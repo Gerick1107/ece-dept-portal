@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Evaluation Space</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f0f0; color: #333; }
+
+        .navbar {
+            background: #2b2b2b;
+            color: #fff;
+            padding: 0 24px;
+            height: 52px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+        .navbar-left { display: flex; align-items: center; gap: 14px; }
+        .navbar-actions { display: flex; align-items: center; gap: 10px; }
+        .navbar-logo-bg {
+            background: #fff;
+            padding: 3px 6px;
+            display: flex;
+            align-items: center;
+        }
+        .navbar-logo { height: 32px; }
+        .navbar-title { font-size: 1.05em; font-weight: 600; letter-spacing: 0.3px; }
+        .navbar-btn {
+            background: #2AABA0;
+            color: #fff;
+            padding: 7px 16px;
+            border: none;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.8em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .navbar-btn:hover { background: #239089; }
+
+        .page-wrapper {
+            max-width: 1100px;
+            margin: 18px auto;
+            padding: 0 20px 24px;
+        }
+        .page-header {
+            margin-bottom: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+        }
+        .page-header h1 { font-size: 1.35em; font-weight: 700; color: #2b2b2b; }
+        .page-header p { font-size: 0.84em; color: #666; max-width: 720px; line-height: 1.5; }
+
+        .grid-2col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+            align-items: start;
+        }
+        .stack-col {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+        .grid-full { grid-column: 1 / -1; }
+
+        .form-section {
+            background: #fff;
+            border: 1px solid #ddd;
+            padding: 16px 18px;
+        }
+        .form-section-title {
+            font-size: 0.72em;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: #2AABA0;
+            margin-bottom: 10px;
+            padding-bottom: 6px;
+            border-bottom: 2px solid #2AABA0;
+        }
+        .step-badge {
+            display: inline-block;
+            background: #2AABA0;
+            color: #fff;
+            width: 20px;
+            height: 20px;
+            line-height: 20px;
+            text-align: center;
+            font-size: 0.7em;
+            font-weight: 700;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+
+        label.field-label {
+            display: block;
+            font-size: 0.82em;
+            font-weight: 600;
+            color: #444;
+            margin-bottom: 5px;
+        }
+        select, input[type="file"], input[type="text"] {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid #ccc;
+            background: #fff;
+            font-size: 0.85em;
+            font-family: inherit;
+            color: #333;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        select:focus, input[type="file"]:focus, input[type="text"]:focus { border-color: #2AABA0; }
+
+        .radio-group { margin: 4px 0 8px 0; }
+        .radio-option {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 3px 0;
+            font-size: 0.82em;
+            color: #555;
+            cursor: pointer;
+        }
+        .radio-option input[type="radio"] { accent-color: #2AABA0; margin: 0; }
+
+        .file-upload-area {
+            margin-top: 6px;
+            padding: 8px;
+            border: 1px dashed #ccc;
+            background: #fafafa;
+        }
+
+        .info-box {
+            padding: 10px 12px;
+            background: #f0faf9;
+            border-left: 3px solid #2AABA0;
+            font-size: 0.8em;
+            color: #555;
+            line-height: 1.5;
+        }
+        .info-box strong { color: #333; }
+        .info-box-warn {
+            padding: 8px 12px;
+            background: #fdf8ee;
+            border-left: 3px solid #d4a017;
+            font-size: 0.8em;
+            color: #8a6914;
+            line-height: 1.4;
+        }
+        .info-box-success {
+            padding: 8px 12px;
+            background: #f0faf4;
+            border-left: 3px solid #2AABA0;
+            font-size: 0.8em;
+            color: #1a7a6e;
+            line-height: 1.4;
+        }
+
+        .flash-messages { margin-bottom: 12px; }
+        .flash-msg {
+            position: relative;
+            padding: 10px 36px 10px 14px;
+            background: #fdf0f0;
+            border: 1px solid #e8a0a0;
+            border-left: 4px solid #d44;
+            color: #8b1a1a;
+            font-size: 0.85em;
+            margin-bottom: 8px;
+            white-space: pre-line;
+            line-height: 1.5;
+        }
+        .flash-close {
+            position: absolute;
+            top: 6px;
+            right: 10px;
+            font-size: 1.2em;
+            color: #c44;
+            cursor: pointer;
+            font-weight: 700;
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 13px;
+            background: #2AABA0;
+            color: #fff;
+            border: none;
+            font-size: 0.95em;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .submit-btn:hover { background: #239089; }
+        .submit-btn:disabled { background: #999; cursor: not-allowed; }
+
+        .spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            vertical-align: middle;
+            margin-right: 6px;
+        }
+        .spinner-dark {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 2px solid rgba(42,171,160,0.2);
+            border-top-color: #2AABA0;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            vertical-align: middle;
+            margin-right: 5px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .searchable-select { position: relative; }
+        .ss-display {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid #ccc;
+            background: #fff;
+            font-size: 0.85em;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: border-color 0.2s;
+        }
+        .ss-display:hover { border-color: #2AABA0; }
+        .ss-display.open { border-color: #2AABA0; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+        .ss-placeholder { color: #999; }
+        .ss-dropdown {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: #fff;
+            border: 1px solid #2AABA0;
+            border-top: none;
+            z-index: 100;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+        }
+        .ss-search {
+            width: 100%;
+            padding: 8px 10px;
+            border: none;
+            border-bottom: 1px solid #eee;
+            font-size: 0.85em;
+            font-family: inherit;
+            outline: none;
+            box-sizing: border-box;
+        }
+        .ss-options {
+            max-height: 220px;
+            overflow-y: auto;
+        }
+        .ss-option {
+            padding: 7px 10px;
+            font-size: 0.84em;
+            cursor: pointer;
+            transition: background 0.15s;
+            border-bottom: 1px solid #f5f5f5;
+        }
+        .ss-option:hover, .ss-option.highlighted { background: #e8f5f3; }
+        .ss-option.selected { background: #d4f0ed; font-weight: 600; }
+        .ss-match { background: #ffeb3b; border-radius: 2px; }
+        .ss-no-results {
+            padding: 10px;
+            text-align: center;
+            font-size: 0.82em;
+            color: #999;
+        }
+
+        .prog-group { margin-bottom: 10px; }
+        .prog-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 0;
+        }
+        .prog-header label {
+            font-size: 0.88em;
+            font-weight: 600;
+            color: #333;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .prog-header input[type="checkbox"] { accent-color: #2AABA0; width: 16px; height: 16px; }
+        .prog-count {
+            font-size: 0.78em;
+            background: #e8f5f3;
+            color: #1a7a6e;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 600;
+        }
+        .branch-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+            gap: 4px 12px;
+            margin-left: 28px;
+            margin-top: 4px;
+        }
+        .branch-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.82em;
+            color: #555;
+            cursor: pointer;
+        }
+        .branch-item input[type="checkbox"] { accent-color: #2AABA0; }
+        .branch-count { font-size: 0.75em; color: #999; }
+        .parse-placeholder {
+            font-size: 0.82em;
+            color: #999;
+            padding: 12px 0;
+            text-align: center;
+        }
+        .student-summary {
+            font-size: 0.78em;
+            color: #1a7a6e;
+            background: #f0faf9;
+            padding: 6px 10px;
+            margin-bottom: 10px;
+            border-left: 3px solid #2AABA0;
+        }
+        .co-tag-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 6px;
+        }
+        .co-tag {
+            background: #2b2b2b;
+            color: #fff;
+            padding: 2px 10px;
+            font-size: 0.72em;
+            font-weight: 600;
+        }
+
+        @media (max-width: 860px) {
+            .grid-2col { grid-template-columns: 1fr; }
+            .page-header { display: block; }
+            .page-header p { margin-top: 6px; }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-left">
+            <div class="navbar-logo-bg">
+                <img src="{{ url_for('static', filename='ECE_logo_header_new.png') }}" alt="ECE Logo" class="navbar-logo">
+            </div>
+            <span class="navbar-title">Evaluation Space</span>
+        </div>
+        <div class="navbar-actions">
+            <a href="{{ url_for('bulk_eval_space') }}" class="navbar-btn" onclick="cleanupAndNavigate(event, '{{ url_for('bulk_eval_space') }}')">Bulk Evaluation</a>
+            <a href="{{ url_for('index') }}" class="navbar-btn" onclick="cleanupAndNavigate(event, '{{ url_for('index') }}')">Back To Generator</a>
+        </div>
+    </nav>
+
+    <div class="page-wrapper">
+        {% with messages = get_flashed_messages() %}
+          {% if messages %}
+            <div class="flash-messages">
+              {% for message in messages %}
+                <div class="flash-msg">
+                    <span class="flash-close" onclick="this.parentElement.remove()">&times;</span>
+                    {{ message }}
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+        {% endwith %}
+
+        <div class="page-header">
+            <div>
+                <h1>Compare Generated Output Against Existing Output</h1>
+                <p>Upload the raw input sheet, choose the course and mapping, and provide a second workbook in <strong>To Compare With</strong>. The evaluator will recompute the output and compare the detected CO and PO/PSO summary rows.</p>
+            </div>
+        </div>
+
+        <form method="post" enctype="multipart/form-data" id="evalForm">
+            <input type="hidden" name="course_file_path" id="course_file_path" value="">
+            <div class="grid-2col">
+                <div class="stack-col">
+                    <div class="form-section">
+                        <div class="form-section-title"><span class="step-badge">1</span> Input Sheet</div>
+                        <label class="field-label" for="course_file">Student Data File (.xlsx)</label>
+                        <input type="file" name="course_file" id="course_file" accept=".xlsx" required>
+                        <div id="parse_status" style="margin-top:6px;"></div>
+                    </div>
+
+                    <div class="form-section">
+                        <div class="form-section-title"><span class="step-badge">2</span> To Compare With</div>
+                        <label class="field-label" for="compare_file">Existing Output File (.xlsx)</label>
+                        <input type="file" name="compare_file" id="compare_file" accept=".xlsx" required>
+                    </div>
+
+                    <div class="form-section">
+                        <div class="form-section-title"><span class="step-badge">3</span> CO-PO Mapping</div>
+                        <label class="field-label">Mapping File</label>
+                        <div class="radio-group">
+                            <label class="radio-option">
+                                <input type="radio" name="mapping_option" value="default" checked onchange="toggleMappingUpload()">
+                                Use default (CO-PO Mapping Nov 25)
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" id="upload_mapping" name="mapping_option" value="upload" onchange="toggleMappingUpload()">
+                                Upload custom mapping file
+                            </label>
+                        </div>
+                        <div id="mapping_upload_section" style="display: none;">
+                            <div class="file-upload-area">
+                                <input type="file" name="custom_mapping_file" id="custom_mapping_file" accept=".xlsx">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="stack-col">
+                    <div class="form-section">
+                        <div class="form-section-title"><span class="step-badge">4</span> Course Selection</div>
+                        <label class="field-label">Course Title</label>
+                        <input type="hidden" name="course_title" id="course_title_hidden" value="">
+                        <div class="searchable-select">
+                            <div class="ss-display" id="ss_display">
+                                <span id="ss_display_text" class="ss-placeholder">Loading courses...</span>
+                                <svg width="12" height="12" viewBox="0 0 12 12" fill="#999"><path d="M2 4l4 4 4-4"/></svg>
+                            </div>
+                            <div class="ss-dropdown" id="ss_dropdown">
+                                <input type="text" class="ss-search" id="ss_search" placeholder="Search courses..." autocomplete="off">
+                                <div class="ss-options" id="ss_options"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section" id="scope_section">
+                        <div class="form-section-title"><span class="step-badge">5</span> Evaluation Scope</div>
+                        <div id="scope_content">
+                            <div class="parse-placeholder">
+                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="1.5" style="display:block;margin:0 auto 6px;">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                    <polyline points="14 2 14 8 20 8"/>
+                                    <line x1="16" y1="13" x2="8" y2="13"/>
+                                    <line x1="16" y1="17" x2="8" y2="17"/>
+                                </svg>
+                                Upload an input sheet to detect available programmes and branches
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <div class="form-section-title"><span class="step-badge">6</span> Optional Cell Overrides</div>
+                        <label class="field-label" for="co_attainment_cell">CO Attainment Cell ID</label>
+                        <input type="text" name="co_attainment_cell" id="co_attainment_cell" placeholder="Label cell or first value cell, e.g. AZ416">
+                        <label class="field-label" for="po_attainment_cell" style="margin-top:10px;">PO Attainment Cell ID</label>
+                        <input type="text" name="po_attainment_cell" id="po_attainment_cell" placeholder="Label cell or first value cell, e.g. BA421">
+                    </div>
+                </div>
+
+                <div class="grid-full">
+                    <div class="info-box" style="margin-bottom: 10px;">
+                        <strong>Comparison row matching:</strong> the evaluator searches using only the stable part of each label, so suffixes such as <code>[Non-MT]</code>, <code>[Selected]</code>, or omitted scope text will still match. If you enter a CO or PO cell ID, that override takes priority over string matching, and the cell can be either the label cell or the first numeric value cell. If you choose a subset of programmes or branches, the recomputation uses that same scope.
+                    </div>
+                    <button type="submit" class="submit-btn" id="submitBtn">Compare Output</button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        function cleanupAndNavigate(e, targetUrl) {
+            e.preventDefault();
+            fetch('/api/clear_uploads', { method: 'POST' })
+                .finally(() => { window.location.href = targetUrl; });
+        }
+
+        const courseFileInput = document.getElementById('course_file');
+        const courseFilePathInput = document.getElementById('course_file_path');
+        const hiddenCourseInput = document.getElementById('course_title_hidden');
+        const ssDisplay = document.getElementById('ss_display');
+        const ssDisplayText = document.getElementById('ss_display_text');
+        const ssDropdown = document.getElementById('ss_dropdown');
+        const ssSearch = document.getElementById('ss_search');
+        const ssOptions = document.getElementById('ss_options');
+        const scopeContent = document.getElementById('scope_content');
+
+        let allCourses = [];
+        let highlightedIdx = -1;
+
+        courseFileInput.addEventListener('change', function() {
+            if (!this.files.length) return;
+            parseUploadedFile(this.files[0]);
+        });
+
+        function parseUploadedFile(file) {
+            const status = document.getElementById('parse_status');
+            status.innerHTML = '<span class="spinner-dark"></span> <span style="font-size:0.82em;color:#666;">Analyzing file...</span>';
+            scopeContent.innerHTML = '<div class="parse-placeholder"><span class="spinner-dark"></span> Parsing student data...</div>';
+
+            const formData = new FormData();
+            formData.append('course_file', file);
+
+            fetch('/api/parse_students', { method: 'POST', body: formData })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.error) {
+                        status.innerHTML = '<span style="font-size:0.82em;color:#d44;">Error: ' + data.error + '</span>';
+                        scopeContent.innerHTML = '<div class="info-box-warn">Error parsing file. Please check the format.</div>';
+                        return;
+                    }
+                    courseFilePathInput.value = data.file_path;
+                    status.innerHTML = '<span style="font-size:0.82em;color:#1a7a6e;">&#10003; File analyzed successfully</span>';
+                    renderScopeSection(data);
+                })
+                .catch(err => {
+                    status.innerHTML = '<span style="font-size:0.82em;color:#d44;">Upload failed</span>';
+                    scopeContent.innerHTML = '<div class="info-box-warn">Failed to parse file.</div>';
+                    console.error(err);
+                });
+        }
+
+        function renderScopeSection(data) {
+            const progs = data.programmes || {};
+            const branches = data.branches || {};
+            const cos = data.cos || [];
+            const total = data.total_students || 0;
+
+            const branchesByProg = {};
+            for (const [key, info] of Object.entries(branches)) {
+                const prog = info.programme;
+                const brName = info.branch;
+                if (!branchesByProg[prog]) branchesByProg[prog] = {};
+                branchesByProg[prog][key] = { name: brName, count: info.count };
+            }
+
+            let html = '';
+            html += '<div class="student-summary"><strong>' + total + '</strong> students detected in file</div>';
+
+            const hasBranchData = Object.keys(branches).length > 0;
+            if (!hasBranchData) {
+                html += '<div class="info-box" style="margin-bottom:10px;">No branch column found in file. Branch-level filtering unavailable, so filtering will stay at programme level.</div>';
+            }
+
+            const progOrder = ['UG', 'PG', 'PhD', 'Other'];
+            const progLabels = { UG: 'UG (Undergraduate)', PG: 'PG / M.Tech (MT prefix)', PhD: 'PhD (PhD prefix)', Other: 'Other' };
+
+            for (const prog of progOrder) {
+                if (!(prog in progs)) continue;
+                const count = progs[prog];
+                html += '<div class="prog-group">';
+                html += '<div class="prog-header">';
+                html += '<label><input type="checkbox" name="programmes" value="' + prog + '" checked onchange="onProgToggle(\'' + prog + '\', this.checked)"> ' + progLabels[prog] + '</label>';
+                html += '<span class="prog-count">' + count + '</span>';
+                html += '</div>';
+
+                const progBranches = branchesByProg[prog];
+                if (progBranches && Object.keys(progBranches).length > 0) {
+                    html += '<div class="branch-grid" id="branch_grid_' + prog + '">';
+                    const sortedKeys = Object.keys(progBranches).sort((a, b) => progBranches[a].name.localeCompare(progBranches[b].name));
+                    for (const key of sortedKeys) {
+                        const br = progBranches[key];
+                        html += '<label class="branch-item">';
+                        html += '<input type="checkbox" name="branches" value="' + key + '" checked> ';
+                        html += br.name + ' <span class="branch-count">(' + br.count + ')</span>';
+                        html += '</label>';
+                    }
+                    html += '</div>';
+                }
+                html += '</div>';
+            }
+
+            if (cos.length > 0) {
+                html += '<div style="margin-top:10px; padding-top:8px; border-top:1px solid #eee;">';
+                html += '<span style="font-size:0.78em; font-weight:600; color:#888; text-transform:uppercase; letter-spacing:0.5px;">Detected COs in File</span>';
+                html += '<div class="co-tag-list">';
+                cos.forEach(function(co) { html += '<span class="co-tag">' + co + '</span>'; });
+                html += '</div></div>';
+            }
+
+            scopeContent.innerHTML = html;
+        }
+
+        function onProgToggle(prog, checked) {
+            const branchGrid = document.getElementById('branch_grid_' + prog);
+            if (branchGrid) {
+                const boxes = branchGrid.querySelectorAll('input[type="checkbox"]');
+                boxes.forEach(b => { b.checked = checked; b.disabled = !checked; });
+            }
+        }
+
+        function toggleMappingUpload() {
+            const section = document.getElementById('mapping_upload_section');
+            const radio = document.getElementById('upload_mapping');
+            const fileInput = document.getElementById('custom_mapping_file');
+
+            if (radio.checked) {
+                section.style.display = 'block';
+                fileInput.required = true;
+            } else {
+                section.style.display = 'none';
+                fileInput.required = false;
+                fileInput.value = '';
+                fetchDefaultCourses();
+            }
+
+            hiddenCourseInput.value = '';
+            ssDisplayText.textContent = 'Select a course';
+            ssDisplayText.style.color = '#999';
+        }
+
+        function openDropdown() {
+            ssDropdown.style.display = 'block';
+            ssDisplay.classList.add('open');
+            ssSearch.value = '';
+            renderCourseOptions(allCourses, '');
+            setTimeout(() => ssSearch.focus(), 0);
+            highlightedIdx = -1;
+        }
+
+        function closeDropdown() {
+            ssDropdown.style.display = 'none';
+            ssDisplay.classList.remove('open');
+            highlightedIdx = -1;
+        }
+
+        ssDisplay.addEventListener('click', function() {
+            if (ssDropdown.style.display === 'block') {
+                closeDropdown();
+            } else {
+                openDropdown();
+            }
+        });
+
+        document.addEventListener('click', function(e) {
+            if (!ssDisplay.contains(e.target) && !ssDropdown.contains(e.target)) {
+                closeDropdown();
+            }
+        });
+
+        ssSearch.addEventListener('input', function() {
+            const query = this.value;
+            const filtered = allCourses.filter(course => course.toLowerCase().includes(query.toLowerCase()));
+            renderCourseOptions(filtered, query);
+            highlightedIdx = -1;
+        });
+
+        ssSearch.addEventListener('keydown', function(e) {
+            const items = ssOptions.querySelectorAll('.ss-option');
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                highlightedIdx = Math.min(highlightedIdx + 1, items.length - 1);
+                updateHighlight(items);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                highlightedIdx = Math.max(highlightedIdx - 1, 0);
+                updateHighlight(items);
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (highlightedIdx >= 0 && items[highlightedIdx]) {
+                    selectCourse(items[highlightedIdx].dataset.value);
+                }
+            } else if (e.key === 'Escape') {
+                closeDropdown();
+            }
+        });
+
+        function updateHighlight(items) {
+            items.forEach((el, idx) => el.classList.toggle('highlighted', idx === highlightedIdx));
+            if (items[highlightedIdx]) {
+                items[highlightedIdx].scrollIntoView({ block: 'nearest' });
+            }
+        }
+
+        function highlightMatch(text, query) {
+            if (!query) return text;
+            const idx = text.toLowerCase().indexOf(query.toLowerCase());
+            if (idx === -1) return text;
+            return text.substring(0, idx) + '<span class="ss-match">' + text.substring(idx, idx + query.length) + '</span>' + text.substring(idx + query.length);
+        }
+
+        function renderCourseOptions(list, query) {
+            if (list.length === 0) {
+                ssOptions.innerHTML = '<div class="ss-no-results">No matches</div>';
+                return;
+            }
+
+            ssOptions.innerHTML = list.map(name =>
+                '<div class="ss-option' + (name === hiddenCourseInput.value ? ' selected' : '') + '" data-value="' + name.replace(/"/g, '&quot;') + '" onclick="selectCourse(this.dataset.value)">' + highlightMatch(name, query) + '</div>'
+            ).join('');
+        }
+
+        function selectCourse(name) {
+            hiddenCourseInput.value = name;
+            ssDisplayText.textContent = name;
+            ssDisplayText.style.color = '#222';
+            closeDropdown();
+        }
+
+        function populateCourseDropdown(courses) {
+            allCourses = courses;
+            hiddenCourseInput.value = '';
+            if (courses.length === 0) {
+                ssDisplayText.textContent = 'No courses found';
+                ssDisplayText.style.color = '#999';
+                return;
+            }
+            ssDisplayText.textContent = '-- Select a course (' + courses.length + ' available) --';
+            ssDisplayText.style.color = '#999';
+            renderCourseOptions(courses, '');
+        }
+
+        function fetchDefaultCourses() {
+            ssDisplayText.textContent = 'Loading courses...';
+            ssDisplayText.style.color = '#999';
+            fetch('/api/course_names')
+                .then(r => r.json())
+                .then(data => populateCourseDropdown(data.courses || []))
+                .catch(() => {
+                    ssDisplayText.textContent = 'Error loading courses';
+                    ssDisplayText.style.color = '#d44';
+                });
+        }
+
+        document.getElementById('custom_mapping_file').addEventListener('change', function() {
+            if (!this.files.length) return;
+            ssDisplayText.textContent = 'Reading courses...';
+            ssDisplayText.style.color = '#999';
+
+            const formData = new FormData();
+            formData.append('mapping_file', this.files[0]);
+
+            fetch('/api/course_names', { method: 'POST', body: formData })
+                .then(r => r.json())
+                .then(data => populateCourseDropdown(data.courses || []))
+                .catch(() => {
+                    ssDisplayText.textContent = 'Error reading file';
+                    ssDisplayText.style.color = '#d44';
+                });
+        });
+
+        document.getElementById('evalForm').addEventListener('submit', function(e) {
+            if (!courseFilePathInput.value && !courseFileInput.files.length) {
+                e.preventDefault();
+                alert('Please upload an input Excel file.');
+                return;
+            }
+
+            if (!hiddenCourseInput.value) {
+                e.preventDefault();
+                alert('Please select a course title.');
+                return;
+            }
+
+            const btn = document.getElementById('submitBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Comparing...';
+        });
+
+        fetchDefaultCourses();
+    </script>
+</body>
+</html>

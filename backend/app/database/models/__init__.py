@@ -1,0 +1,29 @@
+from app.database.models.copo import CopoEvaluationRun, CopoMarksUpload, CopoResultArchive
+from app.database.models.user import User
+from app.publications.models.entities import (
+    BlockedPublication,
+    Faculty,
+    Publication,
+    PublicationAuditLog,
+    PublicationFaculty,
+    ScrapeLog,
+)
+from app.projects.models.entities import Project, ProjectSdg, ProjectStudent, ProjectUpload, Sdg
+
+__all__ = [
+    "User",
+    "CopoMarksUpload",
+    "CopoEvaluationRun",
+    "CopoResultArchive",
+    "Faculty",
+    "Publication",
+    "PublicationFaculty",
+    "ScrapeLog",
+    "BlockedPublication",
+    "PublicationAuditLog",
+    "Project",
+    "ProjectStudent",
+    "ProjectSdg",
+    "ProjectUpload",
+    "Sdg",
+]

@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bulk Evaluation</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f0f0; color: #333; }
+
+        .navbar {
+            background: #2b2b2b;
+            color: #fff;
+            padding: 0 24px;
+            height: 52px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+        .navbar-left { display: flex; align-items: center; gap: 14px; }
+        .navbar-actions { display: flex; align-items: center; gap: 10px; }
+        .navbar-logo-bg {
+            background: #fff;
+            padding: 3px 6px;
+            display: flex;
+            align-items: center;
+        }
+        .navbar-logo { height: 32px; }
+        .navbar-title { font-size: 1.05em; font-weight: 600; letter-spacing: 0.3px; }
+        .navbar-btn {
+            background: #2AABA0;
+            color: #fff;
+            padding: 7px 16px;
+            border: none;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.8em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .navbar-btn:hover { background: #239089; }
+
+        .page-wrapper {
+            max-width: 1380px;
+            margin: 18px auto;
+            padding: 0 20px 24px;
+        }
+        .page-header { margin-bottom: 14px; }
+        .page-header h1 { font-size: 1.35em; font-weight: 700; color: #2b2b2b; }
+        .page-header p { font-size: 0.84em; color: #666; max-width: 980px; line-height: 1.5; margin-top: 6px; }
+
+        .card {
+            background: #fff;
+            border: 1px solid #ddd;
+            padding: 18px 20px;
+            margin-bottom: 14px;
+        }
+        .card-title {
+            font-size: 0.76em;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: #2AABA0;
+            margin-bottom: 12px;
+            padding-bottom: 6px;
+            border-bottom: 2px solid #2AABA0;
+        }
+
+        .radio-group { margin: 4px 0 8px 0; }
+        .radio-option {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 3px 0;
+            font-size: 0.82em;
+            color: #555;
+            cursor: pointer;
+        }
+        .radio-option input[type="radio"] { accent-color: #2AABA0; margin: 0; }
+        .file-upload-area {
+            margin-top: 6px;
+            padding: 8px;
+            border: 1px dashed #ccc;
+            background: #fafafa;
+            max-width: 420px;
+        }
+
+        .flash-messages { margin-bottom: 12px; }
+        .flash-msg {
+            position: relative;
+            padding: 10px 36px 10px 14px;
+            background: #fdf0f0;
+            border: 1px solid #e8a0a0;
+            border-left: 4px solid #d44;
+            color: #8b1a1a;
+            font-size: 0.85em;
+            margin-bottom: 8px;
+            white-space: pre-line;
+            line-height: 1.5;
+        }
+        .flash-close {
+            position: absolute;
+            top: 6px;
+            right: 10px;
+            font-size: 1.2em;
+            color: #c44;
+            cursor: pointer;
+            font-weight: 700;
+        }
+
+        .info-box {
+            padding: 10px 12px;
+            background: #f0faf9;
+            border-left: 3px solid #2AABA0;
+            font-size: 0.8em;
+            color: #555;
+            line-height: 1.5;
+        }
+        .info-box strong { color: #333; }
+        .info-box-warn {
+            padding: 8px 12px;
+            background: #fdf8ee;
+            border-left: 3px solid #d4a017;
+            font-size: 0.8em;
+            color: #8a6914;
+            line-height: 1.4;
+        }
+        .info-box-success {
+            padding: 8px 12px;
+            background: #f0faf4;
+            border-left: 3px solid #2AABA0;
+            font-size: 0.8em;
+            color: #1a7a6e;
+            line-height: 1.4;
+        }
+
+        .bulk-table-wrap {
+            overflow-x: auto;
+            border: 1px solid #ddd;
+        }
+        .bulk-table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 1480px;
+        }
+        .bulk-table th, .bulk-table td {
+            border: 1px solid #ddd;
+            padding: 10px 8px;
+            vertical-align: top;
+            text-align: left;
+        }
+        .bulk-table th {
+            background: #2b2b2b;
+            color: #fff;
+            font-size: 0.8em;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            white-space: nowrap;
+        }
+        .bulk-table td { background: #fff; font-size: 0.82em; }
+        .bulk-table tr:nth-child(even) td { background: #fafafa; }
+
+        .mini-input, .mini-select, input[type="file"] {
+            width: 100%;
+            padding: 7px 8px;
+            border: 1px solid #ccc;
+            background: #fff;
+            font-size: 0.82em;
+            font-family: inherit;
+            color: #333;
+            outline: none;
+        }
+        .mini-select:focus, input[type="file"]:focus { border-color: #2AABA0; }
+        .mini-select[multiple] { min-height: 96px; }
+
+        .row-number {
+            font-weight: 700;
+            color: #2b2b2b;
+            min-width: 28px;
+            text-align: center;
+        }
+        .row-status {
+            font-size: 0.78em;
+            line-height: 1.45;
+            color: #666;
+            min-width: 180px;
+        }
+        .row-status.success { color: #1a7a6e; }
+        .row-status.error { color: #a33; }
+
+        .btn-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-top: 14px;
+        }
+        .btn-secondary, .btn-danger, .submit-btn {
+            border: none;
+            cursor: pointer;
+            font-family: inherit;
+            transition: background 0.2s;
+        }
+        .btn-secondary {
+            padding: 10px 16px;
+            background: #2b2b2b;
+            color: #fff;
+            font-size: 0.82em;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .btn-secondary:hover { background: #1e1e1e; }
+        .btn-danger {
+            padding: 8px 10px;
+            background: #d44;
+            color: #fff;
+            font-size: 0.76em;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            width: 100%;
+        }
+        .btn-danger:hover { background: #b93333; }
+        .submit-btn {
+            padding: 12px 20px;
+            background: #2AABA0;
+            color: #fff;
+            font-size: 0.92em;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+        }
+        .submit-btn:hover { background: #239089; }
+        .submit-btn:disabled { background: #999; cursor: not-allowed; }
+
+        .spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            vertical-align: middle;
+            margin-right: 6px;
+        }
+        .spinner-dark {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 2px solid rgba(42,171,160,0.2);
+            border-top-color: #2AABA0;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            vertical-align: middle;
+            margin-right: 5px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .searchable-select { position: relative; min-width: 220px; }
+        .ss-display {
+            width: 100%;
+            padding: 7px 8px;
+            border: 1px solid #ccc;
+            background: #fff;
+            font-size: 0.82em;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: border-color 0.2s;
+        }
+        .ss-display:hover { border-color: #2AABA0; }
+        .ss-display.open {
+            border-color: #2AABA0;
+            border-bottom-left-radius: 0;
+            border-bottom-right-radius: 0;
+        }
+        .ss-display.disabled {
+            color: #999;
+            background: #f8f8f8;
+            cursor: not-allowed;
+        }
+        .ss-dropdown {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: #fff;
+            border: 1px solid #2AABA0;
+            border-top: none;
+            z-index: 100;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+        }
+        .ss-search {
+            width: 100%;
+            padding: 8px 10px;
+            border: none;
+            border-bottom: 1px solid #eee;
+            font-size: 0.82em;
+            font-family: inherit;
+            outline: none;
+        }
+        .ss-options {
+            max-height: 220px;
+            overflow-y: auto;
+        }
+        .ss-option {
+            padding: 7px 10px;
+            font-size: 0.82em;
+            cursor: pointer;
+            transition: background 0.15s;
+            border-bottom: 1px solid #f5f5f5;
+        }
+        .ss-option:hover, .ss-option.highlighted { background: #e8f5f3; }
+        .ss-option.selected { background: #d4f0ed; font-weight: 600; }
+        .ss-match { background: #ffeb3b; border-radius: 2px; }
+        .ss-no-results {
+            padding: 10px;
+            text-align: center;
+            font-size: 0.8em;
+            color: #999;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-left">
+            <div class="navbar-logo-bg">
+                <img src="{{ url_for('static', filename='ECE_logo_header_new.png') }}" alt="ECE Logo" class="navbar-logo">
+            </div>
+            <span class="navbar-title">Bulk Evaluation</span>
+        </div>
+        <div class="navbar-actions">
+            <a href="{{ url_for('eval_space') }}" class="navbar-btn" onclick="cleanupAndNavigate(event, '{{ url_for('eval_space') }}')">Single Evaluation</a>
+            <a href="{{ url_for('index') }}" class="navbar-btn" onclick="cleanupAndNavigate(event, '{{ url_for('index') }}')">Back To Generator</a>
+        </div>
+    </nav>
+
+    <div class="page-wrapper">
+        {% with messages = get_flashed_messages() %}
+          {% if messages %}
+            <div class="flash-messages">
+              {% for message in messages %}
+                <div class="flash-msg">
+                    <span class="flash-close" onclick="this.parentElement.remove()">&times;</span>
+                    {{ message }}
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+        {% endwith %}
+
+        <div class="page-header">
+            <h1>Bulk Compare Multiple Courses</h1>
+            <p>Add one row per comparison. Each row can use its own input sheet, comparison workbook, course selection, and scope. If one row fails, the remaining rows still run and the results page will show exactly which file likely caused the failure.</p>
+        </div>
+
+        <form method="post" enctype="multipart/form-data" id="bulkEvalForm">
+            <div class="card">
+                <div class="card-title">Shared Mapping File</div>
+                <div class="radio-group">
+                    <label class="radio-option">
+                        <input type="radio" name="mapping_option" value="default" checked onchange="toggleBulkMappingUpload()">
+                        Use default (CO-PO Mapping Nov 25) for all rows
+                    </label>
+                    <label class="radio-option">
+                        <input type="radio" id="bulk_upload_mapping" name="mapping_option" value="upload" onchange="toggleBulkMappingUpload()">
+                        Upload one custom mapping file for all rows
+                    </label>
+                </div>
+                <div id="bulk_mapping_upload_section" style="display:none;">
+                    <div class="file-upload-area">
+                        <input type="file" name="bulk_custom_mapping_file" id="bulk_custom_mapping_file" accept=".xlsx">
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">Bulk Rows</div>
+                <div class="info-box" style="margin-bottom:12px;">
+                    <strong>Tip:</strong> Programme and branch fields are multi-select dropdowns. Upload the input sheet in a row first, then use <code>Ctrl</code>/<code>Cmd</code> to select a subset if needed. If you know the exact CO or PO anchor cell in the comparison workbook, enter it in that row and it will override string matching. The override can be either the label cell or the first numeric value cell.
+                </div>
+                <div class="bulk-table-wrap">
+                    <table class="bulk-table">
+                        <thead>
+                            <tr>
+                                <th style="width:50px;">#</th>
+                                <th style="width:220px;">Input Sheet</th>
+                                <th style="width:220px;">To Compare With</th>
+                                <th style="width:250px;">Course</th>
+                                <th style="width:170px;">Programme</th>
+                                <th style="width:190px;">Branch</th>
+                                <th style="width:120px;">CO Cell</th>
+                                <th style="width:120px;">PO Cell</th>
+                                <th style="width:200px;">Status</th>
+                                <th style="width:120px;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bulkRowsBody"></tbody>
+                    </table>
+                </div>
+                <div class="btn-row">
+                    <button type="button" class="btn-secondary" onclick="addBulkRow()">Add Another Course</button>
+                    <button type="submit" class="submit-btn" id="bulkSubmitBtn">Run Bulk Evaluation</button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        function cleanupAndNavigate(e, targetUrl) {
+            e.preventDefault();
+            fetch('/api/clear_uploads', { method: 'POST' })
+                .finally(() => { window.location.href = targetUrl; });
+        }
+
+        const bulkRowsBody = document.getElementById('bulkRowsBody');
+        const bulkSubmitBtn = document.getElementById('bulkSubmitBtn');
+        const bulkMappingFileInput = document.getElementById('bulk_custom_mapping_file');
+        const bulkMappingUploadSection = document.getElementById('bulk_mapping_upload_section');
+
+        let bulkCourses = [];
+        let rowSerial = 0;
+        const rowScopeData = {};
+        const rowDropdownState = {};
+
+        function escapeHtml(text) {
+            return String(text || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function toggleBulkMappingUpload() {
+            const uploadRadio = document.getElementById('bulk_upload_mapping');
+            if (uploadRadio.checked) {
+                bulkMappingUploadSection.style.display = 'block';
+                bulkMappingFileInput.required = true;
+            } else {
+                bulkMappingUploadSection.style.display = 'none';
+                bulkMappingFileInput.required = false;
+                bulkMappingFileInput.value = '';
+                fetchBulkDefaultCourses();
+            }
+        }
+
+        function setRowStatus(rowId, html, cls) {
+            const status = document.getElementById('row_status_' + rowId);
+            status.className = 'row-status' + (cls ? ' ' + cls : '');
+            status.innerHTML = html;
+        }
+
+        function addBulkRow() {
+            rowSerial += 1;
+            const rowId = 'row_' + Date.now() + '_' + rowSerial;
+            const tr = document.createElement('tr');
+            tr.dataset.rowId = rowId;
+            tr.innerHTML = `
+                <td class="row-number"></td>
+                <td>
+                    <input type="hidden" name="row_ids" value="${rowId}">
+                    <input type="hidden" name="course_file_path_${rowId}" id="course_file_path_${rowId}" value="">
+                    <input type="file" name="course_file_${rowId}" accept=".xlsx" onchange="handleBulkCourseFileChange(event, '${rowId}')">
+                </td>
+                <td>
+                    <input type="file" name="compare_file_${rowId}" accept=".xlsx">
+                </td>
+                <td>
+                    <input type="hidden" name="course_title_${rowId}" id="course_title_${rowId}" value="">
+                    <div class="searchable-select" id="searchable_${rowId}">
+                        <div class="ss-display disabled" id="ss_display_${rowId}" onclick="toggleRowDropdown('${rowId}')">
+                            <span id="ss_display_text_${rowId}">Loading courses...</span>
+                            <svg width="12" height="12" viewBox="0 0 12 12" fill="#999"><path d="M2 4l4 4 4-4"/></svg>
+                        </div>
+                        <div class="ss-dropdown" id="ss_dropdown_${rowId}">
+                            <input type="text" class="ss-search" id="ss_search_${rowId}" placeholder="Search courses..." autocomplete="off" oninput="filterRowCourses('${rowId}')" onkeydown="handleRowSearchKeydown(event, '${rowId}')">
+                            <div class="ss-options" id="ss_options_${rowId}"></div>
+                        </div>
+                    </div>
+                </td>
+                <td>
+                    <select name="programmes_${rowId}" id="programmes_${rowId}" class="mini-select" multiple size="4" onchange="onBulkProgrammeChange('${rowId}')" disabled>
+                        <option value="">Upload input sheet first</option>
+                    </select>
+                </td>
+                <td>
+                    <select name="branches_${rowId}" id="branches_${rowId}" class="mini-select" multiple size="5" disabled>
+                        <option value="">Upload input sheet first</option>
+                    </select>
+                </td>
+                <td>
+                    <input type="text" name="co_cell_${rowId}" class="mini-input" placeholder="Label/value cell">
+                </td>
+                <td>
+                    <input type="text" name="po_cell_${rowId}" class="mini-input" placeholder="Label/value cell">
+                </td>
+                <td>
+                    <div class="row-status" id="row_status_${rowId}">Awaiting input sheet</div>
+                </td>
+                <td>
+                    <button type="button" class="btn-danger" onclick="removeBulkRow('${rowId}')">Remove Row</button>
+                </td>
+            `;
+            bulkRowsBody.appendChild(tr);
+            populateCourseSelect(rowId);
+            setupRowDropdown(rowId);
+            updateRowNumbers();
+        }
+
+        function removeBulkRow(rowId) {
+            const row = bulkRowsBody.querySelector(`tr[data-row-id="${rowId}"]`);
+            if (row) {
+                row.remove();
+            }
+            delete rowScopeData[rowId];
+            if (!bulkRowsBody.querySelector('tr')) {
+                addBulkRow();
+            } else {
+                updateRowNumbers();
+            }
+        }
+
+        function updateRowNumbers() {
+            const rows = bulkRowsBody.querySelectorAll('tr');
+            rows.forEach((row, index) => {
+                const numberCell = row.querySelector('.row-number');
+                if (numberCell) numberCell.textContent = index + 1;
+            });
+        }
+
+        function populateCourseSelect(rowId) {
+            const hiddenInput = document.getElementById('course_title_' + rowId);
+            const display = document.getElementById('ss_display_' + rowId);
+            const displayText = document.getElementById('ss_display_text_' + rowId);
+            if (!hiddenInput || !display || !displayText) return;
+
+            if (!rowDropdownState[rowId]) {
+                rowDropdownState[rowId] = { highlightedIdx: -1 };
+            }
+
+            if (!bulkCourses.length) {
+                hiddenInput.value = '';
+                display.classList.add('disabled');
+                displayText.textContent = 'No courses found';
+                renderRowCourseOptions(rowId, [], '');
+                return;
+            }
+
+            display.classList.remove('disabled');
+            if (hiddenInput.value && bulkCourses.includes(hiddenInput.value)) {
+                displayText.textContent = hiddenInput.value;
+            } else {
+                hiddenInput.value = '';
+                displayText.textContent = '-- Select course (' + bulkCourses.length + ' available) --';
+            }
+            renderRowCourseOptions(rowId, bulkCourses, '');
+        }
+
+        function refreshAllCourseSelects() {
+            bulkRowsBody.querySelectorAll('tr').forEach(row => populateCourseSelect(row.dataset.rowId));
+        }
+
+        function setupRowDropdown(rowId) {
+            if (!rowDropdownState[rowId]) {
+                rowDropdownState[rowId] = { highlightedIdx: -1 };
+            }
+        }
+
+        function getRowDropdownEls(rowId) {
+            return {
+                wrapper: document.getElementById('searchable_' + rowId),
+                hiddenInput: document.getElementById('course_title_' + rowId),
+                display: document.getElementById('ss_display_' + rowId),
+                displayText: document.getElementById('ss_display_text_' + rowId),
+                dropdown: document.getElementById('ss_dropdown_' + rowId),
+                search: document.getElementById('ss_search_' + rowId),
+                options: document.getElementById('ss_options_' + rowId)
+            };
+        }
+
+        function closeAllRowDropdowns(exceptRowId) {
+            bulkRowsBody.querySelectorAll('tr').forEach(row => {
+                const currentRowId = row.dataset.rowId;
+                if (exceptRowId && currentRowId === exceptRowId) return;
+                closeRowDropdown(currentRowId);
+            });
+        }
+
+        function toggleRowDropdown(rowId) {
+            const { display, dropdown } = getRowDropdownEls(rowId);
+            if (!display || !dropdown || display.classList.contains('disabled')) return;
+
+            if (dropdown.style.display === 'block') {
+                closeRowDropdown(rowId);
+            } else {
+                openRowDropdown(rowId);
+            }
+        }
+
+        function openRowDropdown(rowId) {
+            const { display, dropdown, search } = getRowDropdownEls(rowId);
+            if (!display || !dropdown || !search || display.classList.contains('disabled')) return;
+
+            closeAllRowDropdowns(rowId);
+            dropdown.style.display = 'block';
+            display.classList.add('open');
+            search.value = '';
+            rowDropdownState[rowId].highlightedIdx = -1;
+            renderRowCourseOptions(rowId, bulkCourses, '');
+            setTimeout(() => search.focus(), 0);
+        }
+
+        function closeRowDropdown(rowId) {
+            const { display, dropdown } = getRowDropdownEls(rowId);
+            if (!display || !dropdown) return;
+            dropdown.style.display = 'none';
+            display.classList.remove('open');
+            if (rowDropdownState[rowId]) {
+                rowDropdownState[rowId].highlightedIdx = -1;
+            }
+        }
+
+        function highlightRowMatch(text, query) {
+            if (!query) return escapeHtml(text);
+            const idx = text.toLowerCase().indexOf(query.toLowerCase());
+            if (idx === -1) return escapeHtml(text);
+            return escapeHtml(text.substring(0, idx)) +
+                '<span class="ss-match">' + escapeHtml(text.substring(idx, idx + query.length)) + '</span>' +
+                escapeHtml(text.substring(idx + query.length));
+        }
+
+        function renderRowCourseOptions(rowId, list, query) {
+            const { hiddenInput, options } = getRowDropdownEls(rowId);
+            if (!options || !hiddenInput) return;
+
+            if (!list.length) {
+                options.innerHTML = '<div class="ss-no-results">No matches</div>';
+                return;
+            }
+
+            options.innerHTML = list.map(course =>
+                '<div class="ss-option' + (course === hiddenInput.value ? ' selected' : '') + '" data-value="' + escapeHtml(course) + '" onclick="selectRowCourse(\'' + rowId + '\', this.dataset.value)">' +
+                highlightRowMatch(course, query) +
+                '</div>'
+            ).join('');
+        }
+
+        function filterRowCourses(rowId) {
+            const { search } = getRowDropdownEls(rowId);
+            if (!search) return;
+            const query = search.value || '';
+            const filtered = bulkCourses.filter(course => course.toLowerCase().includes(query.toLowerCase()));
+            rowDropdownState[rowId].highlightedIdx = -1;
+            renderRowCourseOptions(rowId, filtered, query);
+        }
+
+        function updateRowHighlight(rowId) {
+            const { options } = getRowDropdownEls(rowId);
+            if (!options) return;
+            const items = options.querySelectorAll('.ss-option');
+            const highlightedIdx = rowDropdownState[rowId].highlightedIdx;
+            items.forEach((el, idx) => el.classList.toggle('highlighted', idx === highlightedIdx));
+            if (items[highlightedIdx]) {
+                items[highlightedIdx].scrollIntoView({ block: 'nearest' });
+            }
+        }
+
+        function handleRowSearchKeydown(event, rowId) {
+            const { options } = getRowDropdownEls(rowId);
+            if (!options) return;
+            const items = options.querySelectorAll('.ss-option');
+
+            if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                rowDropdownState[rowId].highlightedIdx = Math.min(rowDropdownState[rowId].highlightedIdx + 1, items.length - 1);
+                updateRowHighlight(rowId);
+            } else if (event.key === 'ArrowUp') {
+                event.preventDefault();
+                rowDropdownState[rowId].highlightedIdx = Math.max(rowDropdownState[rowId].highlightedIdx - 1, 0);
+                updateRowHighlight(rowId);
+            } else if (event.key === 'Enter') {
+                event.preventDefault();
+                const idx = rowDropdownState[rowId].highlightedIdx;
+                if (idx >= 0 && items[idx]) {
+                    selectRowCourse(rowId, items[idx].dataset.value);
+                }
+            } else if (event.key === 'Escape') {
+                closeRowDropdown(rowId);
+            }
+        }
+
+        function selectRowCourse(rowId, courseName) {
+            const { hiddenInput, displayText } = getRowDropdownEls(rowId);
+            if (!hiddenInput || !displayText) return;
+            hiddenInput.value = courseName;
+            displayText.textContent = courseName;
+            closeRowDropdown(rowId);
+            renderRowCourseOptions(rowId, bulkCourses, '');
+        }
+
+        function handleBulkCourseFileChange(event, rowId) {
+            const file = event.target.files[0];
+            if (!file) return;
+            parseBulkUploadedFile(rowId, file);
+        }
+
+        function parseBulkUploadedFile(rowId, file) {
+            setRowStatus(rowId, '<span class="spinner-dark"></span> Analyzing input sheet...', '');
+            const formData = new FormData();
+            formData.append('course_file', file);
+
+            fetch('/api/parse_students', { method: 'POST', body: formData })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.error) {
+                        setRowStatus(rowId, 'Parse error: ' + escapeHtml(data.error), 'error');
+                        return;
+                    }
+                    document.getElementById('course_file_path_' + rowId).value = data.file_path || '';
+                    rowScopeData[rowId] = data;
+                    renderBulkScope(rowId, data);
+                    const cosCount = (data.cos || []).length;
+                    const total = data.total_students || 0;
+                    setRowStatus(rowId, 'Ready: ' + total + ' students, ' + cosCount + ' COs detected.', 'success');
+                })
+                .catch(err => {
+                    console.error(err);
+                    setRowStatus(rowId, 'Failed to parse input sheet.', 'error');
+                });
+        }
+
+        function renderBulkScope(rowId, data) {
+            const programmes = data.programmes || {};
+            const branches = data.branches || {};
+            const programmeSelect = document.getElementById('programmes_' + rowId);
+            const branchSelect = document.getElementById('branches_' + rowId);
+
+            const progOrder = ['UG', 'PG', 'PhD', 'Other'];
+            const progLabels = {
+                UG: 'UG',
+                PG: 'PG / M.Tech',
+                PhD: 'PhD',
+                Other: 'Other'
+            };
+
+            const progOptions = [];
+            for (const prog of progOrder) {
+                if (!(prog in programmes)) continue;
+                progOptions.push('<option value="' + escapeHtml(prog) + '" selected>' + escapeHtml(progLabels[prog] + ' (' + programmes[prog] + ')') + '</option>');
+            }
+
+            if (progOptions.length) {
+                programmeSelect.innerHTML = progOptions.join('');
+                programmeSelect.disabled = false;
+            } else {
+                programmeSelect.innerHTML = '<option value="">No programmes found</option>';
+                programmeSelect.disabled = true;
+            }
+
+            renderBulkBranches(rowId, true);
+        }
+
+        function renderBulkBranches(rowId, selectAllWhenEmpty) {
+            const data = rowScopeData[rowId] || {};
+            const branches = data.branches || {};
+            const branchSelect = document.getElementById('branches_' + rowId);
+            const programmeSelect = document.getElementById('programmes_' + rowId);
+            const selectedProgrammes = Array.from(programmeSelect.selectedOptions).map(opt => opt.value);
+            const previous = new Set(Array.from(branchSelect.selectedOptions).map(opt => opt.value).filter(Boolean));
+
+            const filteredKeys = Object.keys(branches)
+                .filter(key => !selectedProgrammes.length || selectedProgrammes.includes(branches[key].programme))
+                .sort((a, b) => branches[a].branch.localeCompare(branches[b].branch));
+
+            if (!filteredKeys.length) {
+                branchSelect.innerHTML = '<option value="">No branches available</option>';
+                branchSelect.disabled = true;
+                return;
+            }
+
+            branchSelect.innerHTML = filteredKeys.map(key => {
+                const info = branches[key];
+                const selected = previous.size ? previous.has(key) : selectAllWhenEmpty;
+                return '<option value="' + escapeHtml(key) + '"' + (selected ? ' selected' : '') + '>' +
+                    escapeHtml(info.branch + ' (' + info.count + ')') + '</option>';
+            }).join('');
+            branchSelect.disabled = false;
+        }
+
+        function onBulkProgrammeChange(rowId) {
+            renderBulkBranches(rowId, false);
+        }
+
+        function fetchBulkDefaultCourses() {
+            fetch('/api/course_names')
+                .then(r => r.json())
+                .then(data => {
+                    bulkCourses = data.courses || [];
+                    refreshAllCourseSelects();
+                })
+                .catch(() => {
+                    bulkCourses = [];
+                    refreshAllCourseSelects();
+                });
+        }
+
+        bulkMappingFileInput.addEventListener('change', function() {
+            if (!this.files.length) return;
+            const formData = new FormData();
+            formData.append('mapping_file', this.files[0]);
+
+            fetch('/api/course_names', { method: 'POST', body: formData })
+                .then(r => r.json())
+                .then(data => {
+                    bulkCourses = data.courses || [];
+                    refreshAllCourseSelects();
+                })
+                .catch(() => {
+                    bulkCourses = [];
+                    refreshAllCourseSelects();
+                });
+        });
+
+        document.addEventListener('click', function(event) {
+            bulkRowsBody.querySelectorAll('tr').forEach(row => {
+                const rowId = row.dataset.rowId;
+                const { wrapper } = getRowDropdownEls(rowId);
+                if (!wrapper) return;
+                if (!wrapper.contains(event.target)) {
+                    closeRowDropdown(rowId);
+                }
+            });
+        });
+
+        function validateBulkRows() {
+            const rows = Array.from(bulkRowsBody.querySelectorAll('tr'));
+            const errors = [];
+            let activeRows = 0;
+
+            rows.forEach((row, index) => {
+                const rowId = row.dataset.rowId;
+                const coursePath = document.getElementById('course_file_path_' + rowId).value.trim();
+                const courseInput = row.querySelector(`input[name="course_file_${rowId}"]`);
+                const compareInput = row.querySelector(`input[name="compare_file_${rowId}"]`);
+                const courseSelect = document.getElementById('course_title_' + rowId);
+
+                const hasCourseFile = courseInput && courseInput.files.length > 0;
+                const hasCompareFile = compareInput && compareInput.files.length > 0;
+                const hasCourseTitle = courseSelect && courseSelect.value;
+                const isBlank = !coursePath && !hasCourseFile && !hasCompareFile && !hasCourseTitle;
+
+                if (isBlank) return;
+                activeRows += 1;
+
+                if (!coursePath && !hasCourseFile) {
+                    errors.push('Row ' + (index + 1) + ': input sheet is required.');
+                }
+                if (!hasCompareFile) {
+                    errors.push('Row ' + (index + 1) + ': "To Compare With" file is required.');
+                }
+                if (!hasCourseTitle) {
+                    errors.push('Row ' + (index + 1) + ': course selection is required.');
+                }
+            });
+
+            if (!activeRows) {
+                errors.push('Please fill at least one bulk evaluation row.');
+            }
+
+            return errors;
+        }
+
+        document.getElementById('bulkEvalForm').addEventListener('submit', function(e) {
+            const errors = validateBulkRows();
+            if (errors.length) {
+                e.preventDefault();
+                alert(errors.join('\n'));
+                return;
+            }
+
+            bulkSubmitBtn.disabled = true;
+            bulkSubmitBtn.innerHTML = '<span class="spinner"></span> Running Bulk Evaluation...';
+        });
+
+        addBulkRow();
+        fetchBulkDefaultCourses();
+    </script>
+</body>
+</html>

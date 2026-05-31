@@ -1,0 +1,26 @@
+# OPTIONAL — MySQL in Docker (not used for normal local development on Windows).
+# Local dev: use MySQL Server 8.0 on port 3306 (see docs/LOCAL_DATABASE.md).
+#
+# Start only if you explicitly want containerized MySQL:
+#   docker compose -f docker-compose.mysql.yml up -d
+#
+# Warning: a fresh volume starts empty. Corrupt volumes must be removed:
+#   docker compose -f docker-compose.mysql.yml down -v
+
+services:
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: ece_dept_portal
+      MYSQL_USER: portal_user
+      MYSQL_PASSWORD: portal_pass
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    command: --default-authentication-plugin=mysql_native_password
+
+volumes:
+  mysql_data:

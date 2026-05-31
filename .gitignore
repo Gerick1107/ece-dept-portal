@@ -1,0 +1,64 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+backend/.venv/
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+*.log
+
+# Backend runtime & secrets
+backend/.env
+.env
+.env.*
+!.env.example
+!backend/.env.example
+backend/storage/
+storage/
+
+# Node / frontend
+node_modules/
+frontend/node_modules/
+frontend/dist/
+*.tsbuildinfo
+
+# IDE & OS
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Cursor / local tooling
+.cursor/
+*.local
+
+# Database dumps & local SQL (may contain real data)
+*.sql
+!data/sql/local_mysql_bootstrap.sql
+
+# Legacy runtime uploads (reference tree)
+uploads/*
+!uploads/.gitkeep
+
+# Test / scratch files
+*.xlsx
+!data/templates/*.xlsx
+projects_seeded.xlsx
+dump.sql
+
+# Compiled / cache
+*.pyc
+.cache/

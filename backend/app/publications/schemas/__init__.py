@@ -1,0 +1,33 @@
+from app.publications.schemas.publication import (
+    BulkDeleteRequest,
+    CsvImportSummary,
+    DeletionResponse,
+    FacultyCreate,
+    FacultyListResponse,
+    FacultyResponse,
+    FacultyUpdate,
+    PublicationCreate,
+    PublicationListResponse,
+    PublicationResponse,
+    PublicationUpdate,
+    ScrapeTriggerRequest,
+    ScrapeTriggerResponse,
+    SyncAllResponse,
+)
+
+__all__ = [
+    "FacultyCreate",
+    "FacultyUpdate",
+    "FacultyResponse",
+    "FacultyListResponse",
+    "PublicationCreate",
+    "PublicationUpdate",
+    "PublicationResponse",
+    "PublicationListResponse",
+    "CsvImportSummary",
+    "ScrapeTriggerRequest",
+    "ScrapeTriggerResponse",
+    "SyncAllResponse",
+    "BulkDeleteRequest",
+    "DeletionResponse",
+]

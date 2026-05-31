@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CO-PO Results &mdash; {{ course_title }}</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f0f0; color: #333; }
+
+        /* Navbar */
+        .navbar {
+            background: #2b2b2b;
+            color: #fff;
+            padding: 0 24px;
+            height: 60px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+        .navbar-left { display: flex; align-items: center; gap: 14px; }
+        .navbar-actions { display: flex; align-items: center; gap: 10px; }
+        .navbar-logo-bg {
+            background: #fff;
+            padding: 4px 8px;
+            display: flex;
+            align-items: center;
+        }
+        .navbar-logo { height: 36px; }
+        .navbar-title { font-size: 1.15em; font-weight: 600; letter-spacing: 0.3px; }
+        .navbar-btn {
+            background: #2AABA0;
+            color: #fff;
+            padding: 8px 18px;
+            border: none;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.85em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .navbar-btn:hover { background: #239089; }
+
+        /* Layout */
+        .page-wrapper {
+            max-width: 96%;
+            margin: 24px auto;
+            padding: 0 16px;
+        }
+
+        /* Top bar: title + download */
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .top-bar h1 {
+            font-size: 1.5em;
+            font-weight: 700;
+            color: #2b2b2b;
+        }
+        .download-btn {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #2AABA0;
+            color: #fff;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.85em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            transition: background 0.2s;
+        }
+        .download-btn:hover { background: #239089; }
+
+        /* Cards */
+        .card {
+            background: #fff;
+            border: 1px solid #ddd;
+            padding: 20px 24px;
+            margin-bottom: 16px;
+        }
+        .card-title {
+            font-size: 0.8em;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: #2AABA0;
+            margin-bottom: 14px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #2AABA0;
+        }
+
+        /* Meta info */
+        .meta-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px 24px;
+        }
+        .meta-item { font-size: 0.9em; padding: 4px 0; }
+        .meta-label { font-weight: 600; color: #555; }
+        .meta-value { color: #222; }
+
+        /* Status banners */
+        .banner {
+            padding: 10px 14px;
+            font-size: 0.85em;
+            margin-top: 12px;
+            border-left: 3px solid;
+        }
+        .banner-success { background: #f0faf4; border-color: #2AABA0; color: #1a7a6e; }
+        .banner-warn { background: #fdf8ee; border-color: #d4a017; color: #8a6914; }
+
+        /* Sub-section title inside a card */
+        .sub-section-title {
+            font-size: 0.78em;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            color: #888;
+            margin-top: 16px;
+            padding-top: 12px;
+            border-top: 1px solid #eee;
+            margin-bottom: 10px;
+        }
+
+        /* CO tags */
+        .tag-list-inline { display: inline-flex; flex-wrap: wrap; gap: 5px; vertical-align: middle; }
+        .tag-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+        .tag {
+            background: #2b2b2b;
+            color: #fff;
+            padding: 4px 12px;
+            font-size: 0.8em;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+        }
+
+        /* Assessment grid */
+        .assess-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .assess-group {
+            background: #fafafa;
+            border: 1px solid #e0e0e0;
+            padding: 10px 12px;
+        }
+        .assess-parent {
+            font-weight: 700;
+            font-size: 0.85em;
+            color: #2b2b2b;
+            padding-bottom: 6px;
+            margin-bottom: 6px;
+            border-bottom: 2px solid #2AABA0;
+        }
+        .assess-child {
+            font-size: 0.82em;
+            color: #666;
+            padding: 2px 0 2px 8px;
+        }
+        .assess-standalone {
+            font-size: 0.82em;
+            color: #999;
+        }
+
+        /* Tables */
+        .table-wrapper {
+            overflow-x: auto;
+            margin-top: 10px;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            font-size: 0.88em;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px 10px;
+            text-align: center;
+            white-space: nowrap;
+        }
+        th {
+            background: #2b2b2b;
+            color: #fff;
+            font-weight: 600;
+            font-size: 0.85em;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+        tr:nth-child(even) td { background: #f7f7f7; }
+        tr:hover td { background: #eef8f7; }
+        table.row-labels td:first-child {
+            text-align: left;
+            font-weight: 700 !important;
+            color: #222 !important;
+            background: #f5f5f5 !important;
+        }
+
+        /* PSO column distinction */
+        th.pso {
+            background: #1e8a81;
+        }
+        td.pso {
+            background: #f0faf9;
+        }
+        tr:nth-child(even) td.pso { background: #e8f5f3; }
+        tr:hover td.pso { background: #ddf0ed; }
+
+        /* Color-coded attainment cells */
+        .att-high { background: #e6f5ee !important; color: #1a7a4e; font-weight: 700; }
+        .att-mid  { background: #fef9e7 !important; color: #8a6914; font-weight: 600; }
+        .att-low  { background: #fdf0f0 !important; color: #a33; font-weight: 600; }
+
+        /* Final attainment highlight */
+        .final-section {
+            border-top: 3px solid #2AABA0;
+            padding-top: 16px;
+        }
+        .final-section .card-title {
+            font-size: 0.9em;
+            color: #2b2b2b;
+        }
+
+        /* Two-column table layout for side-by-side sections */
+        .two-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+        @media (max-width: 800px) {
+            .two-col { grid-template-columns: 1fr; }
+            .meta-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-left">
+            <div class="navbar-logo-bg">
+                <img src="{{ url_for('static', filename='ECE_logo_header_new.png') }}" alt="ECE Logo" class="navbar-logo">
+            </div>
+            <span class="navbar-title">CO-PO Attainment Results</span>
+        </div>
+        <div class="navbar-actions">
+            <a href="{{ url_for('eval_space') }}" class="navbar-btn" onclick="cleanupAndNavigate(event, '{{ url_for('eval_space') }}')">Evaluation Space</a>
+            <a href="{{ url_for('index') }}" class="navbar-btn" onclick="cleanupAndNavigate(event, '{{ url_for('index') }}')">New Course</a>
+        </div>
+    </nav>
+
+    <div class="page-wrapper">
+        <!-- Top bar -->
+        <div class="top-bar">
+            <h1>{{ course_title }}</h1>
+            {% if download_id %}
+                <a href="{{ url_for('download_results', download_id=download_id) }}" class="download-btn">Download Excel</a>
+            {% endif %}
+        </div>
+
+        <!-- Course Info (combined) -->
+        <div class="card">
+            <div class="card-title">Course Information</div>
+            <div class="meta-grid">
+                <div class="meta-item">
+                    <span class="meta-label">Course Data:</span>
+                    <span class="meta-value">{{ course_filename }}</span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label">CO-PO Mapping:</span>
+                    <span class="meta-value">{{ mapping_filename }}</span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label">Course Outcomes:</span>
+                    <span class="meta-value">
+                        <span class="tag-list-inline">
+                            {% for co in intermediate.unique_COs %}
+                                <span class="tag">{{ co }}</span>
+                            {% endfor %}
+                        </span>
+                    </span>
+                </div>
+            </div>
+            {% if intermediate.indirect_attainment_values %}
+                <div class="banner banner-success">
+                    Indirect attainment loaded &mdash; {{ intermediate.indirect_attainment_values|length }} CO values from indirect file.
+                </div>
+            {% else %}
+                <div class="banner banner-warn">
+                    Indirect attainment not found for this course. Only direct attainment is shown.
+                </div>
+            {% endif %}
+
+            <div class="sub-section-title">Assessment IDs</div>
+            <div class="assess-grid">
+                {% set grouped = {} %}
+                {% for aid in intermediate.assessment_ids %}
+                    {% if '.' in aid %}
+                        {% set parent = aid.split('.')[0] %}
+                        {% if parent not in grouped %}
+                            {% set _ = grouped.update({parent: []}) %}
+                        {% endif %}
+                        {% set _ = grouped[parent].append(aid) %}
+                    {% else %}
+                        {% if aid not in grouped %}
+                            {% set _ = grouped.update({aid: []}) %}
+                        {% endif %}
+                    {% endif %}
+                {% endfor %}
+                {% for parent, children in grouped.items()|sort %}
+                    <div class="assess-group">
+                        <div class="assess-parent">{{ parent }}</div>
+                        {% if children %}
+                            {% for child in children|sort %}
+                                <div class="assess-child">{{ child }}</div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="assess-standalone">(standalone)</div>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- CO Stats -->
+        <div class="card">
+            <div class="card-title">CO Statistics</div>
+            <div class="table-wrapper">
+                <table class="row-labels">
+                    <thead>
+                        <tr>
+                            <th style="text-align: left;">CO</th>
+                            <th>Mean</th>
+                            <th>Std Dev</th>
+                            <th>Threshold</th>
+                            <th>% Above Threshold</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for co, mean in intermediate.CO_stats.mean.items() %}
+                        <tr>
+                            <td>{{ co }}</td>
+                            <td>{{ mean|round(2) }}</td>
+                            <td>{{ intermediate.CO_stats.std[co]|round(2) }}</td>
+                            <td>{{ intermediate.CO_stats.threshold[co]|round(2) }}</td>
+                            {% set pct = intermediate.CO_stats.pct_above[co] %}
+                            <td class="{% if pct >= 60 %}att-high{% elif pct >= 40 %}att-mid{% else %}att-low{% endif %}">
+                                {{ pct|round(2) }}%
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- CO-PO Mapping -->
+        <div class="card">
+            <div class="card-title">CO-PO Mapping</div>
+            <div class="table-wrapper">
+                <table class="row-labels">
+                    <thead>
+                        <tr>
+                            <th style="text-align: left;">CO</th>
+                            {% set po_headers = intermediate.CO_PO_mapping.values()|list %}
+                            {% if po_headers|length > 0 %}
+                                {% for po in po_headers[0].keys() %}
+                                    <th{% if po.startswith('PSO') %} class="pso"{% endif %}>{{ po }}</th>
+                                {% endfor %}
+                            {% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for co, row in intermediate.CO_PO_mapping.items() %}
+                        <tr>
+                            <td>{{ co }}</td>
+                            {% for po, val in row.items() %}
+                                <td class="{% if po.startswith('PSO') %}pso {% endif %}{% if val == 3 %}att-high{% elif val == 2 %}att-mid{% elif val == 1 %}att-low{% endif %}"{% if val == 0 %} style="color: #ccc;"{% endif %}>{{ val }}</td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Attainment tables -->
+        <div class="card">
+            <div class="card-title">Direct PO/PSO Attainment (From Course Data)</div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            {% for po in intermediate.po_pso_attainment.keys() %}
+                                <th{% if po.startswith('PSO') %} class="pso"{% endif %}>{{ po }}</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            {% for po, val in intermediate.po_pso_attainment.items() %}
+                                {% set v = val|round(2) %}
+                                <td class="{% if po.startswith('PSO') %}pso {% endif %}{% if v >= 2 %}att-high{% elif v >= 1 %}att-mid{% else %}att-low{% endif %}">{{ v }}</td>
+                            {% endfor %}
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        {% if intermediate.indirect_attainment_values %}
+        <div class="two-col">
+            <div class="card">
+                <div class="card-title">Indirect CO Attainment</div>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                {% for co in intermediate.indirect_attainment_values.keys() %}
+                                    <th>{{ co }}</th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                {% for val in intermediate.indirect_attainment_values.values() %}
+                                    <td>{{ val|round(2) }}</td>
+                                {% endfor %}
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {% if intermediate.indirect_po_pso_attainment %}
+            <div class="card">
+                <div class="card-title">Indirect PO/PSO Attainment</div>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                {% for po in intermediate.indirect_po_pso_attainment.keys() %}
+                                    <th{% if po.startswith('PSO') %} class="pso"{% endif %}>{{ po }}</th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                {% for po, val in intermediate.indirect_po_pso_attainment.items() %}
+                                    {% set v = val|round(2) %}
+                                    <td class="{% if po.startswith('PSO') %}pso {% endif %}{% if v >= 2 %}att-high{% elif v >= 1 %}att-mid{% else %}att-low{% endif %}">{{ v }}</td>
+                                {% endfor %}
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% if intermediate.final_po_pso_attainment %}
+        <div class="card final-section">
+            <div class="card-title">Final PO/PSO Attainment (90% Direct + 10% Indirect)</div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            {% for po in intermediate.final_po_pso_attainment.keys() %}
+                                <th{% if po.startswith('PSO') %} class="pso"{% endif %}>{{ po }}</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            {% for po, val in intermediate.final_po_pso_attainment.items() %}
+                                {% set v = val|round(2) %}
+                                <td class="{% if po.startswith('PSO') %}pso {% endif %}{% if v >= 2 %}att-high{% elif v >= 1 %}att-mid{% else %}att-low{% endif %}" style="font-size: 1.05em;">{{ v }}</td>
+                            {% endfor %}
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <script>
+        function cleanupAndNavigate(e, targetUrl) {
+            e.preventDefault();
+            fetch('/api/clear_uploads', { method: 'POST' })
+                .finally(() => { window.location.href = targetUrl; });
+        }
+    </script>
+</body>
+</html>

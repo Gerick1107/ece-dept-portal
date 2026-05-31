@@ -1,0 +1,7 @@
+# NPortal local development uses Windows MySQL on port 3306 — not Docker.
+# See docs/LOCAL_DATABASE.md for setup.
+#
+# Optional containerized MySQL (port 3307 on host):
+#   docker compose -f docker-compose.mysql.yml up -d
+
+services: {}
