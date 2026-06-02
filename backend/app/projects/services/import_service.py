@@ -102,7 +102,6 @@ def import_projects_file(
             students_raw = cell_str(row[mapping["students"]]) if "students" in mapping else ""
             status = cell_str(row[mapping["status"]]) if "status" in mapping else "Pending"
             credit = cell_str(row[mapping["credit"]]) if "credit" in mapping else None
-            grade = cell_str(row[mapping["grade"]]) if "grade" in mapping else None
 
             body = ProjectCreate(
                 project_title=title,
@@ -112,7 +111,6 @@ def import_projects_file(
                 co_guide=co_guide or None,
                 status=status or "Pending",
                 credit=credit or None,
-                grade=grade or None,
                 students=_split_students(students_raw),
             )
             project = create_project(db, body, upload_batch_id=upload.id)
@@ -147,7 +145,6 @@ def build_template_bytes() -> bytes:
         "Semester",
         "Status",
         "Credit",
-        "Grade",
     ]
     sample = pd.DataFrame(
         [
@@ -160,7 +157,6 @@ def build_template_bytes() -> bytes:
                 "Semester": "Winter 2026",
                 "Status": "Approved",
                 "Credit": "8",
-                "Grade": "A",
             }
         ],
         columns=columns,

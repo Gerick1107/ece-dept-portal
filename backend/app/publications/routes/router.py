@@ -15,6 +15,7 @@ from app.auth.dependencies import get_current_user, require_roles
 from app.database.models.user import User, UserRole
 from app.database.session import get_db
 from app.publications.exports.export_service import (
+    export_publications_grouped_archive,
     export_publications_csv,
     export_publications_excel,
     export_publications_pdf,
@@ -344,25 +345,58 @@ def export_publications(
     format: str = Query(default="csv", pattern="^(csv|xlsx|pdf)$"),
     scope: str = Query(default="all", pattern="^(all|faculty|year)$"),
     faculty_id: int | None = None,
+    faculty_ids: str | None = None,
     publication_year: int | None = None,
+    year_start: int | None = None,
+    year_end: int | None = None,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     if user.role not in (UserRole.admin, UserRole.faculty, UserRole.hod):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    if scope == "faculty" and faculty_id is None and format != "xlsx":
-        raise HTTPException(
-            status_code=400,
-            detail="faculty_id is required for faculty-wise export (or use xlsx without faculty_id for multi-sheet by faculty)",
-        )
-    if scope == "year" and publication_year is None and format == "csv":
-        raise HTTPException(status_code=400, detail="publication_year is recommended for year-wise CSV/PDF export")
+    if year_start is not None and year_end is not None and year_start > year_end:
+        raise HTTPException(status_code=400, detail="year_start cannot be greater than year_end")
+
+    parsed_faculty_ids: list[int] = []
+    if faculty_ids:
+        try:
+            parsed_faculty_ids = sorted(
+                {
+                    int(part.strip())
+                    for part in faculty_ids.split(",")
+                    if part.strip()
+                }
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="faculty_ids must be a comma-separated list of integers") from exc
+    if faculty_id is not None:
+        parsed_faculty_ids.append(faculty_id)
+    parsed_faculty_ids = sorted(set(parsed_faculty_ids))
 
     base_name = "publications"
-    if faculty_id:
-        base_name += f"_faculty_{faculty_id}"
+    if parsed_faculty_ids:
+        joined = "-".join(str(fid) for fid in parsed_faculty_ids)
+        base_name += f"_faculty_{joined}"
     if publication_year:
         base_name += f"_year_{publication_year}"
+    if year_start is not None or year_end is not None:
+        base_name += f"_range_{year_start or 'min'}_{year_end or 'max'}"
+
+    if scope in {"faculty", "year"} and format in {"csv", "pdf"}:
+        payload = export_publications_grouped_archive(
+            db,
+            format=format,
+            scope=scope,
+            faculty_ids=parsed_faculty_ids or None,
+            publication_year=publication_year,
+            year_start=year_start,
+            year_end=year_end,
+        )
+        return Response(
+            content=payload,
+            media_type="application/zip",
+            headers={"Content-Disposition": f"attachment; filename={base_name}_{scope}_{format}.zip"},
+        )
 
     if format == "pdf":
         title = f"Publications — {scope}"
@@ -370,8 +404,10 @@ def export_publications(
             title += f" ({publication_year})"
         payload = export_publications_pdf(
             db,
-            faculty_id=faculty_id,
+            faculty_ids=parsed_faculty_ids or None,
             publication_year=publication_year,
+            year_start=year_start,
+            year_end=year_end,
             title=title,
         )
         return Response(
@@ -382,8 +418,10 @@ def export_publications(
     if format == "xlsx":
         payload = export_publications_excel(
             db,
-            faculty_id=faculty_id,
+            faculty_ids=parsed_faculty_ids or None,
             publication_year=publication_year,
+            year_start=year_start,
+            year_end=year_end,
             scope=scope,
         )
         return Response(
@@ -393,8 +431,10 @@ def export_publications(
         )
     payload = export_publications_csv(
         db,
-        faculty_id=faculty_id,
+        faculty_ids=parsed_faculty_ids or None,
         publication_year=publication_year,
+        year_start=year_start,
+        year_end=year_end,
     )
     return Response(
         content=payload,

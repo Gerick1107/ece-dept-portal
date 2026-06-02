@@ -14,7 +14,6 @@ export type ProjectFilters = {
   sdg?: number;
   status?: string;
   credit?: string;
-  grade?: string;
   confirmed_sdg_only?: boolean;
 };
 

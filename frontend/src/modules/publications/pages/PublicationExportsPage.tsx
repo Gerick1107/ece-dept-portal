@@ -15,18 +15,23 @@ async function downloadExport(params: URLSearchParams) {
   }
   const blob = await res.blob();
   const format = params.get("format") ?? "csv";
+  const disposition = res.headers.get("content-disposition") ?? "";
+  const nameMatch = disposition.match(/filename=([^;]+)/i);
+  const responseName = nameMatch?.[1]?.replaceAll('"', "").trim();
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `publications.${format}`;
+  a.download = responseName || `publications.${format}`;
   a.click();
   URL.revokeObjectURL(url);
 }
 
 export default function PublicationExportsPage() {
   const [faculty, setFaculty] = useState<Faculty[]>([]);
-  const [facultyId, setFacultyId] = useState("");
+  const [selectedFacultyIds, setSelectedFacultyIds] = useState<string[]>([]);
   const [year, setYear] = useState("");
+  const [yearStart, setYearStart] = useState("");
+  const [yearEnd, setYearEnd] = useState("");
   const [scope, setScope] = useState<"all" | "faculty" | "year">("all");
   const [error, setError] = useState("");
 
@@ -38,8 +43,10 @@ export default function PublicationExportsPage() {
 
   function buildParams(format: "csv" | "xlsx" | "pdf") {
     const p = new URLSearchParams({ format, scope });
-    if (facultyId) p.set("faculty_id", facultyId);
+    if (selectedFacultyIds.length) p.set("faculty_ids", selectedFacultyIds.join(","));
     if (year) p.set("publication_year", year);
+    if (yearStart) p.set("year_start", yearStart);
+    if (yearEnd) p.set("year_end", yearEnd);
     return p;
   }
 
@@ -70,33 +77,57 @@ export default function PublicationExportsPage() {
               onChange={(e) => setScope(e.target.value as "all" | "faculty" | "year")}
             >
               <option value="all">All publications</option>
-              <option value="faculty">Faculty-wise (multi-sheet Excel)</option>
-              <option value="year">Year-wise (multi-sheet Excel)</option>
+              <option value="faculty">Faculty-wise (Excel sheets / CSV-PDF zip)</option>
+              <option value="year">Year-wise (Excel sheets / CSV-PDF zip)</option>
             </select>
           </label>
           <label className="text-sm">
             <span className="block text-slate-600 mb-1">Filter by faculty</span>
             <select
+              multiple
               className="w-full border rounded-lg px-3 py-2 text-sm"
-              value={facultyId}
-              onChange={(e) => setFacultyId(e.target.value)}
+              value={selectedFacultyIds}
+              onChange={(e) => {
+                const values = Array.from(e.target.selectedOptions).map((o) => o.value);
+                setSelectedFacultyIds(values);
+              }}
             >
-              <option value="">All faculty</option>
               {faculty.map((f) => (
                 <option key={f.id} value={f.id}>
                   {f.name}
                 </option>
               ))}
             </select>
+            <span className="mt-1 block text-xs text-slate-500">Ctrl/Cmd + click to choose multiple faculty</span>
           </label>
           <label className="text-sm">
-            <span className="block text-slate-600 mb-1">Filter by year</span>
+            <span className="block text-slate-600 mb-1">Filter by single year</span>
             <input
               type="number"
               className="w-full border rounded-lg px-3 py-2 text-sm"
               placeholder="e.g. 2024"
               value={year}
               onChange={(e) => setYear(e.target.value)}
+            />
+          </label>
+          <label className="text-sm">
+            <span className="block text-slate-600 mb-1">Year range start</span>
+            <input
+              type="number"
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+              placeholder="e.g. 2020"
+              value={yearStart}
+              onChange={(e) => setYearStart(e.target.value)}
+            />
+          </label>
+          <label className="text-sm">
+            <span className="block text-slate-600 mb-1">Year range end</span>
+            <input
+              type="number"
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+              placeholder="e.g. 2024"
+              value={yearEnd}
+              onChange={(e) => setYearEnd(e.target.value)}
             />
           </label>
         </div>

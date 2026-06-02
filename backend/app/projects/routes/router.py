@@ -55,7 +55,6 @@ def _filters_from_query(
     sdg: int | None = None,
     status: str | None = None,
     credit: str | None = None,
-    grade: str | None = None,
     confirmed_sdg_only: bool = True,
 ) -> ProjectSearchFilters:
     return ProjectSearchFilters(
@@ -67,7 +66,6 @@ def _filters_from_query(
         sdg_number=sdg,
         status=status,
         credit=credit,
-        grade=grade,
         confirmed_sdg_only=confirmed_sdg_only,
     )
 
@@ -102,11 +100,10 @@ def list_or_search_projects(
     sdg: int | None = None,
     status: str | None = None,
     credit: str | None = None,
-    grade: str | None = None,
     confirmed_sdg_only: bool = False,
 ):
     filters = _filters_from_query(
-        query, faculty_id, project_type, semester, student_name, sdg, status, credit, grade, confirmed_sdg_only
+        query, faculty_id, project_type, semester, student_name, sdg, status, credit, confirmed_sdg_only
     )
     rows, total = search_projects(db, filters, page, page_size)
     return ProjectListResponse(
@@ -207,11 +204,9 @@ def generate_sdgs(
         if exc.response.status_code == 429:
             raise HTTPException(
                 status_code=429,
-                detail="Gemini rate limit reached — wait a minute and try again.",
+                detail="SDG tagging rate limit reached — wait a minute and try again.",
             ) from exc
         raise HTTPException(status_code=502, detail="SDG service error") from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
     project = _load_project(db, project_id)
     return ProjectResponse.model_validate(project_to_dict(db, project))
 
@@ -269,11 +264,10 @@ def export_projects(
     sdg: int | None = None,
     status: str | None = None,
     credit: str | None = None,
-    grade: str | None = None,
     confirmed_sdg_only: bool = True,
 ):
     filters = _filters_from_query(
-        query, faculty_id, project_type, semester, student_name, sdg, status, credit, grade, confirmed_sdg_only
+        query, faculty_id, project_type, semester, student_name, sdg, status, credit, confirmed_sdg_only
     )
     if format == "csv":
         payload = export_projects_csv(db, filters)

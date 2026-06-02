@@ -16,7 +16,6 @@ export type Project = {
   co_guide: string | null;
   status: string;
   credit: string | null;
-  grade: string | null;
   students: string[];
   sdg_review_status: string;
   suggested_sdgs: SdgBrief[];

@@ -19,7 +19,6 @@ CANONICAL_FIELDS = {
     "semester": ["semester", "term", "session"],
     "status": ["status", "project status"],
     "credit": ["credit", "credits"],
-    "grade": ["grade", "marks", "result"],
 }
 
 

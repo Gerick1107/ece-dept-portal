@@ -20,6 +20,7 @@ import os
 import sys
 import datetime
 import re
+from difflib import SequenceMatcher
 
 # Display uncropped output for pandas
 pd.set_option('display.max_columns', None)
@@ -29,6 +30,28 @@ def normalize_evaluation_name(value):
     if pd.isna(value):
         return ""
     return re.sub(r"\s+", "", str(value).strip()).upper()
+
+
+def normalize_group_key(value) -> str:
+    """Normalize parent group labels (case/space/punctuation tolerant)."""
+    raw = normalize_evaluation_name(value)
+    raw = raw.split(".")[0]
+    return re.sub(r"[^A-Z0-9]", "", raw)
+
+
+def _group_name_parts(group_key: str) -> tuple[str, str]:
+    m = re.match(r"^([A-Z_]+?)(\d+)?$", group_key or "")
+    if not m:
+        return (group_key or "", "")
+    return (m.group(1) or "", m.group(2) or "")
+
+
+def _canonical_assessment_id(col_name: str, group_key: str) -> str:
+    col = str(col_name).strip()
+    suffix_match = re.match(r"^(.+?)(\.\d+)$", col)
+    if suffix_match:
+        return f"{group_key}{suffix_match.group(2)}"
+    return group_key
 
 
 def co_cell_empty(value) -> bool:
@@ -284,14 +307,14 @@ def main_process(course_file_path, mapping_file_path, course_title, included_rol
         m = re.match(r'^(.+)\.(\d+)$', col_str)
         if m:
             parent = m.group(1).strip()
-            parent_key = normalize_evaluation_name(parent)
+            parent_key = normalize_group_key(parent)
             if parent_key not in assessment_groups:
                 assessment_groups[parent_key] = []
             assessment_groups[parent_key].append(col)
 
     # Add un-suffixed parent columns to their group
     for col in df.columns:
-        col_key = normalize_evaluation_name(col)
+        col_key = normalize_group_key(col)
         if col_key in assessment_groups and normalize_evaluation_name(col) not in normalized_skip_cols:
             if col not in assessment_groups[col_key]:
                 assessment_groups[col_key].insert(0, col)
@@ -303,13 +326,61 @@ def main_process(course_file_path, mapping_file_path, course_title, included_rol
     for col in df.columns:
         if col in cols_in_groups or normalize_evaluation_name(col) in normalized_skip_cols:
             continue
-        col_key = normalize_evaluation_name(col)
+        col_key = normalize_group_key(col)
         for parent_key in assessment_groups:
             if col_key == parent_key:
                 assessment_groups[parent_key].append(col)
                 cols_in_groups.add(col)
                 print(f"Added '{col}' to group '{parent_key}' (case/space-normalized match)")
                 break
+
+    # Attach typo variants (especially unsuffixed totals) to the closest parent group.
+    for col in df.columns:
+        if col in cols_in_groups or normalize_evaluation_name(col) in normalized_skip_cols:
+            continue
+        col_key = normalize_group_key(col)
+        col_prefix, col_num = _group_name_parts(col_key)
+        best_key = None
+        best_score = 0.0
+        for parent_key in assessment_groups:
+            parent_prefix, parent_num = _group_name_parts(parent_key)
+            if col_num and parent_num and col_num != parent_num:
+                continue
+            if col_prefix and parent_prefix and col_prefix[:2] != parent_prefix[:2]:
+                continue
+            score = SequenceMatcher(None, col_key, parent_key).ratio()
+            if score > best_score:
+                best_score = score
+                best_key = parent_key
+        if best_key and best_score >= 0.82:
+            assessment_groups[best_key].append(col)
+            cols_in_groups.add(col)
+            print(f"Added '{col}' to group '{best_key}' (typo-tolerant match)")
+
+    # Merge near-identical groups (e.g., typo variants like ASSIGN1/ASSING1).
+    group_keys = list(assessment_groups.keys())
+    for i, left in enumerate(group_keys):
+        if left not in assessment_groups:
+            continue
+        for right in group_keys[i + 1:]:
+            if right not in assessment_groups:
+                continue
+            left_prefix, left_num = _group_name_parts(left)
+            right_prefix, right_num = _group_name_parts(right)
+            if left_num and right_num and left_num != right_num:
+                continue
+            if left_prefix and right_prefix and left_prefix[:2] != right_prefix[:2]:
+                continue
+            similarity = SequenceMatcher(None, left, right).ratio()
+            if similarity >= 0.82:
+                assessment_groups[left].extend(assessment_groups[right])
+                assessment_groups[left] = list(dict.fromkeys(assessment_groups[left]))
+                del assessment_groups[right]
+
+    col_to_group_key: dict[str, str] = {}
+    for gkey, cols in assessment_groups.items():
+        for c in cols:
+            col_to_group_key[str(c)] = gkey
 
     # For each group, identify total columns (those with NaN CO) — position doesn't matter
     total_cols_in_groups = set()
@@ -318,7 +389,8 @@ def main_process(course_file_path, mapping_file_path, course_title, included_rol
             group_totals = []
             for col in cols:
                 co_val = df.loc['CO', col]
-                if co_cell_empty(co_val):
+                normalized_col = normalize_evaluation_name(col)
+                if co_cell_empty(co_val) or "BEST_TOTAL_" in normalized_col:
                     group_totals.append(col)
                     total_cols_in_groups.add(col)
             if not group_totals:
@@ -340,9 +412,15 @@ def main_process(course_file_path, mapping_file_path, course_title, included_rol
             is_project = normalized_col.startswith('PROJECT')
             is_group_total = col in total_cols_in_groups
             is_branch = normalized_col == 'BRANCH'
+            col_group_key = normalize_group_key(col)
+            has_numbered_children = any(
+                normalize_group_key(other).startswith(col_group_key)
+                and normalize_group_key(other) != col_group_key
+                for other in df.columns
+            )
             if is_bonus_assessment_column(col):
                 continue
-            if is_best_total or is_project or is_group_total or is_branch:
+            if is_best_total or is_project or is_group_total or is_branch or (co_cell_empty(df.loc['CO', col]) and has_numbered_children):
                 continue  # totals, best-of, projects, and branch metadata don't need CO assignments
             co_val = df.loc['CO', col]
             if co_cell_empty(co_val):
@@ -433,13 +511,22 @@ def main_process(course_file_path, mapping_file_path, course_title, included_rol
     assessment_ids = assessment_ids.drop(['Grade_Point'], errors='ignore')
     assessment_ids_display = []
     seen_assessment_ids = set()
+    co_row_values = df.loc['CO'] if 'CO' in df.index else None
     for assessment_id in assessment_ids:
         normalized_assessment_id = normalize_evaluation_name(assessment_id)
         if normalized_assessment_id in normalized_skip_cols:
             continue
-        if normalized_assessment_id not in seen_assessment_ids:
-            assessment_ids_display.append(normalized_assessment_id)
-            seen_assessment_ids.add(normalized_assessment_id)
+        is_best_total = 'BEST_TOTAL_' in normalized_assessment_id
+        if is_best_total:
+            continue
+        if co_row_values is not None and co_cell_empty(co_row_values[assessment_id]) and assessment_id in total_cols_in_groups:
+            continue
+
+        group_key = col_to_group_key.get(str(assessment_id), normalize_group_key(assessment_id))
+        canonical_id = _canonical_assessment_id(str(assessment_id), group_key)
+        if canonical_id not in seen_assessment_ids:
+            assessment_ids_display.append(canonical_id)
+            seen_assessment_ids.add(canonical_id)
 
     print(assessment_ids)
     print("Canonical Assessment IDs:", assessment_ids_display)

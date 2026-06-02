@@ -59,7 +59,6 @@ export default function ProjectsPage() {
     sdg: "",
     status: "",
     credit: "",
-    grade: "",
     page: 1,
   });
 
@@ -71,7 +70,6 @@ export default function ProjectsPage() {
     co_guide: "",
     status: "Pending",
     credit: "",
-    grade: "",
     students: "",
   });
 
@@ -89,7 +87,6 @@ export default function ProjectsPage() {
         sdg: filters.sdg ? Number(filters.sdg) : undefined,
         status: filters.status || undefined,
         credit: filters.credit || undefined,
-        grade: filters.grade || undefined,
         confirmed_sdg_only: false,
       });
       setProjects(r.items);
@@ -147,7 +144,6 @@ export default function ProjectsPage() {
       co_guide: "",
       status: "Pending",
       credit: "",
-      grade: "",
       students: "",
     });
     setShowForm(true);
@@ -163,7 +159,6 @@ export default function ProjectsPage() {
       co_guide: p.co_guide ?? "",
       status: p.status,
       credit: p.credit ?? "",
-      grade: p.grade ?? "",
       students: p.students.join("; "),
     });
     setShowForm(true);
@@ -179,7 +174,6 @@ export default function ProjectsPage() {
       co_guide: form.co_guide || null,
       status: form.status,
       credit: form.credit || null,
-      grade: form.grade || null,
       students: form.students.split(/[;,]/).map((s) => s.trim()).filter(Boolean),
     };
     try {
@@ -353,12 +347,6 @@ export default function ProjectsPage() {
             value={filters.status}
             onChange={(e) => setFilters({ ...filters, status: e.target.value, page: 1 })}
           />
-          <input
-            placeholder="Grade"
-            className="border rounded-lg px-3 py-2 text-sm"
-            value={filters.grade}
-            onChange={(e) => setFilters({ ...filters, grade: e.target.value, page: 1 })}
-          />
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={() => load()} className="rounded-lg bg-slate-800 text-white px-3 py-1.5 text-sm">
@@ -378,7 +366,6 @@ export default function ProjectsPage() {
                     student_name: filters.student_name || undefined,
                     sdg: filters.sdg ? Number(filters.sdg) : undefined,
                     status: filters.status || undefined,
-                    grade: filters.grade || undefined,
                   },
                   fmt
                 ).catch((e) => setError(e instanceof Error ? e.message : "Export failed"))
@@ -406,7 +393,6 @@ export default function ProjectsPage() {
                 <th className="px-3 py-2 font-medium">SDGs</th>
                 <th className="px-3 py-2 font-medium">Status</th>
                 <th className="px-3 py-2 font-medium">Credit</th>
-                <th className="px-3 py-2 font-medium">Grade</th>
                 {canReviewSdgs && <th className="px-3 py-2 font-medium">Actions</th>}
               </tr>
             </thead>
@@ -428,7 +414,6 @@ export default function ProjectsPage() {
                   </td>
                   <td className="px-3 py-2">{p.status}</td>
                   <td className="px-3 py-2">{p.credit ?? "—"}</td>
-                  <td className="px-3 py-2">{p.grade ?? "—"}</td>
                   {canReviewSdgs && (
                     <td className="px-3 py-2 whitespace-nowrap">
                       <div className="flex flex-wrap items-center gap-2">
@@ -468,7 +453,7 @@ export default function ProjectsPage() {
               ))}
               {!projects.length && (
                 <tr>
-                  <td colSpan={canReviewSdgs ? 12 : 11} className="px-3 py-8 text-center text-slate-500">
+                  <td colSpan={canReviewSdgs ? 11 : 10} className="px-3 py-8 text-center text-slate-500">
                     No projects match your filters.
                   </td>
                 </tr>
@@ -553,7 +538,7 @@ export default function ProjectsPage() {
               value={form.students}
               onChange={(e) => setForm({ ...form, students: e.target.value })}
             />
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <input
                 className="border rounded-lg px-3 py-2 text-sm"
                 placeholder="Status"
@@ -565,12 +550,6 @@ export default function ProjectsPage() {
                 placeholder="Credit"
                 value={form.credit}
                 onChange={(e) => setForm({ ...form, credit: e.target.value })}
-              />
-              <input
-                className="border rounded-lg px-3 py-2 text-sm"
-                placeholder="Grade"
-                value={form.grade}
-                onChange={(e) => setForm({ ...form, grade: e.target.value })}
               />
             </div>
             <div className="flex justify-end gap-2 pt-2">
@@ -676,10 +655,14 @@ export default function ProjectsPage() {
                   className="text-sm text-teal-700"
                   onClick={async () => {
                     try {
-                      await generateSdgs(reviewProject.id);
-                      const r = await listProjects({ page: 1, page_size: 1, query: reviewProject.project_title });
-                      const updated = r.items.find((x) => x.id === reviewProject.id);
-                      if (updated) setReviewProject(updated);
+                      const updated = await generateSdgs(reviewProject.id);
+                      setReviewProject(updated);
+                      setEditSdgsSelection(
+                        updated.confirmed_sdgs.length > 0
+                          ? updated.confirmed_sdgs.map((s) => s.sdg_number)
+                          : updated.suggested_sdgs.map((s) => s.sdg_number)
+                      );
+                      await load();
                     } catch (e) {
                       setError(e instanceof Error ? e.message : "Regenerate failed");
                     }

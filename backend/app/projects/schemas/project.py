@@ -28,7 +28,6 @@ class ProjectBase(BaseModel):
     co_guide: str | None = None
     status: str = "Pending"
     credit: str | None = None
-    grade: str | None = None
     students: list[str] = Field(default_factory=list)
 
 
@@ -49,7 +48,6 @@ class ProjectUpdate(BaseModel):
     co_guide: str | None = None
     status: str | None = None
     credit: str | None = None
-    grade: str | None = None
     students: list[str] | None = None
 
 
@@ -63,7 +61,6 @@ class ProjectResponse(BaseModel):
     co_guide: str | None
     status: str
     credit: str | None
-    grade: str | None
     students: list[str]
     sdg_review_status: str
     suggested_sdgs: list[SdgBrief] = Field(default_factory=list)

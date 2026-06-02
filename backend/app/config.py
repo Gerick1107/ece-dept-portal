@@ -114,15 +114,11 @@ class Settings(BaseSettings):
 
     projects_upload_dir: str = str(BACKEND_ROOT / "storage" / "uploads" / "projects")
 
-    # SDG tagging — set ENABLE_SDG_LLM=true to turn on Gemini/OpenRouter auto-tagging
+    # SDG tagging (local embedding-based; no API key required)
     enable_sdg_llm: bool = False
-    sdg_llm_provider: str = "gemini"
-    gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.0-flash-lite"
-    openrouter_api_key: str = ""
-    openrouter_model: str = "deepseek/deepseek-chat"
-    sdg_request_delay_seconds: float = 6.0
-    sdg_max_retries: int = 5
+    sdg_embedding_model: str = "BAAI/bge-large-en-v1.5"
+    sdg_top_k: int = 5
+    sdg_request_delay_seconds: float = 0.5
 
     @model_validator(mode="after")
     def _assemble_database_url(self) -> "Settings":

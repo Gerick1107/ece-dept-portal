@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from io import BytesIO
+from zipfile import ZIP_DEFLATED, ZipFile
 
 import pandas as pd
 from sqlalchemy import select
@@ -41,19 +42,32 @@ def _query_publications(
     db: Session,
     *,
     faculty_id: int | None = None,
+    faculty_ids: list[int] | None = None,
     publication_year: int | None = None,
+    year_start: int | None = None,
+    year_end: int | None = None,
 ) -> list[Publication]:
     stmt = select(Publication)
+    resolved_faculty_ids: list[int] = []
+    if faculty_ids:
+        resolved_faculty_ids.extend(faculty_ids)
     if faculty_id is not None:
+        resolved_faculty_ids.append(faculty_id)
+    resolved_faculty_ids = sorted(set(resolved_faculty_ids))
+    if resolved_faculty_ids:
         stmt = stmt.where(
             Publication.id.in_(
                 select(PublicationFaculty.publication_id).where(
-                    PublicationFaculty.faculty_id == faculty_id
+                    PublicationFaculty.faculty_id.in_(resolved_faculty_ids)
                 )
             )
         )
     if publication_year is not None:
         stmt = stmt.where(Publication.publication_year == publication_year)
+    if year_start is not None:
+        stmt = stmt.where(Publication.publication_year >= year_start)
+    if year_end is not None:
+        stmt = stmt.where(Publication.publication_year <= year_end)
     stmt = stmt.order_by(
         Publication.publication_year.is_(None).asc(),
         Publication.publication_year.desc(),
@@ -88,9 +102,19 @@ def export_publications_csv(
     db: Session,
     *,
     faculty_id: int | None = None,
+    faculty_ids: list[int] | None = None,
     publication_year: int | None = None,
+    year_start: int | None = None,
+    year_end: int | None = None,
 ) -> bytes:
-    rows = _query_publications(db, faculty_id=faculty_id, publication_year=publication_year)
+    rows = _query_publications(
+        db,
+        faculty_id=faculty_id,
+        faculty_ids=faculty_ids,
+        publication_year=publication_year,
+        year_start=year_start,
+        year_end=year_end,
+    )
     frame = _dataframe(_records_from_rows(db, rows))
     return frame.to_csv(index=False).encode("utf-8")
 
@@ -99,10 +123,20 @@ def export_publications_excel(
     db: Session,
     *,
     faculty_id: int | None = None,
+    faculty_ids: list[int] | None = None,
     publication_year: int | None = None,
+    year_start: int | None = None,
+    year_end: int | None = None,
     scope: str = "all",
 ) -> bytes:
-    rows = _query_publications(db, faculty_id=faculty_id, publication_year=publication_year)
+    rows = _query_publications(
+        db,
+        faculty_id=faculty_id,
+        faculty_ids=faculty_ids,
+        publication_year=publication_year,
+        year_start=year_start,
+        year_end=year_end,
+    )
     records = _records_from_rows(db, rows)
     output = BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
@@ -133,10 +167,20 @@ def export_publications_pdf(
     db: Session,
     *,
     faculty_id: int | None = None,
+    faculty_ids: list[int] | None = None,
     publication_year: int | None = None,
+    year_start: int | None = None,
+    year_end: int | None = None,
     title: str = "Publications Export",
 ) -> bytes:
-    rows = _query_publications(db, faculty_id=faculty_id, publication_year=publication_year)
+    rows = _query_publications(
+        db,
+        faculty_id=faculty_id,
+        faculty_ids=faculty_ids,
+        publication_year=publication_year,
+        year_start=year_start,
+        year_end=year_end,
+    )
     records = _records_from_rows(db, rows)
     pdf_records = [
         {
@@ -152,3 +196,67 @@ def export_publications_pdf(
         for rec in records
     ]
     return records_to_list_pdf_bytes(title, pdf_records, entry_title_key="Title")
+
+
+def export_publications_grouped_archive(
+    db: Session,
+    *,
+    format: str,
+    scope: str,
+    faculty_ids: list[int] | None = None,
+    publication_year: int | None = None,
+    year_start: int | None = None,
+    year_end: int | None = None,
+) -> bytes:
+    rows = _query_publications(
+        db,
+        faculty_ids=faculty_ids,
+        publication_year=publication_year,
+        year_start=year_start,
+        year_end=year_end,
+    )
+    records = _records_from_rows(db, rows)
+    if scope == "faculty":
+        grouped: dict[str, list[dict]] = defaultdict(list)
+        for rec in records:
+            names = rec.get("faculty_names") or "Unassigned"
+            for part in names.split(";"):
+                name = part.strip() or "Unassigned"
+                grouped[name].append(rec)
+    elif scope == "year":
+        grouped = defaultdict(list)
+        for rec in records:
+            grouped[str(rec.get("publication_year") or "Unknown")].append(rec)
+    else:
+        raise ValueError(f"Unsupported grouping scope: {scope}")
+
+    output = BytesIO()
+    with ZipFile(output, mode="w", compression=ZIP_DEFLATED) as archive:
+        for key, items in sorted(grouped.items()):
+            safe_key = str(key).replace("/", "-").replace("\\", "-").strip() or "group"
+            if format == "csv":
+                payload = _dataframe(items).to_csv(index=False).encode("utf-8")
+                archive.writestr(f"publications_{scope}_{safe_key}.csv", payload)
+            elif format == "pdf":
+                pdf_records = [
+                    {
+                        "Title": rec.get("title") or "",
+                        "Authors": rec.get("authors") or "",
+                        "Year": str(rec.get("publication_year") or ""),
+                        "Faculty": rec.get("faculty_names") or "",
+                        "Journal or Conference": rec.get("journal_or_conference") or "",
+                        "Publisher": rec.get("publisher") or "",
+                        "Citations": str(rec.get("citation_count") or ""),
+                        "Type": rec.get("publication_type") or "",
+                    }
+                    for rec in items
+                ]
+                pdf = records_to_list_pdf_bytes(
+                    f"Publications — {scope.title()}: {key}",
+                    pdf_records,
+                    entry_title_key="Title",
+                )
+                archive.writestr(f"publications_{scope}_{safe_key}.pdf", pdf)
+            else:
+                raise ValueError(f"Unsupported grouped archive format: {format}")
+    return output.getvalue()

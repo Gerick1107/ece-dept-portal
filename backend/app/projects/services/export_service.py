@@ -19,7 +19,6 @@ EXPORT_COLUMNS = [
     "sdgs",
     "status",
     "credit",
-    "grade",
 ]
 
 
@@ -48,7 +47,6 @@ def _rows_from_filters(db: Session, filters: ProjectSearchFilters) -> list[dict]
                 "sdgs": sdg_text,
                 "status": data["status"],
                 "credit": data["credit"] or "",
-                "grade": data["grade"] or "",
             }
         )
     return records
@@ -82,7 +80,6 @@ def export_projects_pdf(db: Session, filters: ProjectSearchFilters, title: str =
             "SDGs": str(row["sdgs"]),
             "Status": str(row["status"]),
             "Credit": str(row["credit"]),
-            "Grade": str(row["grade"]),
         }
         for row in records
     ]

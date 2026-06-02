@@ -41,7 +41,6 @@ class Project(Base):
     co_guide: Mapped[str | None] = mapped_column(String(255), nullable=True)
     status: Mapped[str] = mapped_column(String(64), nullable=False, default="Pending", index=True)
     credit: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    grade: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
     upload_batch_id: Mapped[int | None] = mapped_column(
         ForeignKey("project_uploads.id", ondelete="SET NULL"), nullable=True
     )

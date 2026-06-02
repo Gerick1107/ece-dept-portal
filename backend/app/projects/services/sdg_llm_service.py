@@ -1,128 +1,62 @@
 from __future__ import annotations
 
-import json
-import re
-import time
-from abc import ABC, abstractmethod
+from functools import lru_cache
 
-import httpx
+import numpy as np
+from sentence_transformers import SentenceTransformer
 
 from app.config import get_settings
 
-
-class SdgLlmProvider(ABC):
-    @abstractmethod
-    def suggest_sdgs(self, project_title: str, project_type: str) -> list[dict]:
-        """Return list of {sdg_number, confidence}."""
-
-    def suggest_sdgs_with_retry(self, project_title: str, project_type: str) -> list[dict]:
-        settings = get_settings()
-        last_error: Exception | None = None
-        for attempt in range(settings.sdg_max_retries):
-            try:
-                return self.suggest_sdgs(project_title, project_type)
-            except httpx.HTTPStatusError as exc:
-                last_error = exc
-                if exc.response.status_code == 429:
-                    wait = settings.sdg_request_delay_seconds * (2**attempt)
-                    time.sleep(wait)
-                    continue
-                raise
-            except Exception as exc:
-                last_error = exc
-                if attempt + 1 < settings.sdg_max_retries:
-                    time.sleep(settings.sdg_request_delay_seconds)
-                    continue
-                raise
-        if last_error:
-            raise last_error
-        raise RuntimeError("SDG suggestion failed after retries")
+SDG_REFERENCE = [
+    (1, "No Poverty", "End poverty in all its forms everywhere."),
+    (2, "Zero Hunger", "End hunger, achieve food security and improved nutrition, and promote sustainable agriculture."),
+    (3, "Good Health and Well-being", "Ensure healthy lives and promote well-being for all at all ages."),
+    (4, "Quality Education", "Ensure inclusive and equitable quality education and lifelong learning opportunities for all."),
+    (5, "Gender Equality", "Achieve gender equality and empower all women and girls."),
+    (6, "Clean Water and Sanitation", "Ensure availability and sustainable management of water and sanitation for all."),
+    (7, "Affordable and Clean Energy", "Ensure access to affordable, reliable, sustainable, and modern energy for all."),
+    (8, "Decent Work and Economic Growth", "Promote sustained, inclusive and sustainable economic growth, full and productive employment."),
+    (9, "Industry, Innovation and Infrastructure", "Build resilient infrastructure, promote inclusive industrialization and foster innovation."),
+    (10, "Reduced Inequalities", "Reduce inequality within and among countries."),
+    (11, "Sustainable Cities and Communities", "Make cities and human settlements inclusive, safe, resilient and sustainable."),
+    (12, "Responsible Consumption and Production", "Ensure sustainable consumption and production patterns."),
+    (13, "Climate Action", "Take urgent action to combat climate change and its impacts."),
+    (14, "Life Below Water", "Conserve and sustainably use oceans, seas and marine resources."),
+    (15, "Life on Land", "Protect, restore and promote sustainable use of terrestrial ecosystems and halt biodiversity loss."),
+    (16, "Peace, Justice and Strong Institutions", "Promote peaceful and inclusive societies, justice for all and effective institutions."),
+    (17, "Partnerships for the Goals", "Strengthen the means of implementation and revitalize the global partnership for sustainable development."),
+]
 
 
-class GeminiSdgProvider(SdgLlmProvider):
-    def suggest_sdgs(self, project_title: str, project_type: str) -> list[dict]:
-        settings = get_settings()
-        if not settings.gemini_api_key:
-            raise ValueError("GEMINI_API_KEY is not configured in backend/.env")
-        prompt = _build_prompt(project_title, project_type)
-        url = (
-            f"https://generativelanguage.googleapis.com/v1beta/models/"
-            f"{settings.gemini_model}:generateContent"
-        )
-        payload = {
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {"temperature": 0.2, "maxOutputTokens": 512},
-        }
-        with httpx.Client(timeout=60.0) as client:
-            response = client.post(url, params={"key": settings.gemini_api_key}, json=payload)
-            response.raise_for_status()
-            data = response.json()
-        candidates = data.get("candidates") or []
-        if not candidates:
-            raise ValueError("Gemini returned no candidates — check API key and model name")
-        text = candidates[0]["content"]["parts"][0]["text"]
-        return _parse_llm_json(text)
+@lru_cache(maxsize=1)
+def _embedder() -> SentenceTransformer:
+    model_name = get_settings().sdg_embedding_model
+    return SentenceTransformer(model_name)
 
 
-class OpenRouterSdgProvider(SdgLlmProvider):
-    def suggest_sdgs(self, project_title: str, project_type: str) -> list[dict]:
-        settings = get_settings()
-        if not settings.openrouter_api_key:
-            raise ValueError("OPENROUTER_API_KEY is not configured in backend/.env")
-        prompt = _build_prompt(project_title, project_type)
-        with httpx.Client(timeout=90.0) as client:
-            response = client.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {settings.openrouter_api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": settings.openrouter_model,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.2,
-                },
-            )
-            response.raise_for_status()
-            text = response.json()["choices"][0]["message"]["content"]
-        return _parse_llm_json(text)
+@lru_cache(maxsize=1)
+def _sdg_embeddings() -> np.ndarray:
+    model = _embedder()
+    corpus = [f"SDG {n}: {name}. {desc}" for n, name, desc in SDG_REFERENCE]
+    vectors = model.encode(corpus, convert_to_numpy=True, normalize_embeddings=True)
+    return np.asarray(vectors, dtype=np.float32)
 
 
-def get_sdg_provider() -> SdgLlmProvider:
+def suggest_project_sdgs(project_title: str, project_type: str, project_abstract: str | None = None) -> list[dict]:
     settings = get_settings()
-    if settings.sdg_llm_provider.lower() == "openrouter":
-        return OpenRouterSdgProvider()
-    return GeminiSdgProvider()
-
-
-def suggest_project_sdgs(project_title: str, project_type: str) -> list[dict]:
-    return get_sdg_provider().suggest_sdgs_with_retry(project_title, project_type)
-
-
-def _build_prompt(project_title: str, project_type: str) -> str:
-    return (
-        "You classify academic BTP/IP projects against UN Sustainable Development Goals (SDGs 1-17).\n"
-        f"Project type: {project_type}\n"
-        f"Project title: {project_title}\n\n"
-        "Respond with ONLY valid JSON array, no markdown. Each item:\n"
-        '{"sdg_number": <int 1-17>, "confidence": <float 0-1>}\n'
-        "Suggest 1-4 most relevant SDGs."
-    )
-
-
-def _parse_llm_json(text: str) -> list[dict]:
-    cleaned = text.strip()
-    if cleaned.startswith("```"):
-        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
-        cleaned = re.sub(r"\s*```$", "", cleaned)
-    match = re.search(r"\[[\s\S]*\]", cleaned)
-    if not match:
-        raise ValueError("LLM response did not contain a JSON array")
-    raw = json.loads(match.group(0))
-    results: list[dict] = []
-    for item in raw:
-        num = int(item.get("sdg_number", item.get("sdg", 0)))
-        if 1 <= num <= 17:
-            conf = float(item.get("confidence", 0.7))
-            results.append({"sdg_number": num, "confidence": max(0.0, min(1.0, conf))})
-    return results
+    model = _embedder()
+    text_parts = [f"Project type: {project_type}", f"Project title: {project_title}"]
+    if project_abstract and project_abstract.strip():
+        text_parts.append(f"Project abstract: {project_abstract.strip()}")
+    query = "\n".join(text_parts)
+    query_vec = model.encode(query, convert_to_numpy=True, normalize_embeddings=True).astype(np.float32)
+    scores = _sdg_embeddings() @ query_vec
+    top_k = max(1, min(settings.sdg_top_k, len(SDG_REFERENCE)))
+    indices = np.argsort(scores)[::-1][:top_k]
+    return [
+        {
+            "sdg_number": SDG_REFERENCE[int(i)][0],
+            "confidence": float(max(0.0, min(1.0, scores[int(i)]))),
+        }
+        for i in indices
+    ]

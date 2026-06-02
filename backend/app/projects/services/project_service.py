@@ -22,7 +22,6 @@ class ProjectSearchFilters:
         sdg_number: int | None = None,
         status: str | None = None,
         credit: str | None = None,
-        grade: str | None = None,
         confirmed_sdg_only: bool = False,
     ):
         self.query = query
@@ -33,7 +32,6 @@ class ProjectSearchFilters:
         self.sdg_number = sdg_number
         self.status = status
         self.credit = credit
-        self.grade = grade
         self.confirmed_sdg_only = confirmed_sdg_only
 
 
@@ -86,7 +84,6 @@ def project_to_dict(db: Session, project: Project) -> dict:
         "co_guide": project.co_guide,
         "status": project.status,
         "credit": project.credit,
-        "grade": project.grade,
         "students": [s.student_name for s in project.students],
         "sdg_review_status": project.sdg_review_status,
         "suggested_sdgs": suggested,
@@ -118,8 +115,6 @@ def search_projects(
         stmt = stmt.where(Project.status.ilike(f"%{filters.status.strip()}%"))
     if filters.credit:
         stmt = stmt.where(Project.credit.ilike(f"%{filters.credit.strip()}%"))
-    if filters.grade:
-        stmt = stmt.where(Project.grade.ilike(f"%{filters.grade.strip()}%"))
     if filters.query:
         q = f"%{filters.query.strip()}%"
         stmt = stmt.where(
@@ -151,8 +146,6 @@ def search_projects(
         count_stmt = count_stmt.where(Project.status.ilike(f"%{filters.status.strip()}%"))
     if filters.credit:
         count_stmt = count_stmt.where(Project.credit.ilike(f"%{filters.credit.strip()}%"))
-    if filters.grade:
-        count_stmt = count_stmt.where(Project.grade.ilike(f"%{filters.grade.strip()}%"))
     if filters.query:
         q = f"%{filters.query.strip()}%"
         count_stmt = count_stmt.where(or_(Project.project_title.ilike(q), Project.co_guide.ilike(q)))
@@ -184,7 +177,6 @@ def create_project(db: Session, body: ProjectCreate, upload_batch_id: int | None
         co_guide=body.co_guide.strip() if body.co_guide else None,
         status=body.status or "Pending",
         credit=body.credit,
-        grade=body.grade,
         upload_batch_id=upload_batch_id,
         sdg_review_status="none",
     )
@@ -213,8 +205,6 @@ def update_project(db: Session, project: Project, body: ProjectUpdate) -> Projec
         project.status = body.status
     if body.credit is not None:
         project.credit = body.credit
-    if body.grade is not None:
-        project.grade = body.grade
     if body.students is not None:
         _set_students(db, project, body.students)
     project.updated_at = datetime.utcnow()
@@ -239,19 +229,48 @@ def clear_sdg_links(db: Session, project_id: int, *, confirmed_only: bool | None
 
 def apply_sdg_suggestions(db: Session, project: Project, suggestions: list[dict]) -> None:
     clear_sdg_links(db, project.id, confirmed_only=False)
+    existing_confirmed_ids = set(
+        db.scalars(
+            select(ProjectSdg.sdg_id).where(
+                ProjectSdg.project_id == project.id,
+                ProjectSdg.is_confirmed.is_(True),
+            )
+        ).all()
+    )
+
+    deduped_by_sdg: dict[int, float | None] = {}
     for item in suggestions:
-        sdg = db.scalar(select(Sdg).where(Sdg.sdg_number == item["sdg_number"]))
-        if not sdg:
+        try:
+            sdg_number = int(item.get("sdg_number"))
+        except (TypeError, ValueError):
             continue
+        confidence_raw = item.get("confidence")
+        confidence = float(confidence_raw) if confidence_raw is not None else None
+        prev = deduped_by_sdg.get(sdg_number)
+        if prev is None or (confidence is not None and confidence > prev):
+            deduped_by_sdg[sdg_number] = confidence
+
+    added = 0
+    for sdg_number, confidence in deduped_by_sdg.items():
+        sdg = db.scalar(select(Sdg).where(Sdg.sdg_number == sdg_number))
+        if not sdg or sdg.id in existing_confirmed_ids:
+            # Keep confirmed mappings intact; don't reinsert duplicate links.
+            continue
+        added += 1
         db.add(
             ProjectSdg(
                 project_id=project.id,
                 sdg_id=sdg.id,
                 is_confirmed=False,
-                confidence_score=item.get("confidence"),
+                confidence_score=confidence,
             )
         )
-    project.sdg_review_status = "pending_review"
+    if added > 0:
+        project.sdg_review_status = "pending_review"
+    elif existing_confirmed_ids:
+        project.sdg_review_status = "confirmed"
+    else:
+        project.sdg_review_status = "none"
     db.commit()
 
 
