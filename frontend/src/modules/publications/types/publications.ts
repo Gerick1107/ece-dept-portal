@@ -26,10 +26,39 @@ export type Publication = {
   title: string;
   authors?: string | null;
   publication_year?: number | null;
-  journal_or_conference?: string | null;
+  publisher?: string | null;
   citation_count: number;
-  publication_type?: string | null;
+  link?: string | null;
+  publication_date?: string | null;
+  pages?: string | null;
+  conference?: string | null;
+  journal?: string | null;
+  book?: string | null;
+  volume?: string | null;
+  issue?: string | null;
+  is_patent: boolean;
+  inventors?: string | null;
+  patent_office?: string | null;
+  patent_number?: string | null;
+  application_number?: string | null;
   scholar_url?: string | null;
   source_hash: string;
   faculty_ids: number[];
 };
+
+export type PublicationTableMode = "publications" | "patents" | "all";
+
+export function publicationVenue(p: Publication): string {
+  return p.journal || p.conference || p.book || "";
+}
+
+export function publicationTitleHref(p: Publication): string | null {
+  return p.link || p.scholar_url || null;
+}
+
+export function publicationPeople(p: Publication): string {
+  if (p.is_patent) {
+    return p.inventors || p.authors || "";
+  }
+  return p.authors || "";
+}

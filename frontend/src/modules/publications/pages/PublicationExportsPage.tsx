@@ -33,6 +33,7 @@ export default function PublicationExportsPage() {
   const [yearStart, setYearStart] = useState("");
   const [yearEnd, setYearEnd] = useState("");
   const [scope, setScope] = useState<"all" | "faculty" | "year">("all");
+  const [exportType, setExportType] = useState<"publications" | "patents" | "both">("both");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -42,7 +43,7 @@ export default function PublicationExportsPage() {
   }, []);
 
   function buildParams(format: "csv" | "xlsx" | "pdf") {
-    const p = new URLSearchParams({ format, scope });
+    const p = new URLSearchParams({ format, scope, export_type: exportType });
     if (selectedFacultyIds.length) p.set("faculty_ids", selectedFacultyIds.join(","));
     if (year) p.set("publication_year", year);
     if (yearStart) p.set("year_start", yearStart);
@@ -69,6 +70,18 @@ export default function PublicationExportsPage() {
       <section className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-3">
         <h3 className="text-sm font-semibold text-slate-700">Export options</h3>
         <div className="grid sm:grid-cols-3 gap-3">
+          <label className="text-sm">
+            <span className="block text-slate-600 mb-1">Export type</span>
+            <select
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+              value={exportType}
+              onChange={(e) => setExportType(e.target.value as "publications" | "patents" | "both")}
+            >
+              <option value="publications">Publications</option>
+              <option value="patents">Patents</option>
+              <option value="both">Both</option>
+            </select>
+          </label>
           <label className="text-sm">
             <span className="block text-slate-600 mb-1">Scope</span>
             <select

@@ -79,8 +79,7 @@ def list_publications(
     query: str | None = None,
     faculty_id: int | None = None,
     publication_year: int | None = None,
-    publication_type: str | None = None,
-    journal_or_conference: str | None = None,
+    is_patent: bool | None = None,
 ) -> tuple[list[Publication], int]:
     stmt = select(Publication)
     if query:
@@ -88,10 +87,8 @@ def list_publications(
         stmt = stmt.where(Publication.title.ilike(pattern))
     if publication_year is not None:
         stmt = stmt.where(Publication.publication_year == publication_year)
-    if publication_type:
-        stmt = stmt.where(Publication.publication_type == publication_type.strip())
-    if journal_or_conference:
-        stmt = stmt.where(Publication.journal_or_conference == journal_or_conference.strip())
+    if is_patent is not None:
+        stmt = stmt.where(Publication.is_patent.is_(is_patent))
     if faculty_id is not None:
         stmt = stmt.join(PublicationFaculty, PublicationFaculty.publication_id == Publication.id).where(
             PublicationFaculty.faculty_id == faculty_id

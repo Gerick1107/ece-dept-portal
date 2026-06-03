@@ -5,6 +5,8 @@ import PublicationsTable from "../components/PublicationsTable";
 import { deletePublication, listAllPublications, listFaculty } from "../services/publicationsApi";
 import type { Faculty, Publication } from "../types/publications";
 
+type ProfileTab = "publications" | "patents";
+
 export default function FacultyProfilePage() {
   const { facultyId } = useParams();
   const { user } = useAuth();
@@ -13,6 +15,7 @@ export default function FacultyProfilePage() {
   const [faculty, setFaculty] = useState<Faculty | null>(null);
   const [publications, setPublications] = useState<Publication[]>([]);
   const [titleQuery, setTitleQuery] = useState("");
+  const [activeTab, setActiveTab] = useState<ProfileTab>("publications");
   const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
@@ -37,11 +40,18 @@ export default function FacultyProfilePage() {
     loadPublications();
   }, [loadPublications]);
 
-  const filtered = useMemo(() => {
+  const tabItems = useMemo(() => {
     const q = titleQuery.trim().toLowerCase();
-    if (!q) return publications;
-    return publications.filter((p) => p.title.toLowerCase().includes(q));
-  }, [publications, titleQuery]);
+    const byPatent = activeTab === "patents";
+    return publications.filter((p) => {
+      if (p.is_patent !== byPatent) return false;
+      if (!q) return true;
+      return p.title.toLowerCase().includes(q);
+    });
+  }, [publications, titleQuery, activeTab]);
+
+  const pubCount = useMemo(() => publications.filter((p) => !p.is_patent).length, [publications]);
+  const patentCount = useMemo(() => publications.filter((p) => p.is_patent).length, [publications]);
 
   const scholarUrl = useMemo(
     () => (faculty ? `https://scholar.google.com/citations?user=${faculty.scholar_id}` : "#"),
@@ -100,7 +110,26 @@ export default function FacultyProfilePage() {
           <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{loadError}</p>
         )}
         <div className="flex justify-between items-center gap-2 flex-wrap">
-          <h3 className="font-semibold">Publications ({filtered.length})</h3>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setActiveTab("publications")}
+              className={`rounded-lg px-3 py-1.5 text-sm ${
+                activeTab === "publications" ? "bg-teal-700 text-white" : "border border-slate-300"
+              }`}
+            >
+              Publications ({pubCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("patents")}
+              className={`rounded-lg px-3 py-1.5 text-sm ${
+                activeTab === "patents" ? "bg-teal-700 text-white" : "border border-slate-300"
+              }`}
+            >
+              Patents ({patentCount})
+            </button>
+          </div>
           <input
             className="border rounded px-2 py-1 text-sm w-64"
             placeholder="Search by title..."
@@ -109,7 +138,9 @@ export default function FacultyProfilePage() {
           />
         </div>
         <PublicationsTable
-          publications={filtered}
+          publications={tabItems}
+          mode={activeTab === "patents" ? "patents" : "publications"}
+          showPatentOffice
           isAdmin={isAdmin}
           onDelete={isAdmin ? handleDelete : undefined}
         />

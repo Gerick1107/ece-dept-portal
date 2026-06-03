@@ -199,8 +199,7 @@ def get_publications(
     query: str | None = None,
     faculty_id: int | None = None,
     publication_year: int | None = None,
-    publication_type: str | None = None,
-    journal_or_conference: str | None = None,
+    is_patent: bool | None = None,
 ):
     items, total = list_publications(
         db,
@@ -209,8 +208,7 @@ def get_publications(
         query=query,
         faculty_id=faculty_id,
         publication_year=publication_year,
-        publication_type=publication_type,
-        journal_or_conference=journal_or_conference,
+        is_patent=is_patent,
     )
     return PublicationListResponse(
         items=_to_publication_responses(db, items),
@@ -344,6 +342,7 @@ def get_scheduler_status():
 def export_publications(
     format: str = Query(default="csv", pattern="^(csv|xlsx|pdf)$"),
     scope: str = Query(default="all", pattern="^(all|faculty|year)$"),
+    export_type: str = Query(default="both", pattern="^(publications|patents|both)$"),
     faculty_id: int | None = None,
     faculty_ids: str | None = None,
     publication_year: int | None = None,
@@ -391,6 +390,7 @@ def export_publications(
             publication_year=publication_year,
             year_start=year_start,
             year_end=year_end,
+            export_type=export_type,
         )
         return Response(
             content=payload,
@@ -409,6 +409,7 @@ def export_publications(
             year_start=year_start,
             year_end=year_end,
             title=title,
+            export_type=export_type,
         )
         return Response(
             content=payload,
@@ -423,6 +424,7 @@ def export_publications(
             year_start=year_start,
             year_end=year_end,
             scope=scope,
+            export_type=export_type,
         )
         return Response(
             content=payload,
@@ -435,6 +437,7 @@ def export_publications(
         publication_year=publication_year,
         year_start=year_start,
         year_end=year_end,
+        export_type=export_type,
     )
     return Response(
         content=payload,

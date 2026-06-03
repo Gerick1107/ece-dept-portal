@@ -18,16 +18,6 @@ class SerpApiError(Exception):
         self.status_code = status_code
 
 
-def _infer_publication_type(venue: str | None) -> str:
-    if not venue:
-        return "article"
-    lower = venue.lower()
-    for keyword in ("conference", "proceedings", "symposium", "workshop"):
-        if keyword in lower:
-            return "inproceedings"
-    return "article"
-
-
 def _parse_profile_metrics(cited_by: dict[str, Any] | None) -> dict[str, int]:
     metrics = {"total_citations": 0, "h_index": 0, "i10_index": 0}
     table = (cited_by or {}).get("table") or []
@@ -60,12 +50,11 @@ def _normalize_article(article: dict[str, Any]) -> dict[str, Any]:
         "title": (article.get("title") or "").strip(),
         "authors": (article.get("authors") or "").strip() or None,
         "publication_year": year,
-        "journal_or_conference": venue,
+        "journal": venue,
         "publisher": None,
         "citation_count": citation_count,
-        "publication_type": _infer_publication_type(venue),
-        "abstract": None,
-        "doi": None,
+        "link": article.get("link"),
+        "is_patent": False,
         "scholar_url": article.get("link"),
         "pdf_url": None,
     }

@@ -37,6 +37,7 @@ export async function listPublications(params?: {
   query?: string;
   faculty_id?: number;
   publication_year?: number;
+  is_patent?: boolean;
 }): Promise<{ items: Publication[]; pagination: PaginationMeta }> {
   const qs = new URLSearchParams();
   if (params?.page) qs.set("page", String(params.page));
@@ -45,6 +46,7 @@ export async function listPublications(params?: {
   if (params?.query) qs.set("query", params.query);
   if (params?.faculty_id) qs.set("faculty_id", String(params.faculty_id));
   if (params?.publication_year) qs.set("publication_year", String(params.publication_year));
+  if (params?.is_patent !== undefined) qs.set("is_patent", params.is_patent ? "true" : "false");
   const suffix = qs.toString() ? `?${qs.toString()}` : "";
   return apiGet(`/publications/publications${suffix}`);
 }
@@ -54,6 +56,7 @@ export async function listAllPublications(params?: {
   query?: string;
   faculty_id?: number;
   publication_year?: number;
+  is_patent?: boolean;
 }): Promise<Publication[]> {
   const all: Publication[] = [];
   let page = 1;

@@ -38,17 +38,17 @@ def _normalize_pub(pub: dict) -> dict:
         year = None
 
     title = (bib.get("title") or "").strip()
+    venue = (bib.get("venue") or "").strip() or None
     return {
         "title": title,
         "authors": (bib.get("author") or "").strip() or None,
         "publication_year": year,
-        "journal_or_conference": (bib.get("venue") or "").strip() or None,
+        "journal": venue,
         "publisher": (bib.get("publisher") or "").strip() or None,
         "citation_count": int(pub.get("num_citations") or 0),
-        "publication_type": (bib.get("pub_type") or "").strip() or None,
-        "abstract": (bib.get("abstract") or "").strip() or None,
-        "doi": (bib.get("doi") or "").strip() or None,
+        "is_patent": False,
         "scholar_url": pub.get("pub_url") or pub.get("eprint_url"),
+        "link": pub.get("pub_url") or pub.get("eprint_url"),
         "pdf_url": pub.get("eprint_url"),
     }
 
