@@ -24,6 +24,8 @@ from app.copo.schemas import (
     EvaluationResultResponse,
     ComparisonSetup,
     DeleteEvaluationDataResponse,
+    MarksTemplateComponentsResponse,
+    MarksTemplateGenerateRequest,
     ParseStudentsResponse,
 )
 from app.copo.services import evaluation_service, mapping_service
@@ -156,6 +158,38 @@ def download_marks_template():
         template,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         filename="Course_Marks_Template.xlsx",
+    )
+
+
+@router.get("/template-components", response_model=MarksTemplateComponentsResponse)
+def list_marks_template_components():
+    from app.copo.services.marks_template_builder import PRESET_COMPONENT_NAMES
+
+    return MarksTemplateComponentsResponse(presets=PRESET_COMPONENT_NAMES)
+
+
+@router.post("/generate-constraint-template")
+def generate_constraint_marks_template(
+    body: MarksTemplateGenerateRequest,
+    _: Annotated[User, Depends(get_current_user)],
+):
+    """Build a course/semester-specific marks Excel matching portal upload constraints."""
+    from app.copo.services.marks_template_builder import build_constraint_workbook
+
+    try:
+        payload = build_constraint_workbook(body)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    from app.copo.services.marks_template_builder import constraint_template_filename
+
+    filename = constraint_template_filename(body.course_code, body.semester)
+    from fastapi.responses import Response
+
+    return Response(
+        content=payload,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 

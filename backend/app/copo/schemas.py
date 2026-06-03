@@ -5,6 +5,36 @@ class CourseNamesResponse(BaseModel):
     courses: list[str]
 
 
+class MarksComponentSpec(BaseModel):
+    """One row in the constraint-template builder (each row = one component instance)."""
+
+    name: str = Field(min_length=1, max_length=64)
+    questions: int = Field(
+        default=0,
+        ge=0,
+        le=50,
+        description="0 = standalone; >0 = Q1..Qn sub-columns plus Total",
+    )
+    bonus_question: bool = Field(
+        default=False,
+        description="Add Bonus_Q{n+1} column inside this component (CO blank)",
+    )
+    is_bonus_component: bool = Field(
+        default=False,
+        description="Whole component is bonus (name gets _Bonus suffix; CO blank)",
+    )
+
+
+class MarksTemplateGenerateRequest(BaseModel):
+    course_code: str = Field(min_length=1, max_length=64)
+    semester: str = Field(min_length=1, max_length=64)
+    components: list[MarksComponentSpec] = Field(min_length=1)
+
+
+class MarksTemplateComponentsResponse(BaseModel):
+    presets: list[str]
+
+
 class ParseStudentsResponse(BaseModel):
     cos: list[str]
     programmes: dict

@@ -1,6 +1,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import CoWarningsBanner from "../../components/CoWarningsBanner";
+import ConstraintMarksTemplatePanel from "../../components/ConstraintMarksTemplatePanel";
 import CopoFullResultsView from "../../components/CopoFullResultsView";
 import EvaluationScopePanel from "../../components/EvaluationScopePanel";
 import FileUploadField from "../../components/FileUploadField";
@@ -159,9 +160,11 @@ export default function CopoEvaluatePage() {
         Upload <strong>one consolidated Excel</strong> for the course with all assessment columns
         (quizzes, midsem, endsem, etc.) for the semester.
         <a href="/api/v1/copo/template" className="ml-2 underline font-medium" download>
-          Download Excel template
+          Download sample template
         </a>
       </div>
+
+      <ConstraintMarksTemplatePanel initialCourseCode={courseTitle} />
 
       <h2 className="text-xl font-semibold">Generate CO-PO Attainment Report</h2>
       {displayError && (

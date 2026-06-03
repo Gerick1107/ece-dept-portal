@@ -76,14 +76,24 @@ def _build_column_names(raw: pd.DataFrame, start_col: int) -> list[str]:
     """Build stable assessment column names from one or two header rows."""
     names: list[str] = []
     group_counts: dict[str, int] = {}
+    last_group = ""
     for j in range(start_col, raw.shape[1]):
         g = _cell_str(raw.iloc[0, j]) if len(raw) > 0 else ""
+        if g:
+            last_group = g
+        elif last_group:
+            g = last_group
         s = _cell_str(raw.iloc[1, j]) if len(raw) > 1 else ""
+        if s.lower() in ("-", "—"):
+            s = ""
         base = s or g
-        if not base or base.lower() in ("roll no.", "roll no"):
+        if not base or base.lower() in ("roll no.", "roll no", "branch"):
             names.append(f"_skip_{j}")
             continue
-        if g and s and s.lower() != "total":
+        if base.lower() in ("result", "grade_point", "grade point"):
+            names.append("Result" if base.lower() == "result" else "Grade_Point")
+            continue
+        if g and s and s.lower() != "total" and not s.lower().startswith("bonus_q"):
             key = g
             if key not in group_counts:
                 group_counts[key] = 0
@@ -91,14 +101,16 @@ def _build_column_names(raw: pd.DataFrame, start_col: int) -> list[str]:
             else:
                 group_counts[key] += 1
                 names.append(f"{g}.{group_counts[key]}")
+        elif s.lower().startswith("bonus_q"):
+            names.append(s)
         elif s.lower() == "total" and g:
             key = f"{g}::total"
             if key not in group_counts:
                 group_counts[key] = 0
-                names.append(g if group_counts[key] == 0 else f"{g}.total")
+                names.append(f"{g}.total")
             else:
                 group_counts[key] += 1
-                names.append(f"{g}.total{group_counts[key] or ''}")
+                names.append(f"{g}.total{group_counts[key]}")
         else:
             key = base
             if key not in group_counts:

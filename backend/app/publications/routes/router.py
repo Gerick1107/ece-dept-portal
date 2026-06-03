@@ -271,7 +271,14 @@ def sync_all_publications(
 ):
     worker = threading.Thread(target=run_gap_fill_background, daemon=True)
     worker.start()
-    return SyncAllResponse(status="started", message="Sync running in background.")
+    return SyncAllResponse(
+        status="started",
+        message=(
+            "Sync running in background. New publications and patents will be fetched from "
+            "Google Scholar profiles, enriched with full metadata, and saved to the database. "
+            "Refresh Scrape Logs for progress."
+        ),
+    )
 
 
 @router.post("/scrape/trigger", response_model=ScrapeTriggerResponse)
@@ -304,6 +311,7 @@ def trigger_scrape(
 @router.get("/scrape/logs")
 def get_scrape_logs(
     db: Annotated[Session, Depends(get_db)],
+    _: Annotated[User, Depends(require_roles(UserRole.admin))],
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=200),
 ):
@@ -315,6 +323,12 @@ def get_scrape_logs(
     )
     total = db.scalar(select(func.count()).select_from(ScrapeLog)) or 0
     rows = db.execute(stmt.offset((page - 1) * page_size).limit(page_size)).all()
+
+    def _iso(dt: datetime | None) -> str | None:
+        if dt is None:
+            return None
+        return dt.isoformat()
+
     return {
         "items": [
             {
@@ -323,8 +337,8 @@ def get_scrape_logs(
                 "faculty_name": faculty_name,
                 "status": log.status,
                 "new_publications_added": log.new_publications_added,
-                "started_at": log.started_at,
-                "completed_at": log.completed_at,
+                "started_at": _iso(log.started_at),
+                "completed_at": _iso(log.completed_at),
                 "errors": log.errors,
             }
             for log, faculty_name in rows

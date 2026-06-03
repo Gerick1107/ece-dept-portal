@@ -8,35 +8,59 @@ import {
 } from "../services/publicationsApi";
 
 export default function PublicationsAdminPage() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const isAdmin = user?.role === "admin";
   const [logs, setLogs] = useState<ScrapeLogEntry[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [logsError, setLogsError] = useState("");
   const [syncMessage, setSyncMessage] = useState("");
   const [syncing, setSyncing] = useState(false);
 
   const refreshLogs = useCallback(() => {
+    if (!isAdmin) return;
     setLoading(true);
-    getScrapeLogs({ page_size: 50 })
-      .then((r) => setLogs(r.items))
+    setLogsError("");
+    getScrapeLogs({ page: 1, page_size: 50 })
+      .then((r) => setLogs(r.items ?? []))
+      .catch((e) => {
+        setLogs([]);
+        setLogsError(e instanceof Error ? e.message : "Failed to load scrape logs");
+      })
       .finally(() => setLoading(false));
-  }, []);
+  }, [isAdmin]);
 
   useEffect(() => {
-    if (isAdmin) refreshLogs();
-  }, [isAdmin, refreshLogs]);
+    if (authLoading) return;
+    if (isAdmin) {
+      refreshLogs();
+    } else {
+      setLoading(false);
+      setLogs([]);
+    }
+  }, [authLoading, isAdmin, refreshLogs]);
+
+  if (authLoading) {
+    return <p className="text-sm text-slate-500">Loading…</p>;
+  }
 
   if (!isAdmin) {
     return <p className="text-sm text-slate-600">Admin access required.</p>;
   }
 
   async function handleSyncAll() {
-    if (!window.confirm("Check all faculty for new publications via SerpAPI. Continue?")) return;
+    if (
+      !window.confirm(
+        "Check all active faculty Google Scholar profiles for new publications and patents via SerpAPI. This may use many API searches. Continue?"
+      )
+    ) {
+      return;
+    }
     setSyncing(true);
+    setSyncMessage("");
     try {
-      await syncAllPublications();
-      setSyncMessage("Sync started. Check Scrape Logs for progress.");
-      setTimeout(() => refreshLogs(), 3000);
+      const res = await syncAllPublications();
+      setSyncMessage(res.message || "Sync started. Check Scrape Logs for progress.");
+      window.setTimeout(() => refreshLogs(), 5000);
     } catch (e) {
       setSyncMessage(e instanceof Error ? e.message : "Sync failed to start");
     } finally {
@@ -49,6 +73,11 @@ export default function PublicationsAdminPage() {
       <PublicationsModuleIntro />
       <section className="bg-white border rounded-xl p-5 space-y-4">
         <h2 className="text-xl font-semibold">Publications Administration</h2>
+        <p className="text-sm text-slate-600">
+          Fetches new publications and patents from each active faculty Scholar profile, stores full
+          metadata (including patents), and links them to faculty. Uses SerpAPI key rotation from{" "}
+          <code className="text-xs bg-slate-100 px-1 rounded">SERP_API_KEYS</code> in backend .env.
+        </p>
         <button
           type="button"
           onClick={handleSyncAll}
@@ -74,6 +103,15 @@ export default function PublicationsAdminPage() {
             Refresh
           </button>
         </div>
+        {logsError && (
+          <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            {logsError}
+            <span className="block mt-1 text-xs text-red-600">
+              Ensure the backend is running (default proxy: port 8001) and you are logged in as
+              admin.
+            </span>
+          </p>
+        )}
         {loading ? (
           <p className="text-sm text-slate-500">Loading logs…</p>
         ) : (
@@ -97,11 +135,21 @@ export default function PublicationsAdminPage() {
                     <td className="py-2 pr-3">{log.new_publications_added}</td>
                     <td className="py-2 pr-3 text-xs">{formatDt(log.started_at)}</td>
                     <td className="py-2 pr-3 text-xs">{formatDt(log.completed_at)}</td>
-                    <td className="py-2 text-xs text-red-700 max-w-xs truncate" title={log.errors || undefined}>
+                    <td
+                      className="py-2 text-xs text-red-700 max-w-xs truncate"
+                      title={log.errors || undefined}
+                    >
                       {log.errors || "—"}
                     </td>
                   </tr>
                 ))}
+                {logs.length === 0 && !logsError && (
+                  <tr>
+                    <td colSpan={6} className="py-6 text-center text-slate-500">
+                      No scrape logs yet. Run Sync All Publications to create entries.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

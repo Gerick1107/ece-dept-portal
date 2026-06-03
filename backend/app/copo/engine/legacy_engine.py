@@ -62,7 +62,11 @@ def co_cell_empty(value) -> bool:
 
 def is_bonus_assessment_column(name: str) -> bool:
     n = str(name).strip().lower()
-    return n.startswith("bonus") and n != "bonus"
+    if n == "bonus":
+        return False
+    if n.endswith("_bonus"):
+        return True
+    return n.startswith("bonus")
 
 
 def split_co_labels(value) -> list[str]:
