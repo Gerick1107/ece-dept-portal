@@ -10,8 +10,8 @@ export default function CoWarningsBanner({ warnings }: { warnings: string[] }) {
         ))}
       </ul>
       <p className="text-xs text-amber-800 pt-1">
-        These components were excluded from CO attainment. Please verify mappings before submitting
-        official reports.
+        Add CO labels in the Excel CO row for these columns if they should count toward attainment.
+        Bonus, total, and best-of columns are not listed here.
       </p>
     </div>
   );

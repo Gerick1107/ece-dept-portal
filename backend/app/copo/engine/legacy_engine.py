@@ -89,10 +89,170 @@ def get_co_row_key(df: pd.DataFrame):
     return None
 
 
+def get_max_marks_row_key(df: pd.DataFrame):
+    for k in df.index:
+        if str(k).strip().upper() in ("MAX_MARKS", "MAX MARKS"):
+            return k
+    return None
+
+
+def _max_marks_numeric(df: pd.DataFrame, max_marks_key, col) -> float:
+    if max_marks_key is None:
+        return float("-inf")
+    val = df.loc[max_marks_key, col]
+    try:
+        if pd.isna(val):
+            return float("-inf")
+        return float(val)
+    except (TypeError, ValueError):
+        return float("-inf")
+
+
 def columns_mapped_to_co(df: pd.DataFrame, co_key, target_co: str) -> pd.Index:
     co_row = df.loc[co_key]
     matched = [col for col in df.columns if target_co in split_co_labels(co_row[col])]
     return pd.Index(matched)
+
+
+def _is_co_attainment_exempt_column(
+    col,
+    *,
+    normalized_skip_cols: set[str],
+    total_cols_in_groups: set,
+) -> bool:
+    """Columns never shown in Assessment IDs and never warned for missing CO."""
+    col_str = str(col)
+    normalized_col = normalize_evaluation_name(col_str)
+    if normalized_col in normalized_skip_cols:
+        return True
+    if is_bonus_assessment_column(col_str):
+        return True
+    if "BEST_TOTAL_" in normalized_col:
+        return True
+    if col_str in total_cols_in_groups:
+        return True
+    if col_str.endswith(".total") or normalized_col.endswith("TOTAL"):
+        return True
+    return False
+
+
+def _column_has_student_marks(df: pd.DataFrame, col) -> bool:
+    """True if any student row has non-zero marks in this column."""
+    metadata = {"CO", "MAX_MARKS", "MAX_MARKS_SCALED"}
+    candidate_rows = [
+        idx for idx in df.index if str(idx).strip().upper() not in metadata
+    ]
+    if not candidate_rows:
+        return False
+    series = pd.to_numeric(df.loc[candidate_rows, col], errors="coerce").fillna(0)
+    return float(series.sum()) != 0
+
+
+def _columns_used_in_co_attainment(
+    df: pd.DataFrame,
+    co_row_key,
+    *,
+    normalized_skip_cols: set[str],
+    total_cols_in_groups: set,
+) -> list[str]:
+    """Assessment columns that participate in CO attainment (have CO mapping)."""
+    used: list[str] = []
+    for col in df.columns:
+        if _is_co_attainment_exempt_column(
+            col, normalized_skip_cols=normalized_skip_cols, total_cols_in_groups=total_cols_in_groups
+        ):
+            continue
+        if co_cell_empty(df.loc[co_row_key, col]):
+            continue
+        used.append(str(col))
+    return used
+
+
+def _is_missing_co_warning_exempt_column(
+    col,
+    df: pd.DataFrame,
+    *,
+    co_row_key,
+    max_marks_key,
+    normalized_skip_cols: set[str],
+    total_cols_in_groups: set,
+    col_to_group_key: dict[str, str],
+) -> bool:
+    """
+    Warning-only exemptions. Does not change total_cols_in_groups used elsewhere.
+    Group totals (empty CO, in total_cols_in_groups) are exempt only when they have
+    the highest Max_Marks among empty-CO columns in the same group — so sub-questions
+    like MidSem Q4(a–c) still warn while MidSem Total does not.
+    """
+    col_str = str(col)
+    normalized_col = normalize_evaluation_name(col_str)
+    if normalized_col in normalized_skip_cols:
+        return True
+    if is_bonus_assessment_column(col_str):
+        return True
+    if "BEST_TOTAL_" in normalized_col:
+        return True
+    if col_str.endswith(".total") or normalized_col.endswith("TOTAL"):
+        return True
+    if col_str not in total_cols_in_groups:
+        return False
+    group_key = col_to_group_key.get(col_str, normalize_group_key(col_str))
+    group_empty_co_totals = [
+        c
+        for c in df.columns
+        if col_to_group_key.get(str(c), normalize_group_key(c)) == group_key and c in total_cols_in_groups
+    ]
+    if not group_empty_co_totals:
+        return False
+    aggregate_col = max(group_empty_co_totals, key=lambda c: _max_marks_numeric(df, max_marks_key, c))
+    return col_str == str(aggregate_col)
+
+
+def _columns_missing_co_mapping(
+    df: pd.DataFrame,
+    co_row_key,
+    *,
+    normalized_skip_cols: set[str],
+    total_cols_in_groups: set,
+    col_to_group_key: dict[str, str],
+    max_marks_key,
+) -> list[str]:
+    """Scored assessment columns with no CO mapping — faculty should be warned."""
+    missing: list[str] = []
+    for col in df.columns:
+        if _is_missing_co_warning_exempt_column(
+            col,
+            df,
+            co_row_key=co_row_key,
+            max_marks_key=max_marks_key,
+            normalized_skip_cols=normalized_skip_cols,
+            total_cols_in_groups=total_cols_in_groups,
+            col_to_group_key=col_to_group_key,
+        ):
+            continue
+        if not co_cell_empty(df.loc[co_row_key, col]):
+            continue
+        if not _column_has_student_marks(df, col):
+            continue
+        missing.append(str(col))
+    return missing
+
+
+def _assessment_ids_for_co_attainment(
+    df: pd.DataFrame,
+    co_attainment_columns: list[str],
+    col_to_group_key: dict[str, str],
+) -> list[str]:
+    """Canonical labels for dashboard Assessment IDs (CO-attainment columns only)."""
+    display: list[str] = []
+    seen: set[str] = set()
+    for col in co_attainment_columns:
+        group_key = col_to_group_key.get(col, normalize_group_key(col))
+        canonical = _canonical_assessment_id(col, group_key)
+        if canonical not in seen:
+            display.append(canonical)
+            seen.add(canonical)
+    return display
 
 
 def extract_course_co_po_mapping(mapping_xlsx_path: str, course_pattern: str):
@@ -404,48 +564,31 @@ def main_process(course_file_path, mapping_file_path, course_title, included_rol
                     f'One column in each group should have an empty CO row (the total column).'
                 )
 
-    # Check that every question column has a CO entry
-    # Skip: total columns within groups, Best_Total_, Project columns
-    if 'CO' in df.index:
-        cols_missing_co = []
-        for col in df.columns:
-            normalized_col = normalize_evaluation_name(col)
-            if normalized_col in normalized_skip_cols:
-                continue
-            is_best_total = 'BEST_TOTAL_' in normalized_col
-            is_project = normalized_col.startswith('PROJECT')
-            is_group_total = col in total_cols_in_groups
-            is_branch = normalized_col == 'BRANCH'
-            col_group_key = normalize_group_key(col)
-            has_numbered_children = any(
-                normalize_group_key(other).startswith(col_group_key)
-                and normalize_group_key(other) != col_group_key
-                for other in df.columns
-            )
-            if is_bonus_assessment_column(col):
-                continue
-            if is_best_total or is_project or is_group_total or is_branch or (co_cell_empty(df.loc['CO', col]) and has_numbered_children):
-                continue  # totals, best-of, projects, and branch metadata don't need CO assignments
-            co_val = df.loc['CO', col]
-            if co_cell_empty(co_val):
-                max_marks_key = get_max_marks_key()
-                if max_marks_key is not None:
-                    max_cell = df.loc[max_marks_key, col]
-                    # Optional activity columns that are not configured/scored should not raise CO warnings.
-                    if co_cell_empty(max_cell):
-                        candidate_rows = [
-                            idx for idx in df.index if str(idx).strip().upper() not in {'CO', 'MAX_MARKS', 'MAX_MARKS_SCALED'}
-                        ]
-                        student_series = pd.to_numeric(df.loc[candidate_rows, col], errors="coerce")
-                        if student_series.fillna(0).sum() == 0:
-                            continue
-                cols_missing_co.append(str(col))
+    co_row_key_for_checks = get_co_row_key(df) if "CO" in df.index else None
+    cols_missing_co: list[str] = []
+    co_attainment_columns: list[str] = []
+    max_marks_key_for_checks = get_max_marks_row_key(df)
+    if co_row_key_for_checks is not None:
+        cols_missing_co = _columns_missing_co_mapping(
+            df,
+            co_row_key_for_checks,
+            normalized_skip_cols=normalized_skip_cols,
+            total_cols_in_groups=total_cols_in_groups,
+            col_to_group_key=col_to_group_key,
+            max_marks_key=max_marks_key_for_checks,
+        )
+        co_attainment_columns = _columns_used_in_co_attainment(
+            df,
+            co_row_key_for_checks,
+            normalized_skip_cols=normalized_skip_cols,
+            total_cols_in_groups=total_cols_in_groups,
+        )
 
-        if cols_missing_co:
-            co_warnings.append(
-                "The following assessment column(s) have no CO mapping and were excluded from "
-                f"CO attainment: {', '.join(cols_missing_co)}."
-            )
+    if cols_missing_co:
+        co_warnings.append(
+            "The following component(s) or question column(s) have no CO mapping and were "
+            f"excluded from CO attainment: {', '.join(cols_missing_co)}."
+        )
 
     # Validate that CO row has at least some CO values
     if 'CO' in df.index:
@@ -509,31 +652,13 @@ def main_process(course_file_path, mapping_file_path, course_title, included_rol
             return cleaned
         df['Grade_Point'] = df['Grade_Point'].apply(normalize_grade)
 
-    assessment_ids = df.columns
-
-    print(assessment_ids)
-    assessment_ids = assessment_ids.drop(['Grade_Point'], errors='ignore')
-    assessment_ids_display = []
-    seen_assessment_ids = set()
-    co_row_values = df.loc['CO'] if 'CO' in df.index else None
-    for assessment_id in assessment_ids:
-        normalized_assessment_id = normalize_evaluation_name(assessment_id)
-        if normalized_assessment_id in normalized_skip_cols:
-            continue
-        is_best_total = 'BEST_TOTAL_' in normalized_assessment_id
-        if is_best_total:
-            continue
-        if co_row_values is not None and co_cell_empty(co_row_values[assessment_id]) and assessment_id in total_cols_in_groups:
-            continue
-
-        group_key = col_to_group_key.get(str(assessment_id), normalize_group_key(assessment_id))
-        canonical_id = _canonical_assessment_id(str(assessment_id), group_key)
-        if canonical_id not in seen_assessment_ids:
-            assessment_ids_display.append(canonical_id)
-            seen_assessment_ids.add(canonical_id)
-
-    print(assessment_ids)
+    assessment_ids_display = _assessment_ids_for_co_attainment(
+        df, co_attainment_columns, col_to_group_key
+    )
+    print("CO attainment columns:", co_attainment_columns)
     print("Canonical Assessment IDs:", assessment_ids_display)
+
+    assessment_ids = df.columns.drop(["Grade_Point"], errors="ignore")
 
     # Step 6: Extract unique COs (CO1, CO2, … only)
     co_row_key = get_co_row_key(df)

@@ -30,6 +30,7 @@ class FacultyGapFillResult:
     fetched: int = 0
     already_in_db: int = 0
     newly_inserted: int = 0
+    updated_existing: int = 0
     enriched: int = 0
     metrics_updated: bool = False
     status: str = SCRAPE_STATUS_COMPLETED
@@ -41,6 +42,7 @@ class GapFillSummary:
     total_faculty_processed: int = 0
     total_new_publications: int = 0
     total_enriched: int = 0
+    total_citations_updated: int = 0
     failed_faculty: list[str] = field(default_factory=list)
     results: list[FacultyGapFillResult] = field(default_factory=list)
     keys_exhausted: bool = False
@@ -113,6 +115,12 @@ def gap_fill_faculty(
             existing = db.scalar(select(Publication).where(Publication.source_hash == source_hash))
             if existing is not None:
                 result.already_in_db += 1
+                list_citations = article.get("citation_count")
+                if list_citations is not None:
+                    new_count = int(list_citations)
+                    if existing.citation_count != new_count:
+                        existing.citation_count = new_count
+                        result.updated_existing += 1
                 mapping_exists = db.scalar(
                     select(PublicationFaculty).where(
                         PublicationFaculty.faculty_id == faculty.id,
@@ -206,16 +214,18 @@ def run_gap_fill_all(
                 summary.total_faculty_processed += 1
                 summary.total_new_publications += row.newly_inserted
                 summary.total_enriched += row.enriched
+                summary.total_citations_updated += row.updated_existing
                 if row.status == SCRAPE_STATUS_FAILED:
                     summary.failed_faculty.append(row.faculty_name)
 
                 logger.info(
-                    "[%s/%s] %s: fetched=%s new=%s enriched=%s",
+                    "[%s/%s] %s: fetched=%s new=%s citations_updated=%s enriched=%s",
                     index,
                     total_slots,
                     row.faculty_name,
                     row.fetched,
                     row.newly_inserted,
+                    row.updated_existing,
                     row.enriched,
                 )
             finally:

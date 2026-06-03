@@ -24,17 +24,24 @@ type Props = {
 function groupAssessmentIds(ids: string[]): { parent: string; children: string[] }[] {
   const groups = new Map<string, string[]>();
   for (const id of ids) {
+    if (/_bonus$/i.test(id) || /^bonus/i.test(id)) continue;
     const dot = id.indexOf(".");
     if (dot > 0) {
       const parent = id.slice(0, dot);
       groups.set(parent, [...(groups.get(parent) ?? []), id]);
     } else {
-      groups.set(id, []);
+      // Standalone component used in CO attainment (e.g. Project with CO mapping).
+      groups.set(id, [id]);
     }
   }
   return Array.from(groups.entries()).map(([parent, children]) => ({
     parent,
-    children: children.length ? children : [],
+    children: [...children].sort((a, b) => {
+      const na = Number(a.slice(a.indexOf(".") + 1));
+      const nb = Number(b.slice(b.indexOf(".") + 1));
+      if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb;
+      return a.localeCompare(b);
+    }),
   }));
 }
 
@@ -129,15 +136,11 @@ export default function CopoFullResultsView({
             {assessmentGroups.map(({ parent, children }) => (
               <div key={parent} className="border rounded-lg p-3 bg-slate-50 text-sm">
                 <p className="font-semibold text-slate-800 mb-1">{parent}</p>
-                {children.length > 0 ? (
-                  <ul className="text-xs text-slate-600 space-y-0.5">
-                    {children.map((c) => (
-                      <li key={c}>{c}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-xs text-slate-500 italic">(standalone)</p>
-                )}
+                <ul className="text-xs text-slate-600 space-y-0.5">
+                  {children.map((c) => (
+                    <li key={c}>{c}</li>
+                  ))}
+                </ul>
               </div>
             ))}
           </div>

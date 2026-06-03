@@ -33,6 +33,16 @@ def is_bonus_column(name: str) -> bool:
     return bool(_BONUS_COL_RE.match(str(name).strip()))
 
 
+def is_bonus_assessment_column(name: str) -> bool:
+    """Bonus question columns (Bonus_Q6) and whole bonus components (Attendance_Bonus)."""
+    n = str(name).strip().lower()
+    if n in ("bonus", "branch"):
+        return False
+    if n.endswith("_bonus"):
+        return True
+    return n.startswith("bonus")
+
+
 def _cell_str(value) -> str:
     if pd.isna(value):
         return ""
@@ -95,12 +105,8 @@ def _build_column_names(raw: pd.DataFrame, start_col: int) -> list[str]:
             continue
         if g and s and s.lower() != "total" and not s.lower().startswith("bonus_q"):
             key = g
-            if key not in group_counts:
-                group_counts[key] = 0
-                names.append(g)
-            else:
-                group_counts[key] += 1
-                names.append(f"{g}.{group_counts[key]}")
+            group_counts[key] = group_counts.get(key, 0) + 1
+            names.append(f"{g}.{group_counts[key]}")
         elif s.lower().startswith("bonus_q"):
             names.append(s)
         elif s.lower() == "total" and g:
@@ -173,7 +179,9 @@ def _from_sample_layout(raw: pd.DataFrame, source_path: str) -> str:
         assessment_cols.append(name)
         col_indices.append(j)
 
-    regular_cols = [c for c in assessment_cols if not is_bonus_column(c)]
+    regular_cols = [
+        c for c in assessment_cols if not is_bonus_column(c) and not is_bonus_assessment_column(c)
+    ]
 
     co_values: dict[str, str] = {}
     max_values: dict[str, float | str] = {}
@@ -198,7 +206,7 @@ def _from_sample_layout(raw: pd.DataFrame, source_path: str) -> str:
         has_bonus = False
         for name, j in zip(assessment_cols, col_indices):
             val = raw.iloc[r, j]
-            if is_bonus_column(name):
+            if is_bonus_column(name) or is_bonus_assessment_column(name):
                 try:
                     bonus_sum += float(val)
                     has_bonus = True
@@ -214,7 +222,7 @@ def _from_sample_layout(raw: pd.DataFrame, source_path: str) -> str:
         return source_path
 
     out_cols = ["Branch"] + regular_cols
-    if any(is_bonus_column(c) for c in assessment_cols):
+    if any(is_bonus_column(c) or is_bonus_assessment_column(c) for c in assessment_cols):
         out_cols.append("Bonus")
     for req in ("Result", "Grade_Point"):
         if req in assessment_cols and req not in out_cols:
@@ -351,7 +359,7 @@ def _patch_standard_dataframe(df: pd.DataFrame) -> pd.DataFrame | None:
             max_key = i
             break
 
-    bonus_cols = [c for c in df.columns if is_bonus_column(str(c))]
+    bonus_cols = [c for c in df.columns if is_bonus_column(str(c)) or is_bonus_assessment_column(str(c))]
     if bonus_cols:
         changed = True
         bonus_series = pd.Series(0.0, index=[i for i in df.index if str(i).strip().upper() not in _METADATA_INDEX])
