@@ -103,12 +103,16 @@ def complete_evaluation_run(
     excel_path: str | None,
     comparison_summary: dict | None = None,
 ) -> CopoEvaluationRun:
+    from app.copo.services.analytics_snapshot_service import upsert_run_analytics_snapshot
+
     run.status = EvaluationStatus.completed
     run.result_summary = result_summary
     run.comparison_summary = comparison_summary
     run.excel_result_path = excel_path
     db.commit()
     db.refresh(run)
+    upsert_run_analytics_snapshot(db, run)
+    db.commit()
     return run
 
 

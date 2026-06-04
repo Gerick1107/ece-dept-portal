@@ -14,9 +14,31 @@ def list_awards(
     query: str | None = None,
     year: str | None = None,
 ) -> list[FacultyAward]:
-    stmt = select(FacultyAward).order_by(FacultyAward.faculty_name.asc(), FacultyAward.year.desc(), FacultyAward.id.asc())
+    return list_awards_filtered(db, query=query, year=year)
+
+
+def list_awards_filtered(
+    db: Session,
+    *,
+    query: str | None = None,
+    year: str | None = None,
+    year_from: str | None = None,
+    year_to: str | None = None,
+    faculty_names: list[str] | None = None,
+) -> list[FacultyAward]:
+    stmt = select(FacultyAward).order_by(
+        FacultyAward.faculty_name.asc(), FacultyAward.year.desc(), FacultyAward.id.asc()
+    )
     if year:
         stmt = stmt.where(FacultyAward.year == year.strip())
+    if year_from:
+        stmt = stmt.where(FacultyAward.year >= year_from.strip())
+    if year_to:
+        stmt = stmt.where(FacultyAward.year <= year_to.strip())
+    if faculty_names:
+        names = [n.strip() for n in faculty_names if n and n.strip()]
+        if names:
+            stmt = stmt.where(FacultyAward.faculty_name.in_(names))
     if query:
         q = f"%{query.strip()}%"
         stmt = stmt.where(

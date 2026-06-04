@@ -13,18 +13,73 @@ from app.projects.services.faculty_resolver import cleaned_guide_display, match_
 from app.projects.services.file_manager import save_project_upload
 from app.projects.services.project_service import create_project, find_merge_candidate, merge_project
 from app.projects.services.sdg_queue import enqueue_sdg_tags
-from app.projects.utils.column_mapping import cell_str, map_department_headers
+from app.projects.utils.column_mapping import (
+    DEPARTMENT_REQUIRED_FIELDS,
+    cell_str,
+    find_department_header_row_index,
+    map_department_headers,
+)
 from app.projects.utils.course_name import normalize_course_name
 from app.utils.name_utils import strip_name_prefix
 
 
-def _load_dataframe(path: Path) -> pd.DataFrame:
-    suffix = path.suffix.lower()
+def _excel_engine(data: bytes, suffix: str) -> str:
+    """Pick reader engine from file magic bytes (handles .xls saved with .xlsx extension)."""
+    if data[:2] == b"PK":
+        return "openpyxl"
+    if len(data) >= 8 and data[:4] == b"\xd0\xcf\x11\xe0":
+        return "xlrd"
+    if suffix == ".xlsx":
+        return "openpyxl"
+    if suffix == ".xls":
+        return "xlrd"
+    raise ValueError(
+        "Unrecognized Excel format. Upload a valid .xlsx or .xls workbook (not a .zip archive)."
+    )
+
+
+def _read_excel_raw(data: bytes, engine: str) -> pd.DataFrame:
+    try:
+        return pd.read_excel(BytesIO(data), engine=engine, header=None)
+    except Exception as primary_exc:
+        alternate = "xlrd" if engine == "openpyxl" else "openpyxl"
+        try:
+            return pd.read_excel(BytesIO(data), engine=alternate, header=None)
+        except Exception:
+            raise primary_exc
+
+
+def _frame_with_detected_headers(raw: pd.DataFrame) -> pd.DataFrame:
+    header_row = find_department_header_row_index(raw)
+    if header_row is None:
+        return raw
+    headers = [cell_str(v) or f"Column_{i}" for i, v in enumerate(raw.iloc[header_row].tolist())]
+    frame = raw.iloc[header_row + 1 :].copy()
+    frame.columns = headers
+    frame = frame.dropna(how="all")
+    frame.reset_index(drop=True, inplace=True)
+    return frame
+
+
+def _load_dataframe_from_bytes(data: bytes, filename: str) -> pd.DataFrame:
+    suffix = Path(filename).suffix.lower()
     if suffix == ".csv":
-        return pd.read_csv(path)
-    if suffix in {".xlsx", ".xls"}:
-        return pd.read_excel(path, engine="openpyxl")
-    raise ValueError("Unsupported file type — use .csv, .xlsx, or .xls")
+        raw = pd.read_csv(BytesIO(data), header=None)
+        header_row = find_department_header_row_index(raw)
+        if header_row is not None:
+            return _frame_with_detected_headers(raw)
+        raw.columns = raw.iloc[0]
+        return raw.iloc[1:].reset_index(drop=True)
+    if suffix not in {".xlsx", ".xls"}:
+        raise ValueError("Unsupported file type — use .csv, .xlsx, or .xls")
+    engine = _excel_engine(data, suffix)
+    raw = _read_excel_raw(data, engine)
+    header_row = find_department_header_row_index(raw)
+    if header_row is not None:
+        return _frame_with_detected_headers(raw)
+    # Template-style: first row is already the header
+    frame = pd.read_excel(BytesIO(data), engine=engine)
+    return frame
 
 
 def _parse_credit(raw: str) -> float | None:
@@ -57,20 +112,18 @@ def import_projects_file(
         raise ValueError("Semester tag is required (e.g. Monsoon 2024)")
 
     semester_tag = semester_tag.strip()
-    stored_path, _stored_name = save_project_upload(filename, file_bytes)
-    tmp = Path(stored_path)
     try:
-        frame = _load_dataframe(tmp)
+        frame = _load_dataframe_from_bytes(file_bytes, filename)
     except Exception as exc:
-        tmp.unlink(missing_ok=True)
         raise ValueError(f"Could not read spreadsheet: {exc}") from exc
+
+    stored_path, _stored_name = save_project_upload(filename, file_bytes)
 
     if frame.empty:
         raise ValueError("Spreadsheet has no data rows")
 
     mapping = map_department_headers([str(c) for c in frame.columns])
-    required = {"title", "guide_name", "student_roll_no", "student_name", "course_code"}
-    missing = sorted(required - set(mapping))
+    missing = sorted(DEPARTMENT_REQUIRED_FIELDS - set(mapping))
     if missing:
         raise ValueError(f"Missing required columns: {', '.join(missing)}")
 

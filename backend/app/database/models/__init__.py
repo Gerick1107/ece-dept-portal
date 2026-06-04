@@ -1,4 +1,5 @@
 from app.database.models.copo import CopoEvaluationRun, CopoMarksUpload, CopoResultArchive
+from app.database.models.copo_analytics import CopoRunAnalyticsSnapshot
 from app.database.models.course import Course
 from app.database.models.user import User
 from app.awards.models.entities import FacultyAward
@@ -17,6 +18,7 @@ __all__ = [
     "CopoMarksUpload",
     "CopoEvaluationRun",
     "CopoResultArchive",
+    "CopoRunAnalyticsSnapshot",
     "Course",
     "FacultyAward",
     "Faculty",

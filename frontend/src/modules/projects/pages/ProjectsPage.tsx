@@ -37,11 +37,12 @@ function CommaCell({ value }: { value: string | null | undefined }) {
     .map((s) => s.trim())
     .filter(Boolean);
   if (!items.length) return <>—</>;
-  if (items.length <= 2) return <span>{items.join(", ")}</span>;
   return (
-    <span title={items.join(", ")} className="cursor-help underline decoration-dotted">
-      {items.slice(0, 2).join(", ")} +{items.length - 2}
-    </span>
+    <div className="flex flex-col gap-0.5 text-xs leading-snug max-w-[12rem]">
+      {items.map((item) => (
+        <span key={item}>{item}</span>
+      ))}
+    </div>
   );
 }
 
@@ -52,6 +53,7 @@ export default function ProjectsPage() {
   const isAdmin = user?.role === "admin";
   const isFaculty = user?.role === "faculty" || user?.role === "hod";
   const canReviewSdgs = isAdmin || isFaculty;
+  const canImport = isAdmin || isFaculty;
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [total, setTotal] = useState(0);
@@ -100,7 +102,7 @@ export default function ProjectsPage() {
   const apiFilters = useMemo(
     () => ({
       page: filters.page,
-      page_size: 200,
+      page_size: 50,
       query: filters.query || undefined,
       faculty_id: filters.faculty_id ? Number(filters.faculty_id) : undefined,
       project_type: filters.project_type || undefined,
@@ -137,10 +139,24 @@ export default function ProjectsPage() {
       .catch(() => setLlmEnabled(false));
   }, []);
 
+  function validateImportFile(file: File): string | null {
+    const name = file.name.toLowerCase();
+    if (!/\.(xlsx|xls|csv)$/.test(name)) {
+      return "Only .xlsx, .xls, or .csv files are accepted (not .zip or other formats).";
+    }
+    return null;
+  }
+
   async function runImport(file: File) {
+    const fileError = validateImportFile(file);
+    if (fileError) {
+      setError(fileError);
+      return;
+    }
     const semesterTag = `${importSemester} ${importYear}`.trim();
     setBusy(true);
     setMessage("");
+    setError("");
     try {
       const r = await importProjects(file, semesterTag);
       setImportSummary(r);
@@ -266,6 +282,18 @@ export default function ProjectsPage() {
           >
             Download template
           </button>
+          {canImport && (
+            <button
+              type="button"
+              onClick={() => {
+                setError("");
+                setShowImportModal(true);
+              }}
+              className="rounded-lg bg-teal-700 text-white px-3 py-2 text-sm hover:bg-teal-800"
+            >
+              Import Excel
+            </button>
+          )}
           {isAdmin && (
             <>
               <button
@@ -287,13 +315,6 @@ export default function ProjectsPage() {
                 }}
               >
                 Purge all
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowImportModal(true)}
-                className="rounded-lg bg-teal-700 text-white px-3 py-2 text-sm hover:bg-teal-800"
-              >
-                Import Excel
               </button>
               <button type="button" onClick={openCreate} className="rounded-lg bg-teal-700 text-white px-3 py-2 text-sm">
                 Add project
@@ -431,28 +452,28 @@ export default function ProjectsPage() {
       </section>
 
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm border-collapse min-w-[1200px]">
-            <thead>
-              <tr className="bg-slate-50 text-slate-600 text-left">
-                <th className="px-3 py-2 font-medium">Serial Number</th>
-                <th className="px-3 py-2 font-medium">Semester</th>
-                <th className="px-3 py-2 font-medium">Title</th>
-                <th className="px-3 py-2 font-medium">Course Code</th>
-                <th className="px-3 py-2 font-medium">Course Name</th>
-                <th className="px-3 py-2 font-medium">Guide</th>
-                <th className="px-3 py-2 font-medium">Co-Guide</th>
-                <th className="px-3 py-2 font-medium">Student Roll Number</th>
-                <th className="px-3 py-2 font-medium">Student Name</th>
-                <th className="px-3 py-2 font-medium">SDGs</th>
-                <th className="px-3 py-2 font-medium">Credit</th>
-                {canReviewSdgs && <th className="px-3 py-2 font-medium">Actions</th>}
+        <div className="overflow-x-auto max-h-[70vh] overflow-y-auto">
+          <table className="w-full text-sm border-collapse min-w-[1600px]">
+            <thead className="sticky top-0 z-10 bg-slate-50 shadow-sm">
+              <tr className="text-slate-600 text-left">
+                <th className="px-3 py-2 font-medium whitespace-nowrap">Serial Number</th>
+                <th className="px-3 py-2 font-medium min-w-[9rem]">Semester</th>
+                <th className="px-3 py-2 font-medium min-w-[14rem]">Title</th>
+                <th className="px-3 py-2 font-medium whitespace-nowrap">Course Code</th>
+                <th className="px-3 py-2 font-medium min-w-[8rem]">Course Name</th>
+                <th className="px-3 py-2 font-medium min-w-[8rem]">Guide</th>
+                <th className="px-3 py-2 font-medium min-w-[8rem]">Co-Guide</th>
+                <th className="px-3 py-2 font-medium min-w-[9rem]">Student Roll Number</th>
+                <th className="px-3 py-2 font-medium min-w-[9rem]">Student Name</th>
+                <th className="px-3 py-2 font-medium min-w-[14rem]">SDGs</th>
+                <th className="px-3 py-2 font-medium whitespace-nowrap">Credit</th>
+                {canReviewSdgs && <th className="px-3 py-2 font-medium min-w-[10rem]">Actions</th>}
               </tr>
             </thead>
             <tbody>
               {projects.map((p, idx) => (
                 <tr key={p.id} className="border-t border-slate-100 hover:bg-slate-50/80">
-                  <td className="px-3 py-2">{(filters.page - 1) * 200 + idx + 1}</td>
+                  <td className="px-3 py-2">{(filters.page - 1) * 50 + idx + 1}</td>
                   <td className="px-3 py-2">
                     <CommaCell value={p.semesters} />
                   </td>
@@ -467,8 +488,10 @@ export default function ProjectsPage() {
                   <td className="px-3 py-2">
                     <CommaCell value={p.student_names} />
                   </td>
-                  <td className="px-3 py-2">
-                    <span title={p.sdg_review_status}>{formatSdgs(p)}</span>
+                  <td className="px-3 py-2 align-top min-w-[14rem] max-w-[18rem]">
+                    <span className="block text-xs leading-snug whitespace-normal break-words" title={p.sdg_review_status}>
+                      {formatSdgs(p)}
+                    </span>
                   </td>
                   <td className="px-3 py-2">{p.credit ?? "—"}</td>
                   {canReviewSdgs && (
@@ -529,12 +552,33 @@ export default function ProjectsPage() {
         </div>
         <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-t text-xs text-slate-500">
           <span>
-            Showing {projects.length} of {total} projects
+            Showing {(filters.page - 1) * 50 + 1}–{(filters.page - 1) * 50 + projects.length} of {total} projects
           </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={filters.page <= 1}
+              onClick={() => setFilters((f) => ({ ...f, page: f.page - 1 }))}
+              className="rounded border border-slate-300 px-2 py-1 disabled:opacity-40"
+            >
+              Previous
+            </button>
+            <span>
+              Page {filters.page} of {Math.max(1, Math.ceil(total / 50))}
+            </span>
+            <button
+              type="button"
+              disabled={filters.page >= Math.ceil(total / 50)}
+              onClick={() => setFilters((f) => ({ ...f, page: f.page + 1 }))}
+              className="rounded border border-slate-300 px-2 py-1 disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
         </div>
       </div>
 
-      {showImportModal && isAdmin && (
+      {showImportModal && canImport && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-lg max-w-md w-full p-6 space-y-4">
             <h3 className="font-semibold">Import projects</h3>
@@ -566,6 +610,9 @@ export default function ProjectsPage() {
             </div>
             <p className="text-sm font-medium text-teal-800">
               Tag: {importSemester} {importYear}
+            </p>
+            <p className="text-xs text-slate-500">
+              Upload the department Excel file (.xlsx or legacy .xls). Zip archives are not supported.
             </p>
             <input
               ref={fileInputRef}

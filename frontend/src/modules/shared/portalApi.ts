@@ -42,3 +42,36 @@ export function updateAward(id: number, body: { faculty_name: string; year: stri
 export function deleteAward(id: number) {
   return apiDelete(`/awards/${id}`);
 }
+
+export type AwardsExportFilters = {
+  query?: string;
+  year?: string;
+  year_from?: string;
+  year_to?: string;
+  faculty_names?: string[];
+};
+
+export async function downloadAwardsExport(filters: AwardsExportFilters = {}) {
+  const API_BASE = import.meta.env.VITE_API_BASE ?? "/api/v1";
+  const p = new URLSearchParams();
+  if (filters.query) p.set("query", filters.query);
+  if (filters.year) p.set("year", filters.year);
+  if (filters.year_from) p.set("year_from", filters.year_from);
+  if (filters.year_to) p.set("year_to", filters.year_to);
+  if (filters.faculty_names?.length) p.set("faculty_names", filters.faculty_names.join(","));
+  const token = localStorage.getItem("access_token");
+  const res = await fetch(`${API_BASE}/awards/export?${p}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail ?? "Export failed");
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "faculty_awards.xlsx";
+  a.click();
+  URL.revokeObjectURL(url);
+}

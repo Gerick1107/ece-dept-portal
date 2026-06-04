@@ -27,19 +27,25 @@ function groupAssessmentIds(ids: string[]): { parent: string; children: string[]
     if (/_bonus$/i.test(id) || /^bonus/i.test(id)) continue;
     const dot = id.indexOf(".");
     if (dot > 0) {
-      const parent = id.slice(0, dot);
-      groups.set(parent, [...(groups.get(parent) ?? []), id]);
-    } else {
-      // Standalone component used in CO attainment (e.g. Project with CO mapping).
-      groups.set(id, [id]);
+      const suffix = id.slice(dot + 1);
+      if (/^\d+$/.test(suffix)) {
+        const parent = id.slice(0, dot);
+        groups.set(parent, [...(groups.get(parent) ?? []), id]);
+        continue;
+      }
     }
+    groups.set(id, [id]);
   }
   return Array.from(groups.entries()).map(([parent, children]) => ({
     parent,
     children: [...children].sort((a, b) => {
-      const na = Number(a.slice(a.indexOf(".") + 1));
-      const nb = Number(b.slice(b.indexOf(".") + 1));
-      if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb;
+      const da = a.indexOf(".");
+      const db = b.indexOf(".");
+      if (da > 0 && db > 0) {
+        const na = Number(a.slice(da + 1));
+        const nb = Number(b.slice(db + 1));
+        if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb;
+      }
       return a.localeCompare(b);
     }),
   }));
@@ -132,18 +138,24 @@ export default function CopoFullResultsView({
           <h3 className="text-sm font-bold uppercase tracking-wide text-teal-700 border-b border-teal-100 pb-2">
             Assessment IDs
           </h3>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            {assessmentGroups.map(({ parent, children }) => (
-              <div key={parent} className="border rounded-lg p-3 bg-slate-50 text-sm">
-                <p className="font-semibold text-slate-800 mb-1">{parent}</p>
-                <ul className="text-xs text-slate-600 space-y-0.5">
-                  {children.map((c) => (
-                    <li key={c}>{c}</li>
-                  ))}
-                </ul>
-              </div>
-            ))}
+          <div className="max-h-72 overflow-y-auto border rounded-lg p-3 bg-slate-50">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              {assessmentGroups.map(({ parent, children }) => (
+                <div key={parent} className="border rounded-lg p-3 bg-white text-sm">
+                  <p className="font-semibold text-slate-800 mb-1">
+                    {parent}
+                    {children.length > 1 ? ` (${children.length})` : ""}
+                  </p>
+                  <ul className="text-xs text-slate-600 space-y-0.5">
+                    {children.map((c) => (
+                      <li key={c}>{c}</li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
           </div>
+          <p className="text-xs text-slate-500">{assessmentIds.length} assessment column(s) used in CO attainment.</p>
         </section>
       )}
 

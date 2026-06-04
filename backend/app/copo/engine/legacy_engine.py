@@ -131,8 +131,6 @@ def _is_co_attainment_exempt_column(
         return True
     if col_str in total_cols_in_groups:
         return True
-    if col_str.endswith(".total") or normalized_col.endswith("TOTAL"):
-        return True
     return False
 
 
@@ -243,16 +241,9 @@ def _assessment_ids_for_co_attainment(
     co_attainment_columns: list[str],
     col_to_group_key: dict[str, str],
 ) -> list[str]:
-    """Canonical labels for dashboard Assessment IDs (CO-attainment columns only)."""
-    display: list[str] = []
-    seen: set[str] = set()
-    for col in co_attainment_columns:
-        group_key = col_to_group_key.get(col, normalize_group_key(col))
-        canonical = _canonical_assessment_id(col, group_key)
-        if canonical not in seen:
-            display.append(canonical)
-            seen.add(canonical)
-    return display
+    """Column labels used in CO attainment (exact names from the marks workbook)."""
+    _ = (df, col_to_group_key)
+    return list(dict.fromkeys(co_attainment_columns))
 
 
 def extract_course_co_po_mapping(mapping_xlsx_path: str, course_pattern: str):
@@ -437,6 +428,14 @@ def main_process(course_file_path, mapping_file_path, course_title, included_rol
 
     original_data = df.copy()
 
+    # Normalize Result / Grade_Point column aliases (e.g. Result.1 from merged headers)
+    for col in list(df.columns):
+        norm = normalize_evaluation_name(col)
+        if norm.startswith("RESULT") and "Result" not in df.columns:
+            df.rename(columns={col: "Result"}, inplace=True)
+        elif norm in ("GRADEPOINT", "GRADE_POINT") and "Grade_Point" not in df.columns:
+            df.rename(columns={col: "Grade_Point"}, inplace=True)
+
     # --- Validate required structure ---
     errors = []
     co_warnings: list[str] = []
@@ -558,6 +557,22 @@ def main_process(course_file_path, mapping_file_path, course_title, included_rol
                     group_totals.append(col)
                     total_cols_in_groups.add(col)
             if not group_totals:
+                scored_with_co = [
+                    str(c)
+                    for c in cols
+                    if normalize_evaluation_name(c) not in normalized_skip_cols
+                    and not co_cell_empty(df.loc["CO", c])
+                ]
+                scored_cols = [
+                    str(c)
+                    for c in cols
+                    if normalize_evaluation_name(c) not in normalized_skip_cols
+                ]
+                # Single scored column or every sub-question has its own CO — no separate total needed.
+                if len(scored_with_co) == 1 or (
+                    scored_cols and len(scored_with_co) == len(scored_cols)
+                ):
+                    continue
                 errors.append(
                     f'No total column found for assessment group "{parent_key}" '
                     f'(columns: {", ".join(str(c) for c in cols)}). '

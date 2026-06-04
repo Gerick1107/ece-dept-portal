@@ -101,7 +101,11 @@ def _build_column_names(raw: pd.DataFrame, start_col: int) -> list[str]:
             names.append(f"_skip_{j}")
             continue
         if base.lower() in ("result", "grade_point", "grade point"):
-            names.append("Result" if base.lower() == "result" else "Grade_Point")
+            label = "Result" if base.lower() == "result" else "Grade_Point"
+            if label not in names:
+                names.append(label)
+            else:
+                names.append(f"_skip_{j}")
             continue
         if g and s and s.lower() != "total" and not s.lower().startswith("bonus_q"):
             key = g
@@ -110,13 +114,17 @@ def _build_column_names(raw: pd.DataFrame, start_col: int) -> list[str]:
         elif s.lower().startswith("bonus_q"):
             names.append(s)
         elif s.lower() == "total" and g:
-            key = f"{g}::total"
-            if key not in group_counts:
-                group_counts[key] = 0
-                names.append(f"{g}.total")
+            # Standalone component (only a Total sub-column, no Q1/Q2/…) → use group name.
+            if group_counts.get(g, 0) == 0:
+                names.append(g)
             else:
-                group_counts[key] += 1
-                names.append(f"{g}.total{group_counts[key]}")
+                key = f"{g}::total"
+                if key not in group_counts:
+                    group_counts[key] = 0
+                    names.append(f"{g}.total")
+                else:
+                    group_counts[key] += 1
+                    names.append(f"{g}.total{group_counts[key]}")
         else:
             key = base
             if key not in group_counts:

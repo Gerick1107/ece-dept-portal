@@ -137,7 +137,7 @@ def list_or_search_projects(
     db: Annotated[Session, Depends(get_db)],
     _: Annotated[User, Depends(get_current_user)],
     page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=50, ge=1, le=200),
+    page_size: int = Query(default=50, ge=1, le=500),
     query: str | None = None,
     faculty_id: int | None = None,
     project_type: str | None = None,
@@ -197,7 +197,7 @@ def download_import_template(_: Annotated[User, Depends(get_current_user)]):
 @router.post("/import", response_model=ImportSummary)
 async def import_projects(
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_roles(UserRole.admin))],
+    user: Annotated[User, Depends(require_roles(UserRole.admin, UserRole.faculty, UserRole.hod))],
     file: UploadFile = File(...),
     semester_tag: str = Query(..., min_length=3, description="Semester tag e.g. Monsoon 2024"),
     auto_sdg: bool = Query(default=True),

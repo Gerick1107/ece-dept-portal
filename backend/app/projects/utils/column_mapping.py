@@ -79,6 +79,36 @@ def map_department_headers(raw_headers: list[str]) -> dict[str, str]:
     return mapping
 
 
+DEPARTMENT_REQUIRED_FIELDS = frozenset(
+    {"title", "guide_name", "student_roll_no", "student_name", "course_code"}
+)
+
+
+def score_department_header_row(row_values: list) -> int:
+    """How many required department columns appear in this row (0–5)."""
+    headers = [cell_str(v) for v in row_values]
+    mapping = map_department_headers(headers)
+    return len(DEPARTMENT_REQUIRED_FIELDS & set(mapping.keys()))
+
+
+def find_department_header_row_index(raw_frame) -> int | None:
+    """
+    Locate the header row in sheets that have title/blank rows before column names
+    (e.g. row 0 = 'Monsoon 2021', row 2 = actual headers).
+    """
+    scan_limit = min(25, len(raw_frame))
+    best_idx: int | None = None
+    best_score = 0
+    for idx in range(scan_limit):
+        score = score_department_header_row(raw_frame.iloc[idx].tolist())
+        if score > best_score:
+            best_score = score
+            best_idx = idx
+    if best_score >= 4:
+        return best_idx
+    return None
+
+
 def cell_str(value: Any) -> str:
     if value is None:
         return ""

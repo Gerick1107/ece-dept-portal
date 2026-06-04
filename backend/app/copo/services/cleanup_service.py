@@ -161,6 +161,9 @@ def delete_evaluation_sensitive_data(
 
 def purge_all_copo_data(db: Session) -> dict[str, int]:
     """Admin-only: remove every CO-PO upload, run, archive, and linked files."""
+    from app.copo.services.analytics_snapshot_service import preserve_all_run_snapshots
+
+    snapshots_preserved = preserve_all_run_snapshots(db)
     removed_files = 0
     for archive in db.query(CopoResultArchive).all():
         remove_file_if_exists(archive.archive_path)
@@ -176,4 +179,8 @@ def purge_all_copo_data(db: Session) -> dict[str, int]:
         removed_files += 1
         db.delete(upload)
     db.commit()
-    return {"removed_files": removed_files, "runs_deleted": True}
+    return {
+        "removed_files": removed_files,
+        "runs_deleted": True,
+        "analytics_snapshots_preserved": snapshots_preserved,
+    }

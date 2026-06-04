@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../auth/AuthContext";
 import { listFaculty } from "../../publications/services/publicationsApi";
 import type { Faculty } from "../../publications/types/publications";
-import { createAward, deleteAward, listAwards, updateAward } from "../../shared/portalApi";
+import { createAward, deleteAward, downloadAwardsExport, listAwards, updateAward } from "../../shared/portalApi";
 import type { FacultyAward } from "../../projects/types/projects";
 
 export default function AwardsPage() {
@@ -16,6 +16,11 @@ export default function AwardsPage() {
   const [query, setQuery] = useState("");
   const [yearFilter, setYearFilter] = useState("");
   const [selectedFaculty, setSelectedFaculty] = useState("");
+  const [exportYearFrom, setExportYearFrom] = useState("");
+  const [exportYearTo, setExportYearTo] = useState("");
+  const [exportFaculty, setExportFaculty] = useState<string[]>([]);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportBusy, setExportBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [showModal, setShowModal] = useState(false);
@@ -90,11 +95,25 @@ export default function AwardsPage() {
           <h2 className="text-xl font-semibold">Faculty Awards & Recognitions</h2>
           <p className="text-sm text-slate-600 mt-1">Browse and manage department faculty awards.</p>
         </div>
-        {isAdmin && (
-          <button type="button" onClick={openAdd} className="rounded-lg bg-teal-700 text-white px-3 py-2 text-sm">
-            Add Award
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setExportYearFrom(yearFilter);
+              setExportYearTo(yearFilter);
+              setExportFaculty(selectedFaculty ? [selectedFaculty] : []);
+              setShowExportModal(true);
+            }}
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50"
+          >
+            Export Excel
           </button>
-        )}
+          {isAdmin && (
+            <button type="button" onClick={openAdd} className="rounded-lg bg-teal-700 text-white px-3 py-2 text-sm">
+              Add Award
+            </button>
+          )}
+        </div>
       </div>
 
       {message && <p className="text-sm text-teal-800 bg-teal-50 border border-teal-200 rounded-lg px-3 py-2">{message}</p>}
@@ -173,6 +192,86 @@ export default function AwardsPage() {
         ))}
         {!grouped.length && <p className="text-center text-slate-500 py-8">No awards match your filters.</p>}
       </div>
+
+      {showExportModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-lg max-w-lg w-full p-6 space-y-4">
+            <h3 className="font-semibold">Export awards</h3>
+            <p className="text-sm text-slate-600">
+              Exports rows matching your filters. Leave fields empty to include all matching the search box above.
+            </p>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-slate-500">Year from</label>
+                <input
+                  className="w-full border rounded-lg px-3 py-2 text-sm mt-1"
+                  placeholder="e.g. 2020-2021"
+                  value={exportYearFrom}
+                  onChange={(e) => setExportYearFrom(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-500">Year to</label>
+                <input
+                  className="w-full border rounded-lg px-3 py-2 text-sm mt-1"
+                  placeholder="e.g. 2024-2025"
+                  value={exportYearTo}
+                  onChange={(e) => setExportYearTo(e.target.value)}
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-slate-500">Faculty (hold Ctrl/Cmd for multiple)</label>
+              <select
+                multiple
+                className="w-full border rounded-lg px-3 py-2 text-sm mt-1 min-h-[120px]"
+                value={exportFaculty}
+                onChange={(e) =>
+                  setExportFaculty(Array.from(e.target.selectedOptions).map((o) => o.value))
+                }
+              >
+                {facultyNames.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-slate-500 mt-1">Leave none selected to export all faculty in the filtered set.</p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button type="button" className="px-3 py-2 text-sm border rounded-lg" onClick={() => setShowExportModal(false)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={exportBusy}
+                className="px-3 py-2 text-sm bg-teal-700 text-white rounded-lg disabled:opacity-50"
+                onClick={async () => {
+                  setExportBusy(true);
+                  setError("");
+                  try {
+                    await downloadAwardsExport({
+                      query: query || undefined,
+                      year: exportYearFrom && exportYearFrom === exportYearTo ? exportYearFrom : undefined,
+                      year_from: exportYearFrom || undefined,
+                      year_to: exportYearTo || undefined,
+                      faculty_names: exportFaculty.length ? exportFaculty : undefined,
+                    });
+                    setShowExportModal(false);
+                    setMessage("Awards exported.");
+                  } catch (e) {
+                    setError(e instanceof Error ? e.message : "Export failed");
+                  } finally {
+                    setExportBusy(false);
+                  }
+                }}
+              >
+                Download
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showModal && isAdmin && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">

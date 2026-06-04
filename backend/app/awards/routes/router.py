@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -16,6 +17,7 @@ from app.awards.services.award_service import (
     list_faculty_with_awards,
     update_award,
 )
+from app.awards.services.export_service import export_awards_xlsx
 from app.database.models.user import User, UserRole
 from app.database.session import get_db
 
@@ -45,6 +47,35 @@ class AwardListResponse(BaseModel):
     items: list[AwardResponse]
     years: list[str]
     faculty_names: list[str]
+
+
+@router.get("/export")
+def export_awards(
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_user)],
+    query: str | None = None,
+    year: str | None = None,
+    year_from: str | None = None,
+    year_to: str | None = None,
+    faculty_names: str | None = Query(
+        default=None,
+        description="Comma-separated faculty names to include",
+    ),
+):
+    names = [n.strip() for n in (faculty_names or "").split(",") if n.strip()] or None
+    payload = export_awards_xlsx(
+        db,
+        query=query,
+        year=year,
+        year_from=year_from,
+        year_to=year_to,
+        faculty_names=names,
+    )
+    return Response(
+        content=payload,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=faculty_awards.xlsx"},
+    )
 
 
 @router.get("", response_model=AwardListResponse)
