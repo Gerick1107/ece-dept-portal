@@ -356,7 +356,7 @@ export default function AdminDataPage() {
                           type="button"
                           className="text-teal-700 hover:underline text-xs"
                           disabled={busy}
-                          onClick={() => downloadProjectUpload(u.id).catch((e) => setError(String(e)))}
+                          onClick={() => downloadProjectUpload(u.id).catch((e: unknown) => setError(String(e)))}
                         >
                           Download
                         </button>

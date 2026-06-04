@@ -1,42 +1,45 @@
 from __future__ import annotations
 
-import re
-
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database.models.user import User
 from app.publications.models.entities import Faculty
+from app.utils.name_utils import names_match, strip_name_prefix
 
 
-_HONORIFIC_RE = re.compile(
-    r"^(?:prof\.?|professor|dr\.?|mr\.?|ms\.?|mrs\.?|shri\.?|smt\.?)\s+",
-    re.IGNORECASE,
-)
+def _is_ece_faculty(faculty: Faculty) -> bool:
+    dept = (faculty.department or "").upper()
+    return "ECE" in dept
 
 
-def _normalize_name(name: str) -> str:
-    cleaned = name.strip()
-    while True:
-        match = _HONORIFIC_RE.match(cleaned)
-        if not match:
-            break
-        cleaned = cleaned[match.end() :].strip()
-    return re.sub(r"\s+", " ", cleaned.lower())
+def _ece_faculty_rows(db: Session) -> list[Faculty]:
+    return [f for f in db.scalars(select(Faculty)).all() if _is_ece_faculty(f)]
+
+
+def match_ece_faculty(db: Session, guide_raw: str, co_guide_raw: str | None) -> Faculty | None:
+    guide = strip_name_prefix(guide_raw)
+    co_guide = strip_name_prefix(co_guide_raw) if co_guide_raw else ""
+    rows = _ece_faculty_rows(db)
+
+    for faculty in rows:
+        if names_match(guide, faculty.name):
+            return faculty
+    if co_guide:
+        for faculty in rows:
+            if names_match(co_guide, faculty.name):
+                return faculty
+    return None
 
 
 def resolve_faculty_by_name(db: Session, raw_name: str) -> Faculty:
     name = raw_name.strip()
     if not name:
         raise ValueError("Faculty name is required")
-    normalized = _normalize_name(name)
+    normalized = strip_name_prefix(name).lower()
     rows = db.scalars(select(Faculty)).all()
 
-    def variants(faculty_name: str) -> set[str]:
-        base = _normalize_name(faculty_name)
-        return {base, f"prof {base}", f"professor {base}", f"dr {base}"}
-
-    exact = [f for f in rows if normalized in variants(f.name) or _normalize_name(f.name) == normalized]
+    exact = [f for f in rows if strip_name_prefix(f.name).lower() == normalized]
     if len(exact) == 1:
         return exact[0]
     if len(exact) > 1:
@@ -45,7 +48,8 @@ def resolve_faculty_by_name(db: Session, raw_name: str) -> Faculty:
     partial = [
         f
         for f in rows
-        if normalized in _normalize_name(f.name) or _normalize_name(f.name) in normalized
+        if normalized in strip_name_prefix(f.name).lower()
+        or strip_name_prefix(f.name).lower() in normalized
     ]
     if len(partial) == 1:
         return partial[0]
@@ -57,9 +61,13 @@ def resolve_faculty_by_name(db: Session, raw_name: str) -> Faculty:
 def faculty_for_user(db: Session, user: User) -> Faculty | None:
     if user.role.value == "admin":
         return None
-    normalized = _normalize_name(user.full_name)
+    normalized = strip_name_prefix(user.full_name).lower()
     for faculty in db.scalars(select(Faculty)).all():
-        fn = _normalize_name(faculty.name)
+        fn = strip_name_prefix(faculty.name).lower()
         if fn == normalized or normalized in fn or fn in normalized:
             return faculty
     return None
+
+
+def cleaned_guide_display(faculty: Faculty) -> str:
+    return strip_name_prefix(faculty.name)

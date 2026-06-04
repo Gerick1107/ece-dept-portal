@@ -10,6 +10,7 @@ const nav = [
   { to: "/publications/search", label: "Publications Search" },
   { to: "/publications/exports", label: "Publication Exports" },
   { to: "/projects", label: "BTP / IP Projects", exact: true },
+  { to: "/awards", label: "Faculty Awards", exact: true },
 ];
 
 function isNavActive(pathname: string, to: string, exact?: boolean): boolean {

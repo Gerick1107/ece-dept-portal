@@ -1,5 +1,5 @@
 import { apiDelete, apiGet, apiPostForm, apiPostJson } from "../../../services/api";
-import type { Project, ProjectListResponse, SdgCatalogItem } from "../types/projects";
+import type { Project, ProjectFilterOptions, ProjectListResponse, SdgCatalogItem } from "../types/projects";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "/api/v1";
 
@@ -10,9 +10,14 @@ export type ProjectFilters = {
   faculty_id?: number;
   project_type?: string;
   semester?: string;
+  semesters?: string;
+  course_code?: string;
+  course_codes?: string;
+  course_name?: string;
+  co_guide?: string;
   student_name?: string;
+  student_roll_no?: string;
   sdg?: number;
-  status?: string;
   credit?: string;
   confirmed_sdg_only?: boolean;
 };
@@ -28,6 +33,10 @@ function qs(filters: ProjectFilters): string {
 
 export function listProjects(filters: ProjectFilters = {}) {
   return apiGet<ProjectListResponse>(`/projects/search${qs(filters)}`);
+}
+
+export function getProjectFilters() {
+  return apiGet<ProjectFilterOptions>("/projects/filters");
 }
 
 export function listSdgCatalog() {
@@ -63,11 +72,12 @@ export function deleteProject(id: number) {
   return apiDelete(`/projects/${id}`);
 }
 
-export function importProjects(file: File, autoSdg = true) {
+export function importProjects(file: File, semesterTag: string, autoSdg = true) {
   const form = new FormData();
   form.append("file", file);
+  const tag = encodeURIComponent(semesterTag);
   return apiPostForm<import("../types/projects").ImportSummary>(
-    `/projects/import?auto_sdg=${autoSdg}`,
+    `/projects/import?auto_sdg=${autoSdg}&semester_tag=${tag}`,
     form
   );
 }
@@ -122,6 +132,10 @@ export async function downloadImportTemplate() {
   URL.revokeObjectURL(url);
 }
 
+export function purgeAllProjects() {
+  return apiPostJson<{ purged: boolean; removed_files: number }>("/projects/admin/purge-all", {});
+}
+
 export function listProjectUploads() {
   return apiGet<{ project_uploads: import("../types/projects").ProjectUploadRow[] }>(
     "/projects/admin/uploads"
@@ -138,15 +152,11 @@ export async function downloadProjectUpload(uploadId: number) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `project_upload_${uploadId}`;
+  a.download = `project_upload_${uploadId}.xlsx`;
   a.click();
   URL.revokeObjectURL(url);
 }
 
 export function deleteProjectUpload(uploadId: number) {
   return apiDelete(`/projects/admin/uploads/${uploadId}`);
-}
-
-export function purgeAllProjects() {
-  return apiPostJson<{ purged: boolean; removed_files: number }>("/projects/admin/purge-all", {});
 }

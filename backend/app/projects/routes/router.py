@@ -23,7 +23,12 @@ from app.projects.schemas.project import (
 )
 from app.projects.services.admin_data_service import delete_project_upload, list_project_uploads, purge_all_projects
 from app.projects.services.export_service import export_projects_csv, export_projects_excel, export_projects_pdf
-from app.projects.services.import_service import build_template_bytes, import_projects_file
+from app.projects.services.import_service import (
+    build_template_bytes,
+    import_projects_file,
+    list_distinct_co_guides,
+    list_distinct_semester_tags,
+)
 from app.projects.services.project_service import (
     ProjectSearchFilters,
     confirm_sdgs,
@@ -31,12 +36,15 @@ from app.projects.services.project_service import (
     delete_project,
     edit_confirmed_sdgs,
     get_sdg_catalog,
+    list_distinct_course_codes,
+    list_distinct_course_names,
     project_to_dict,
     reject_sdgs,
     search_projects,
     update_project,
 )
 from app.projects.services.sdg_queue import enqueue_sdg_tags, sdg_llm_enabled, tag_project_now
+from app.publications.models.entities import Faculty
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -46,25 +54,45 @@ def project_module_settings(_: Annotated[User, Depends(get_current_user)]):
     return {"enable_sdg_llm": sdg_llm_enabled()}
 
 
+def _parse_csv_list(value: str | None) -> list[str]:
+    if not value:
+        return []
+    return [part.strip() for part in value.split(",") if part.strip()]
+
+
 def _filters_from_query(
     query: str | None = None,
     faculty_id: int | None = None,
     project_type: str | None = None,
     semester: str | None = None,
+    semesters: str | None = None,
+    course_code: str | None = None,
+    course_codes: str | None = None,
+    course_name: str | None = None,
+    co_guide: str | None = None,
     student_name: str | None = None,
+    student_roll_no: str | None = None,
     sdg: int | None = None,
-    status: str | None = None,
     credit: str | None = None,
     confirmed_sdg_only: bool = True,
 ) -> ProjectSearchFilters:
+    semester_tags = _parse_csv_list(semesters)
+    if not semester_tags and semester:
+        semester_tags = [semester.strip()]
+    code_list = _parse_csv_list(course_codes)
+    if not code_list and course_code:
+        code_list = [course_code.strip()]
     return ProjectSearchFilters(
         query=query,
         faculty_id=faculty_id,
         project_type=project_type,
-        semester=semester,
+        semesters=semester_tags,
+        course_codes=code_list,
+        course_name=course_name,
+        co_guide=co_guide,
         student_name=student_name,
+        student_roll_no=student_roll_no,
         sdg_number=sdg,
-        status=status,
         credit=credit,
         confirmed_sdg_only=confirmed_sdg_only,
     )
@@ -85,6 +113,24 @@ def _load_project(db: Session, project_id: int) -> Project:
     return project
 
 
+@router.get("/filters")
+def project_filter_options(
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_user)],
+):
+    ece_faculty = db.scalars(
+        select(Faculty).where(Faculty.department.ilike("%ECE%")).order_by(Faculty.name.asc())
+    ).all()
+    return {
+        "semesters": list_distinct_semester_tags(db),
+        "course_codes": list_distinct_course_codes(db),
+        "course_names": list_distinct_course_names(db),
+        "guides": [{"id": f.id, "name": f.name} for f in ece_faculty],
+        "co_guides": list_distinct_co_guides(db),
+        "project_types": ["Thesis", "IP/IS/UR"],
+    }
+
+
 @router.get("", response_model=ProjectListResponse)
 @router.get("/search", response_model=ProjectListResponse)
 def list_or_search_projects(
@@ -96,14 +142,32 @@ def list_or_search_projects(
     faculty_id: int | None = None,
     project_type: str | None = None,
     semester: str | None = None,
+    semesters: str | None = None,
+    course_code: str | None = None,
+    course_codes: str | None = None,
+    course_name: str | None = None,
+    co_guide: str | None = None,
     student_name: str | None = None,
+    student_roll_no: str | None = None,
     sdg: int | None = None,
-    status: str | None = None,
     credit: str | None = None,
     confirmed_sdg_only: bool = False,
 ):
     filters = _filters_from_query(
-        query, faculty_id, project_type, semester, student_name, sdg, status, credit, confirmed_sdg_only
+        query,
+        faculty_id,
+        project_type,
+        semester,
+        semesters,
+        course_code,
+        course_codes,
+        course_name,
+        co_guide,
+        student_name,
+        student_roll_no,
+        sdg,
+        credit,
+        confirmed_sdg_only,
     )
     rows, total = search_projects(db, filters, page, page_size)
     return ProjectListResponse(
@@ -135,6 +199,7 @@ async def import_projects(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(require_roles(UserRole.admin))],
     file: UploadFile = File(...),
+    semester_tag: str = Query(..., min_length=3, description="Semester tag e.g. Monsoon 2024"),
     auto_sdg: bool = Query(default=True),
 ):
     suffix = Path(file.filename or "").suffix.lower()
@@ -142,7 +207,14 @@ async def import_projects(
         raise HTTPException(status_code=400, detail="Only .csv, .xlsx, or .xls files are accepted")
     content = await file.read()
     try:
-        result = import_projects_file(db, content, file.filename or "upload.xlsx", user.id, auto_sdg=auto_sdg)
+        result = import_projects_file(
+            db,
+            content,
+            file.filename or "upload.xlsx",
+            user.id,
+            semester_tag=semester_tag,
+            auto_sdg=auto_sdg,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return ImportSummary(**result)
@@ -260,14 +332,32 @@ def export_projects(
     faculty_id: int | None = None,
     project_type: str | None = None,
     semester: str | None = None,
+    semesters: str | None = None,
+    course_code: str | None = None,
+    course_codes: str | None = None,
+    course_name: str | None = None,
+    co_guide: str | None = None,
     student_name: str | None = None,
+    student_roll_no: str | None = None,
     sdg: int | None = None,
-    status: str | None = None,
     credit: str | None = None,
     confirmed_sdg_only: bool = True,
 ):
     filters = _filters_from_query(
-        query, faculty_id, project_type, semester, student_name, sdg, status, credit, confirmed_sdg_only
+        query,
+        faculty_id,
+        project_type,
+        semester,
+        semesters,
+        course_code,
+        course_codes,
+        course_name,
+        co_guide,
+        student_name,
+        student_roll_no,
+        sdg,
+        credit,
+        confirmed_sdg_only,
     )
     if format == "csv":
         payload = export_projects_csv(db, filters)

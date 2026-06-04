@@ -15,20 +15,20 @@ class SdgBrief(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class ProjectStudentSchema(BaseModel):
-    id: int | None = None
-    student_name: str
-
-
 class ProjectBase(BaseModel):
     project_title: str = Field(min_length=1, max_length=1024)
     project_type: str
-    semester: str = Field(min_length=1, max_length=128)
+    semesters: str = Field(min_length=1)
     faculty_id: int
     co_guide: str | None = None
-    status: str = "Pending"
-    credit: str | None = None
-    students: list[str] = Field(default_factory=list)
+    course_code: str | None = None
+    course_name: str | None = None
+    admission_year: str | None = None
+    program_definition: str | None = None
+    program_specialization: str | None = None
+    student_roll_nos: str = ""
+    student_names: str = ""
+    credit: float | None = None
 
 
 class ProjectCreate(ProjectBase):
@@ -43,25 +43,37 @@ class ProjectCreate(ProjectBase):
 class ProjectUpdate(BaseModel):
     project_title: str | None = None
     project_type: str | None = None
-    semester: str | None = None
+    semesters: str | None = None
     faculty_id: int | None = None
     co_guide: str | None = None
-    status: str | None = None
-    credit: str | None = None
-    students: list[str] | None = None
+    course_code: str | None = None
+    course_name: str | None = None
+    admission_year: str | None = None
+    program_definition: str | None = None
+    program_specialization: str | None = None
+    student_roll_nos: str | None = None
+    student_names: str | None = None
+    credit: float | None = None
 
 
 class ProjectResponse(BaseModel):
     id: int
     project_title: str
     project_type: str
-    semester: str
+    semesters: str
     faculty_id: int
     faculty_name: str
     co_guide: str | None
-    status: str
-    credit: str | None
-    students: list[str]
+    course_code: str | None
+    course_name: str | None
+    admission_year: str | None = None
+    program_definition: str | None = None
+    program_specialization: str | None = None
+    student_roll_nos: str = ""
+    student_names: str = ""
+    credit: float | None
+    students: list[str] = Field(default_factory=list)
+    student_rolls: list[str] = Field(default_factory=list)
     sdg_review_status: str
     suggested_sdgs: list[SdgBrief] = Field(default_factory=list)
     confirmed_sdgs: list[SdgBrief] = Field(default_factory=list)
@@ -80,6 +92,7 @@ class ProjectListResponse(BaseModel):
 class ImportSummary(BaseModel):
     upload_id: int
     imported: int
+    merged: int = 0
     total_rows: int = 0
     skipped_rows: int = 0
     sdg_queued: int = 0

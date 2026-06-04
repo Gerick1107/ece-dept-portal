@@ -1,5 +1,7 @@
 from app.database.models.copo import CopoEvaluationRun, CopoMarksUpload, CopoResultArchive
+from app.database.models.course import Course
 from app.database.models.user import User
+from app.awards.models.entities import FacultyAward
 from app.publications.models.entities import (
     BlockedPublication,
     Faculty,
@@ -15,6 +17,8 @@ __all__ = [
     "CopoMarksUpload",
     "CopoEvaluationRun",
     "CopoResultArchive",
+    "Course",
+    "FacultyAward",
     "Faculty",
     "Publication",
     "PublicationFaculty",

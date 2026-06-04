@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
@@ -16,7 +16,7 @@ class Sdg(Base):
     sdg_name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    project_links: Mapped[list[ProjectSdg]] = relationship("ProjectSdg", back_populates="sdg")
+    project_links: Mapped[list["ProjectSdg"]] = relationship("ProjectSdg", back_populates="sdg")
 
 
 class ProjectUpload(Base):
@@ -35,12 +35,18 @@ class Project(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     project_title: Mapped[str] = mapped_column(String(1024), nullable=False)
-    project_type: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
-    semester: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    project_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    semesters: Mapped[str] = mapped_column(Text, nullable=False, index=True)
     faculty_id: Mapped[int] = mapped_column(ForeignKey("faculty.id", ondelete="RESTRICT"), nullable=False, index=True)
     co_guide: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    status: Mapped[str] = mapped_column(String(64), nullable=False, default="Pending", index=True)
-    credit: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    course_code: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    course_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    admission_year: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    program_definition: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    program_specialization: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    student_roll_nos: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    student_names: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    credit: Mapped[float | None] = mapped_column(Numeric(4, 1), nullable=True)
     upload_batch_id: Mapped[int | None] = mapped_column(
         ForeignKey("project_uploads.id", ondelete="SET NULL"), nullable=True
     )
@@ -51,10 +57,10 @@ class Project(Base):
     )
 
     faculty: Mapped["Faculty"] = relationship("Faculty", foreign_keys=[faculty_id], lazy="joined")
-    students: Mapped[list[ProjectStudent]] = relationship(
+    students: Mapped[list["ProjectStudent"]] = relationship(
         "ProjectStudent", back_populates="project", cascade="all, delete-orphan"
     )
-    sdg_links: Mapped[list[ProjectSdg]] = relationship(
+    sdg_links: Mapped[list["ProjectSdg"]] = relationship(
         "ProjectSdg", back_populates="project", cascade="all, delete-orphan"
     )
 
@@ -84,5 +90,4 @@ class ProjectSdg(Base):
     sdg: Mapped[Sdg] = relationship("Sdg", back_populates="project_links")
 
 
-from app.publications.models.entities import Faculty  # noqa: E402, F401 — register FK target for Project.faculty
-
+from app.publications.models.entities import Faculty  # noqa: E402, F401

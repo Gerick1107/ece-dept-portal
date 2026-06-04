@@ -46,12 +46,18 @@ settings = get_settings()
 
 
 @router.get("/course-names", response_model=CourseNamesResponse)
-def get_course_names():
+def get_course_names(db: Annotated[Session, Depends(get_db)]):
+    from app.courses.services.course_service import course_display_label, list_courses
+
+    db_courses = list_courses(db)
+    if db_courses:
+        return CourseNamesResponse(courses=[course_display_label(c) for c in db_courses])
+
     path = settings.resolved_mapping_path
     if not os.path.exists(path):
         raise HTTPException(
             status_code=500,
-            detail=f"CO-PO mapping file not found at {path}. Place mapping Excel in data/assets/.",
+            detail=f"CO-PO mapping file not found at {path}. Place mapping Excel in data/assets/ or seed courses.",
         )
     names = mapping_service.extract_course_names(path)
     return CourseNamesResponse(courses=names)

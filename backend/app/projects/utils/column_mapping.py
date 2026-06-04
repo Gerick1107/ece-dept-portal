@@ -47,6 +47,38 @@ def require_columns(mapping: dict[str, str]) -> list[str]:
     return missing
 
 
+DEPARTMENT_FIELD_ALIASES = {
+    "sr_no": ["sr. no.", "sr no", "serial number", "s.no"],
+    "admission_year": ["admission year"],
+    "program_definition": ["program definition"],
+    "program_specialization": ["program specialization"],
+    "semester_file": ["semester"],
+    "project_type": ["project type"],
+    "course_code": ["course code"],
+    "course_name": ["course name"],
+    "credit": ["credit", "credits"],
+    "student_roll_no": ["student roll number", "student roll no", "roll number"],
+    "student_name": ["student name"],
+    "guide_name": ["guide name", "guide"],
+    "co_guide": ["co-guide", "co guide", "coguide"],
+    "title": ["title", "project title", "project topic"],
+    "grade": ["grade"],
+    "project_status": ["project status", "status"],
+}
+
+
+def map_department_headers(raw_headers: list[str]) -> dict[str, str]:
+    normalized = {_normalize_header(h): h for h in raw_headers if h and str(h).strip()}
+    mapping: dict[str, str] = {}
+    for canonical, aliases in DEPARTMENT_FIELD_ALIASES.items():
+        for alias in aliases:
+            key = _normalize_header(alias)
+            if key in normalized:
+                mapping[canonical] = normalized[key]
+                break
+    return mapping
+
+
 def cell_str(value: Any) -> str:
     if value is None:
         return ""

@@ -7,7 +7,10 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.projects.models.entities import Project, ProjectSdg, ProjectStudent, Sdg
 from app.projects.schemas.project import ProjectCreate, ProjectUpdate
+from app.projects.utils.course_name import normalize_course_name
+from app.projects.utils.csv_fields import append_csv_value, parse_csv_field
 from app.publications.models.entities import Faculty
+from app.utils.name_utils import strip_name_prefix
 
 
 class ProjectSearchFilters:
@@ -17,42 +20,80 @@ class ProjectSearchFilters:
         query: str | None = None,
         faculty_id: int | None = None,
         project_type: str | None = None,
-        semester: str | None = None,
+        semesters: list[str] | None = None,
+        course_codes: list[str] | None = None,
+        course_name: str | None = None,
+        co_guide: str | None = None,
         student_name: str | None = None,
+        student_roll_no: str | None = None,
         sdg_number: int | None = None,
-        status: str | None = None,
         credit: str | None = None,
         confirmed_sdg_only: bool = False,
     ):
         self.query = query
         self.faculty_id = faculty_id
-        self.project_type = project_type.upper() if project_type else None
-        self.semester = semester
+        self.project_type = project_type.strip() if project_type else None
+        self.semesters = semesters or []
+        self.course_codes = course_codes or []
+        self.course_name = course_name
+        self.co_guide = co_guide
         self.student_name = student_name
+        self.student_roll_no = student_roll_no
         self.sdg_number = sdg_number
-        self.status = status
         self.credit = credit
         self.confirmed_sdg_only = confirmed_sdg_only
 
 
 def _normalize_type(value: str) -> str:
-    """Accept BTP, IP, BTP Design, Independent Project, etc."""
-    upper = value.strip().upper()
-    if not upper:
+    cleaned = value.strip()
+    if not cleaned:
         raise ValueError("project_type is required")
-    if "BTP" in upper:
-        return "BTP"
-    if "IP" in upper or "INDEPENDENT" in upper:
-        return "IP"
-    raise ValueError(f"project_type must be BTP or IP (got {value!r})")
+    return cleaned
 
 
-def _set_students(db: Session, project: Project, names: list[str]) -> None:
+def _sync_students_from_names(db: Session, project: Project) -> None:
     db.execute(delete(ProjectStudent).where(ProjectStudent.project_id == project.id))
-    for name in names:
-        cleaned = name.strip()
-        if cleaned:
-            db.add(ProjectStudent(project_id=project.id, student_name=cleaned))
+    for name in parse_csv_field(project.student_names):
+        db.add(ProjectStudent(project_id=project.id, student_name=name))
+
+
+def find_merge_candidate(
+    db: Session,
+    title: str,
+    guide_clean: str,
+    course_code: str,
+) -> Project | None:
+    title_key = title.strip().lower()
+    guide_key = strip_name_prefix(guide_clean).lower()
+    code_key = (course_code or "").strip().upper()
+    rows = db.scalars(
+        select(Project).options(joinedload(Project.faculty)).order_by(Project.id.asc())
+    ).unique().all()
+    for project in rows:
+        faculty_name = strip_name_prefix(project.faculty.name if project.faculty else "").lower()
+        if (
+            project.project_title.strip().lower() == title_key
+            and faculty_name == guide_key
+            and (project.course_code or "").strip().upper() == code_key
+        ):
+            return project
+    return None
+
+
+def merge_project(
+    project: Project,
+    *,
+    semester_tag: str,
+    student_roll_no: str,
+    student_name: str,
+) -> Project:
+    project.semesters = append_csv_value(project.semesters, semester_tag)
+    if student_roll_no:
+        project.student_roll_nos = append_csv_value(project.student_roll_nos, student_roll_no)
+    if student_name:
+        project.student_names = append_csv_value(project.student_names, student_name)
+    project.updated_at = datetime.utcnow()
+    return project
 
 
 def project_to_dict(db: Session, project: Project) -> dict:
@@ -74,17 +115,27 @@ def project_to_dict(db: Session, project: Project) -> dict:
             confirmed.append(entry)
         else:
             suggested.append(entry)
+    credit_val = project.credit
+    if credit_val is not None:
+        credit_val = float(credit_val)
     return {
         "id": project.id,
         "project_title": project.project_title,
         "project_type": project.project_type,
-        "semester": project.semester,
+        "semesters": project.semesters,
         "faculty_id": project.faculty_id,
-        "faculty_name": faculty.name if faculty else "",
+        "faculty_name": strip_name_prefix(faculty.name) if faculty else "",
         "co_guide": project.co_guide,
-        "status": project.status,
-        "credit": project.credit,
-        "students": [s.student_name for s in project.students],
+        "course_code": project.course_code,
+        "course_name": normalize_course_name(project.course_name) if project.course_name else None,
+        "admission_year": project.admission_year,
+        "program_definition": project.program_definition,
+        "program_specialization": project.program_specialization,
+        "student_roll_nos": project.student_roll_nos,
+        "student_names": project.student_names,
+        "credit": credit_val,
+        "students": parse_csv_field(project.student_names),
+        "student_rolls": parse_csv_field(project.student_roll_nos),
         "sdg_review_status": project.sdg_review_status,
         "suggested_sdgs": suggested,
         "confirmed_sdgs": confirmed,
@@ -92,6 +143,57 @@ def project_to_dict(db: Session, project: Project) -> dict:
         "created_at": project.created_at,
         "updated_at": project.updated_at,
     }
+
+
+def _apply_filters(stmt, filters: ProjectSearchFilters):
+    if filters.faculty_id:
+        stmt = stmt.where(Project.faculty_id == filters.faculty_id)
+    if filters.project_type:
+        stmt = stmt.where(Project.project_type.ilike(f"%{filters.project_type.strip()}%"))
+    if filters.course_name:
+        stmt = stmt.where(Project.course_name.ilike(f"%{filters.course_name.strip()}%"))
+    if filters.course_codes:
+        codes = [c.strip().upper() for c in filters.course_codes if c.strip()]
+        if codes:
+            stmt = stmt.where(func.upper(Project.course_code).in_(codes))
+    if filters.semesters:
+        for tag in filters.semesters:
+            cleaned = tag.strip()
+            if cleaned:
+                stmt = stmt.where(Project.semesters.ilike(f"%{cleaned}%"))
+    if filters.co_guide:
+        cg = f"%{strip_name_prefix(filters.co_guide.strip())}%"
+        stmt = stmt.where(Project.co_guide.ilike(cg))
+    if filters.credit:
+        try:
+            credit_val = float(filters.credit.strip())
+            stmt = stmt.where(Project.credit == credit_val)
+        except ValueError:
+            pass
+    if filters.query:
+        q = f"%{filters.query.strip()}%"
+        stmt = stmt.join(Faculty, Project.faculty_id == Faculty.id).where(
+            or_(
+                Project.project_title.ilike(q),
+                Project.co_guide.ilike(q),
+                Project.student_names.ilike(q),
+                Project.student_roll_nos.ilike(q),
+                Faculty.name.ilike(q),
+            )
+        )
+    if filters.student_name:
+        sn = f"%{filters.student_name.strip()}%"
+        stmt = stmt.where(Project.student_names.ilike(sn))
+    if filters.student_roll_no:
+        sr = f"%{filters.student_roll_no.strip()}%"
+        stmt = stmt.where(Project.student_roll_nos.ilike(sr))
+    if filters.sdg_number:
+        sdg_sub = select(Sdg.id).where(Sdg.sdg_number == filters.sdg_number).scalar_subquery()
+        link_q = select(ProjectSdg.project_id).where(ProjectSdg.sdg_id == sdg_sub)
+        if filters.confirmed_sdg_only:
+            link_q = link_q.where(ProjectSdg.is_confirmed.is_(True))
+        stmt = stmt.where(Project.id.in_(link_q))
+    return stmt
 
 
 def search_projects(
@@ -105,61 +207,10 @@ def search_projects(
         joinedload(Project.sdg_links).joinedload(ProjectSdg.sdg),
         joinedload(Project.faculty),
     )
-    if filters.faculty_id:
-        stmt = stmt.where(Project.faculty_id == filters.faculty_id)
-    if filters.project_type:
-        stmt = stmt.where(Project.project_type == filters.project_type)
-    if filters.semester:
-        stmt = stmt.where(Project.semester.ilike(f"%{filters.semester.strip()}%"))
-    if filters.status:
-        stmt = stmt.where(Project.status.ilike(f"%{filters.status.strip()}%"))
-    if filters.credit:
-        stmt = stmt.where(Project.credit.ilike(f"%{filters.credit.strip()}%"))
-    if filters.query:
-        q = f"%{filters.query.strip()}%"
-        stmt = stmt.where(
-            or_(
-                Project.project_title.ilike(q),
-                Project.co_guide.ilike(q),
-            )
-        )
-    if filters.student_name:
-        sn = f"%{filters.student_name.strip()}%"
-        stmt = stmt.where(
-            Project.id.in_(select(ProjectStudent.project_id).where(ProjectStudent.student_name.ilike(sn)))
-        )
-    if filters.sdg_number:
-        sdg_sub = select(Sdg.id).where(Sdg.sdg_number == filters.sdg_number).scalar_subquery()
-        link_q = select(ProjectSdg.project_id).where(ProjectSdg.sdg_id == sdg_sub)
-        if filters.confirmed_sdg_only:
-            link_q = link_q.where(ProjectSdg.is_confirmed.is_(True))
-        stmt = stmt.where(Project.id.in_(link_q))
+    stmt = _apply_filters(stmt, filters)
 
     count_stmt = select(func.count(Project.id))
-    if filters.faculty_id:
-        count_stmt = count_stmt.where(Project.faculty_id == filters.faculty_id)
-    if filters.project_type:
-        count_stmt = count_stmt.where(Project.project_type == filters.project_type)
-    if filters.semester:
-        count_stmt = count_stmt.where(Project.semester.ilike(f"%{filters.semester.strip()}%"))
-    if filters.status:
-        count_stmt = count_stmt.where(Project.status.ilike(f"%{filters.status.strip()}%"))
-    if filters.credit:
-        count_stmt = count_stmt.where(Project.credit.ilike(f"%{filters.credit.strip()}%"))
-    if filters.query:
-        q = f"%{filters.query.strip()}%"
-        count_stmt = count_stmt.where(or_(Project.project_title.ilike(q), Project.co_guide.ilike(q)))
-    if filters.student_name:
-        sn = f"%{filters.student_name.strip()}%"
-        count_stmt = count_stmt.where(
-            Project.id.in_(select(ProjectStudent.project_id).where(ProjectStudent.student_name.ilike(sn)))
-        )
-    if filters.sdg_number:
-        sdg_sub = select(Sdg.id).where(Sdg.sdg_number == filters.sdg_number).scalar_subquery()
-        link_q = select(ProjectSdg.project_id).where(ProjectSdg.sdg_id == sdg_sub)
-        if filters.confirmed_sdg_only:
-            link_q = link_q.where(ProjectSdg.is_confirmed.is_(True))
-        count_stmt = count_stmt.where(Project.id.in_(link_q))
+    count_stmt = _apply_filters(count_stmt, filters)
     total = db.scalar(count_stmt) or 0
     rows = db.scalars(stmt.order_by(Project.id.asc()).offset((page - 1) * page_size).limit(page_size)).unique().all()
     return list(rows), int(total)
@@ -172,17 +223,23 @@ def create_project(db: Session, body: ProjectCreate, upload_batch_id: int | None
     project = Project(
         project_title=body.project_title.strip(),
         project_type=_normalize_type(body.project_type),
-        semester=body.semester.strip(),
+        semesters=body.semesters.strip(),
         faculty_id=body.faculty_id,
-        co_guide=body.co_guide.strip() if body.co_guide else None,
-        status=body.status or "Pending",
+        co_guide=strip_name_prefix(body.co_guide) if body.co_guide else None,
+        course_code=body.course_code.strip() if body.course_code else None,
+        course_name=normalize_course_name(body.course_name) if body.course_name else None,
+        admission_year=body.admission_year,
+        program_definition=body.program_definition,
+        program_specialization=body.program_specialization,
+        student_roll_nos=body.student_roll_nos.strip() if body.student_roll_nos else "",
+        student_names=body.student_names.strip() if body.student_names else "",
         credit=body.credit,
         upload_batch_id=upload_batch_id,
         sdg_review_status="none",
     )
     db.add(project)
     db.flush()
-    _set_students(db, project, body.students)
+    _sync_students_from_names(db, project)
     db.commit()
     db.refresh(project)
     return project
@@ -193,20 +250,31 @@ def update_project(db: Session, project: Project, body: ProjectUpdate) -> Projec
         project.project_title = body.project_title.strip()
     if body.project_type is not None:
         project.project_type = _normalize_type(body.project_type)
-    if body.semester is not None:
-        project.semester = body.semester.strip()
+    if body.semesters is not None:
+        project.semesters = body.semesters.strip()
     if body.faculty_id is not None:
         if not db.get(Faculty, body.faculty_id):
             raise ValueError("faculty_id not found")
         project.faculty_id = body.faculty_id
     if body.co_guide is not None:
-        project.co_guide = body.co_guide.strip() or None
-    if body.status is not None:
-        project.status = body.status
+        project.co_guide = strip_name_prefix(body.co_guide) if body.co_guide else None
+    if body.course_code is not None:
+        project.course_code = body.course_code.strip() or None
+    if body.course_name is not None:
+        project.course_name = normalize_course_name(body.course_name) if body.course_name else None
+    if body.admission_year is not None:
+        project.admission_year = body.admission_year
+    if body.program_definition is not None:
+        project.program_definition = body.program_definition
+    if body.program_specialization is not None:
+        project.program_specialization = body.program_specialization
+    if body.student_roll_nos is not None:
+        project.student_roll_nos = body.student_roll_nos.strip()
+    if body.student_names is not None:
+        project.student_names = body.student_names.strip()
+        _sync_students_from_names(db, project)
     if body.credit is not None:
         project.credit = body.credit
-    if body.students is not None:
-        _set_students(db, project, body.students)
     project.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(project)
@@ -254,7 +322,6 @@ def apply_sdg_suggestions(db: Session, project: Project, suggestions: list[dict]
     for sdg_number, confidence in deduped_by_sdg.items():
         sdg = db.scalar(select(Sdg).where(Sdg.sdg_number == sdg_number))
         if not sdg or sdg.id in existing_confirmed_ids:
-            # Keep confirmed mappings intact; don't reinsert duplicate links.
             continue
         added += 1
         db.add(
@@ -309,3 +376,23 @@ def edit_confirmed_sdgs(db: Session, project: Project, sdg_numbers: list[int]) -
 
 def get_sdg_catalog(db: Session) -> list[Sdg]:
     return list(db.scalars(select(Sdg).order_by(Sdg.sdg_number)).all())
+
+
+def list_distinct_course_codes(db: Session) -> list[str]:
+    rows = db.scalars(
+        select(Project.course_code)
+        .where(Project.course_code.isnot(None), Project.course_code != "")
+        .distinct()
+        .order_by(Project.course_code.asc())
+    ).all()
+    return [r for r in rows if r]
+
+
+def list_distinct_course_names(db: Session) -> list[str]:
+    rows = db.scalars(
+        select(Project.course_name)
+        .where(Project.course_name.isnot(None), Project.course_name != "")
+        .distinct()
+        .order_by(Project.course_name.asc())
+    ).all()
+    return sorted({normalize_course_name(r) for r in rows if r})

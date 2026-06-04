@@ -11,6 +11,7 @@ import GlobalPublicationsPage from "./modules/publications/pages/GlobalPublicati
 import PublicationExportsPage from "./modules/publications/pages/PublicationExportsPage";
 import PublicationsAdminPage from "./modules/publications/pages/PublicationsAdminPage";
 import ProjectsPage from "./modules/projects/pages/ProjectsPage";
+import AwardsPage from "./modules/awards/pages/AwardsPage";
 import AdminDataPage from "./pages/AdminDataPage";
 import AdminUsersPage from "./pages/AdminUsersPage";
 import DashboardPage from "./pages/DashboardPage";
@@ -50,6 +51,7 @@ export default function App() {
         <Route path="/publications/exports" element={<PublicationExportsPage />} />
         <Route path="/publications/admin" element={<PublicationsAdminPage />} />
         <Route path="/projects" element={<ProjectsPage />} />
+        <Route path="/awards" element={<AwardsPage />} />
         <Route path="/admin/users" element={<AdminUsersPage />} />
         <Route path="/admin/data" element={<AdminDataPage />} />
         <Route path="/profile" element={<ProfilePage />} />

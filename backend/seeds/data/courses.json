@@ -1,0 +1,230 @@
+[
+  {
+    "course_code": "ECE-111",
+    "course_name": "Digital Circuits (DC)"
+  },
+  {
+    "course_code": "ECE-113",
+    "course_name": "Basic Electronics (BE)"
+  },
+  {
+    "course_code": "ECE-270",
+    "course_name": "Embedded Logic Design (ELD)"
+  },
+  {
+    "course_code": "ECE-250",
+    "course_name": "Signals & Systems (S&S)"
+  },
+  {
+    "course_code": "ECE-215",
+    "course_name": "Circuit Theory and Design (CTD)"
+  },
+  {
+    "course_code": "ECE-230",
+    "course_name": "Fields and Waves (F&W)"
+  },
+  {
+    "course_code": "ECE-214",
+    "course_name": "Integrated electronics (IE)"
+  },
+  {
+    "course_code": "ECE-240",
+    "course_name": "Principles of Communication Systems (PCS)"
+  },
+  {
+    "course_code": "ECE-351",
+    "course_name": "Digital Signal Processing (DSP)"
+  },
+  {
+    "course_code": "ECE 501",
+    "course_name": "Probability and Random Processes (PRP)"
+  },
+  {
+    "course_code": "ECE432/632",
+    "course_name": "Radar Systems (RS)"
+  },
+  {
+    "course_code": "ECE513",
+    "course_name": "VLSI Design Flow (VDF)"
+  },
+  {
+    "course_code": "ECE573",
+    "course_name": "Advanced Embedded Logic Design (AELD)"
+  },
+  {
+    "course_code": "ECE-611",
+    "course_name": "Memory Design and Testing (MDT)"
+  },
+  {
+    "course_code": "ECE-356/556",
+    "course_name": "Statistical Machine Learning (SML)"
+  },
+  {
+    "course_code": "ECE-511",
+    "course_name": "Computer Architecture (CA)"
+  },
+  {
+    "course_code": "ECE314/514",
+    "course_name": "Digital VLSI Design (DVD)"
+  },
+  {
+    "course_code": "ECE-315/515",
+    "course_name": "Analog CMOS Circuit Design (ACMOS)"
+  },
+  {
+    "course_code": "ECE-340",
+    "course_name": "Digital Image Processing (DIP)"
+  },
+  {
+    "course_code": "ECE-363/563",
+    "course_name": "Machine Learning (ML)"
+  },
+  {
+    "course_code": "ECE-553",
+    "course_name": "Deep Learning (DL)"
+  },
+  {
+    "course_code": "ECE-537",
+    "course_name": "Wireless Communication Evolution from 3G to 5G (WCE)"
+  },
+  {
+    "course_code": "ECE-551",
+    "course_name": "Bayesian Machine Leraning (BML)"
+  },
+  {
+    "course_code": "ECE-524",
+    "course_name": "Quantum Materials and Devices (QMD)"
+  },
+  {
+    "course_code": "ECE-318/518",
+    "course_name": "Solid State Devices (SSD)"
+  },
+  {
+    "course_code": "ECE-539",
+    "course_name": "Wireless System Implementation (WSI)"
+  },
+  {
+    "course_code": "ECE-634",
+    "course_name": "Information Theory (InT)"
+  },
+  {
+    "course_code": "ECE-677",
+    "course_name": "Advances in Deep Learning (ADL)"
+  },
+  {
+    "course_code": "ECE-564A",
+    "course_name": "Machine Learning for Wireless Communication and Networks (MLWCN)"
+  },
+  {
+    "course_code": "ECE-530",
+    "course_name": "Quantum Communication and Networks (QCN)"
+  },
+  {
+    "course_code": "ECE-211",
+    "course_name": "Electronic System Design (ESD)"
+  },
+  {
+    "course_code": "ECE-571",
+    "course_name": "Optimal Control Systems (OCNS) (old version)"
+  },
+  {
+    "course_code": "ECE-343",
+    "course_name": "Mobile Communication (MCom)"
+  },
+  {
+    "course_code": "ECE-210/310",
+    "course_name": "Physics of Semiconductor Devices (PSD)"
+  },
+  {
+    "course_code": "ECE-366/566",
+    "course_name": "(Neural Engineering and Implantable Devices (NEID)"
+  },
+  {
+    "course_code": "ECE-331/ ECE531",
+    "course_name": "Applied Fields and Waves (AFW)"
+  },
+  {
+    "course_code": "ECE-527",
+    "course_name": "Advanced Digital Design and Verification (ADDV)"
+  },
+  {
+    "course_code": "ECE-670",
+    "course_name": "Robotics (IRob)"
+  },
+  {
+    "course_code": "ECE-572",
+    "course_name": "Estimation Theory for Dynamical Systems (ET)"
+  },
+  {
+    "course_code": "MTH-201",
+    "course_name": "Mathematics-2 (P&S)"
+  },
+  {
+    "course_code": "ECE 340",
+    "course_name": "Digital Communication Systems (DCS)"
+  },
+  {
+    "course_code": "ECE-613",
+    "course_name": "Advanced SSD (ASSD)"
+  },
+  {
+    "course_code": "ECE-525",
+    "course_name": "Quantum Mechanics (QM)"
+  },
+  {
+    "course_code": "ECE-564",
+    "course_name": "Reinforcement Learning (RL)"
+  },
+  {
+    "course_code": "ECE-543",
+    "course_name": "Principles of Digital Communication System (PDCS)"
+  },
+  {
+    "course_code": "ECE-666",
+    "course_name": "Applied Optimization Methods for Machine Learning (AOMML)"
+  },
+  {
+    "course_code": "ECE-523A",
+    "course_name": "Digital Processor design (DPD)"
+  },
+  {
+    "course_code": "ECE-548",
+    "course_name": "Advanced Digital Communication (ADC)"
+  },
+  {
+    "course_code": "ECE-577",
+    "course_name": "Machine learning for real-time Control (MLRC)"
+  },
+  {
+    "course_code": "ECE-344/544",
+    "course_name": "Computer Vision"
+  },
+  {
+    "course_code": "ECE-570",
+    "course_name": "Linear Systems Theory (LST)"
+  },
+  {
+    "course_code": "MTH-374",
+    "course_name": "Linear Optimization (LO)"
+  },
+  {
+    "course_code": "CSE-112",
+    "course_name": "Computer Organization (CO)"
+  },
+  {
+    "course_code": "ECE-431/631",
+    "course_name": "Antennas Theory and Design (ATD)"
+  },
+  {
+    "course_code": "ECE-532",
+    "course_name": "Optical Fiber networks for industry 4.0"
+  },
+  {
+    "course_code": "ECE-323/526",
+    "course_name": "Intelligent Product Design Workshop"
+  },
+  {
+    "course_code": "ECE-560",
+    "course_name": "Data Processing and Management"
+  }
+]

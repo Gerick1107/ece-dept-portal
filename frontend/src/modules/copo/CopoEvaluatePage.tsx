@@ -6,6 +6,8 @@ import CopoFullResultsView from "../../components/CopoFullResultsView";
 import EvaluationScopePanel from "../../components/EvaluationScopePanel";
 import FileUploadField from "../../components/FileUploadField";
 import CourseSearchSelect from "../../components/CourseSearchSelect";
+import { useAuth } from "../auth/AuthContext";
+import { createCourse, listCourses } from "../shared/portalApi";
 import { useMarksFileParse } from "../../hooks/useMarksFileParse";
 import type { MarksParsePreview } from "../../types/copo";
 import { apiGet, apiPostForm, downloadCopoFile } from "../../services/api";
@@ -37,6 +39,8 @@ function defaultScopeFromPreview(preview: MarksParsePreview) {
 }
 
 export default function CopoEvaluatePage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const [courses, setCourses] = useState<string[]>([]);
   const [courseTitle, setCourseTitle] = useState("");
   const [mappingMode, setMappingMode] = useState<"default" | "custom">("default");
@@ -52,6 +56,10 @@ export default function CopoEvaluatePage() {
   const [result, setResult] = useState<EvalResult | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [showAddCourse, setShowAddCourse] = useState(false);
+  const [newCourseCode, setNewCourseCode] = useState("");
+  const [newCourseName, setNewCourseName] = useState("");
+  const [courseMessage, setCourseMessage] = useState("");
   const { parseMarksFile, parsing, error: parseError, setError: setParseError } = useMarksFileParse();
 
   const loadCourses = useCallback(async (mappingFile?: File) => {
@@ -62,6 +70,15 @@ export default function CopoEvaluatePage() {
         const r = await apiPostForm<{ courses: string[] }>("/copo/course-names", fd);
         setCourses(r.courses);
       } else {
+        try {
+          const db = await listCourses();
+          if (db.courses.length) {
+            setCourses(db.courses.map((c) => c.label));
+            return;
+          }
+        } catch {
+          /* fall through to mapping file */
+        }
         const r = await apiGet<{ courses: string[] }>("/copo/course-names");
         setCourses(r.courses);
       }
@@ -166,7 +183,23 @@ export default function CopoEvaluatePage() {
 
       <ConstraintMarksTemplatePanel initialCourseCode={courseTitle} />
 
-      <h2 className="text-xl font-semibold">Generate CO-PO Attainment Report</h2>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-xl font-semibold">Generate CO-PO Attainment Report</h2>
+        {isAdmin && (
+          <button
+            type="button"
+            className="rounded-lg bg-teal-700 text-white px-3 py-2 text-sm"
+            onClick={() => {
+              setNewCourseCode("");
+              setNewCourseName("");
+              setCourseMessage("");
+              setShowAddCourse(true);
+            }}
+          >
+            Add Course
+          </button>
+        )}
+      </div>
       {displayError && (
         <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 whitespace-pre-wrap">
           {displayError}
@@ -366,6 +399,51 @@ export default function CopoEvaluatePage() {
             scopeSummary={result.scope_summary}
           />
         </section>
+      )}
+
+      {showAddCourse && isAdmin && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-lg max-w-md w-full p-6 space-y-3">
+            <h3 className="font-semibold">Add course</h3>
+            {courseMessage && (
+              <p className="text-sm text-teal-800 bg-teal-50 border border-teal-200 rounded px-3 py-2">{courseMessage}</p>
+            )}
+            <input
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+              placeholder="Course code"
+              value={newCourseCode}
+              onChange={(e) => setNewCourseCode(e.target.value)}
+            />
+            <input
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+              placeholder="Course name"
+              value={newCourseName}
+              onChange={(e) => setNewCourseName(e.target.value)}
+            />
+            <div className="flex justify-end gap-2">
+              <button type="button" className="px-3 py-2 text-sm border rounded-lg" onClick={() => setShowAddCourse(false)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="px-3 py-2 text-sm bg-teal-700 text-white rounded-lg"
+                onClick={async () => {
+                  try {
+                    await createCourse(newCourseCode, newCourseName);
+                    setCourseMessage("Course added successfully.");
+                    await loadCourses();
+                    setTimeout(() => setShowAddCourse(false), 800);
+                  } catch (e) {
+                    setCourseMessage("");
+                    setError(e instanceof Error ? e.message : "Could not add course");
+                  }
+                }}
+              >
+                Submit
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

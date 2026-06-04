@@ -10,17 +10,30 @@ export type Project = {
   id: number;
   project_title: string;
   project_type: string;
-  semester: string;
+  semesters: string;
   faculty_id: number;
   faculty_name: string;
   co_guide: string | null;
-  status: string;
-  credit: string | null;
+  course_code: string | null;
+  course_name: string | null;
+  student_roll_nos: string;
+  student_names: string;
+  credit: number | null;
   students: string[];
+  student_rolls: string[];
   sdg_review_status: string;
   suggested_sdgs: SdgBrief[];
   confirmed_sdgs: SdgBrief[];
   upload_batch_id: number | null;
+};
+
+export type ProjectFilterOptions = {
+  semesters: string[];
+  course_codes: string[];
+  course_names: string[];
+  guides: { id: number; name: string }[];
+  co_guides: string[];
+  project_types: string[];
 };
 
 export type ProjectListResponse = {
@@ -38,6 +51,7 @@ export type SdgCatalogItem = {
 export type ImportSummary = {
   upload_id: number;
   imported: number;
+  merged?: number;
   total_rows?: number;
   skipped_rows?: number;
   sdg_queued?: number;
@@ -51,4 +65,24 @@ export type ProjectUploadRow = {
   uploaded_by: number | null;
   uploaded_at: string | null;
   record_count: number;
+};
+
+export type CourseRecord = {
+  id: number;
+  course_code: string;
+  course_name: string;
+  label: string;
+};
+
+export type FacultyAward = {
+  id: number;
+  faculty_name: string;
+  year: string;
+  award: string;
+};
+
+export type AwardsListResponse = {
+  items: FacultyAward[];
+  years: string[];
+  faculty_names: string[];
 };
