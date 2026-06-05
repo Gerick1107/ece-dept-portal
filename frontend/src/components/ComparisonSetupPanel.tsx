@@ -7,22 +7,24 @@ export default function ComparisonSetupPanel({ setup }: { setup: ComparisonSetup
       <h3 className="text-sm font-bold uppercase tracking-wide text-teal-700 border-b border-teal-100 pb-2">
         Comparison setup
       </h3>
-      <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
-        <div>
+      <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-2 text-sm min-w-0">
+        <div className="min-w-0">
           <dt className="text-slate-500">Input sheet</dt>
-          <dd className="font-medium">{setup.input_sheet}</dd>
+          <dd className="font-medium break-words">{setup.input_sheet}</dd>
         </div>
-        <div>
+        <div className="min-w-0 sm:col-span-2">
           <dt className="text-slate-500">To compare with</dt>
-          <dd className="font-medium">{setup.compare_filename}</dd>
+          <dd className="font-medium break-all text-xs leading-snug" title={setup.compare_filename}>
+            {setup.compare_filename}
+          </dd>
         </div>
-        <div>
+        <div className="min-w-0">
           <dt className="text-slate-500">Mapping file</dt>
-          <dd className="font-medium">{setup.mapping_filename}</dd>
+          <dd className="font-medium break-words">{setup.mapping_filename}</dd>
         </div>
-        <div>
+        <div className="min-w-0">
           <dt className="text-slate-500">Evaluation scope</dt>
-          <dd className="font-medium">{setup.scope_summary}</dd>
+          <dd className="font-medium break-words">{setup.scope_summary}</dd>
         </div>
         <div className="sm:col-span-2">
           <dt className="text-slate-500">Threshold rule</dt>

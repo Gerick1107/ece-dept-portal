@@ -45,7 +45,9 @@ If this table is empty, no archive action has been run yet. Normal evaluations o
 | `data/templates/` | Faculty marks template |
 | `data/samples/` | Sample course workbooks (BE, FW, ADC, etc.) — not used at runtime |
 
-Stale files under `uploads/` and `results/` are removed after `FILE_MAX_AGE_SECONDS` (default 30 minutes) by the background cleanup thread.
+Stale files under `uploads/` and `storage/temp/normalized/` are removed after `FILE_MAX_AGE_SECONDS` (default 30 minutes) by the background cleanup thread. **Result Excel files under `storage/results/` are not auto-deleted** — they remain until admin archive or explicit delete.
+
+Archiving **moves** (not copies) the result file from `storage/results/` to `storage/archives/`.
 
 ## Portal UI: how to see data
 

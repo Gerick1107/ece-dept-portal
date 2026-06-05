@@ -114,7 +114,15 @@ def admin_archive_run(db: Session, public_id: str, user_id: int | None = None) -
         if run.marks_upload_id
         else None
     )
-    archive = copo_repo.archive_and_clear_marks(db, run, upload)
+    try:
+        archive = copo_repo.archive_and_clear_marks(db, run, upload)
+    except FileNotFoundError:
+        run.excel_result_path = None
+        db.commit()
+        return {
+            "archived": False,
+            "detail": "Result Excel is missing on disk (may have been removed). Re-run the evaluation to regenerate it.",
+        }
     if not archive:
         return {"archived": False, "detail": "No result file to archive"}
     return {

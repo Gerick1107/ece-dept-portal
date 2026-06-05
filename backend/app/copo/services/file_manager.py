@@ -82,7 +82,7 @@ def finalize_result_workbook(generated_path: str, course_title: str) -> str:
     dest = Path(settings.results_dir) / unique_name
     if os.path.abspath(generated_path) != os.path.abspath(dest):
         shutil.move(generated_path, dest)
-    return str(dest)
+    return str(dest.resolve())
 
 
 def remove_file_if_exists(path: str | None) -> None:
@@ -94,43 +94,44 @@ def remove_file_if_exists(path: str | None) -> None:
 
 
 def cleanup_upload_directory() -> int:
+    """
+    Remove stale ephemeral files only.
+
+    Never deletes ``storage/results/`` — those files are referenced by
+    ``copo_evaluation_runs.excel_result_path`` until admin archive or delete.
+    """
     ensure_storage_dirs()
     removed = 0
     now = time.time()
     upload_root = Path(settings.upload_dir)
-    for item in upload_root.iterdir():
-        if item.is_file() and (
-            item.name.startswith("normalized_")
-            or (now - item.stat().st_mtime) > settings.file_max_age_seconds
-        ):
-            try:
-                item.unlink()
-                removed += 1
-            except OSError:
-                pass
-    normalized_temp = Path(settings.upload_dir).parent / "temp" / "normalized"
-    if normalized_temp.exists():
-        for item in normalized_temp.iterdir():
-            if item.is_file() and (now - item.stat().st_mtime) > settings.file_max_age_seconds:
+    if upload_root.exists():
+        for item in upload_root.iterdir():
+            if not item.is_file():
+                continue
+            if item.name.startswith("normalized_") or (
+                now - item.stat().st_mtime
+            ) > settings.file_max_age_seconds:
                 try:
                     item.unlink()
                     removed += 1
                 except OSError:
                     pass
-    results_root = Path(settings.results_dir)
-    if results_root.exists():
-        for item in results_root.iterdir():
-            if item.is_file() and item.suffix.lower() == ".xlsx":
-                if (now - item.stat().st_mtime) > settings.file_max_age_seconds:
-                    try:
-                        item.unlink()
-                        removed += 1
-                    except OSError:
-                        pass
+    # Normalized temp workbooks (short TTL; also removed after each evaluation run).
+    temp_normalized_ttl = min(settings.file_max_age_seconds, 600)
+    normalized_temp = Path(settings.upload_dir).parent / "temp" / "normalized"
+    if normalized_temp.exists():
+        for item in normalized_temp.iterdir():
+            if item.is_file() and (now - item.stat().st_mtime) > temp_normalized_ttl:
+                try:
+                    item.unlink()
+                    removed += 1
+                except OSError:
+                    pass
     return removed
 
 
 def archive_result_file(source_path: str, evaluation_public_id: str, course_title: str | None = None) -> str:
+    """Move result Excel from storage/results/ into storage/archives/."""
     ensure_storage_dirs()
     if not source_path or not os.path.exists(source_path):
         raise FileNotFoundError("Result file not found for archiving")
@@ -139,5 +140,7 @@ def archive_result_file(source_path: str, evaluation_public_id: str, course_titl
     else:
         name = f"{evaluation_public_id}_{Path(source_path).name}"
     dest = Path(settings.archive_dir) / name
-    shutil.copy2(source_path, dest)
+    if dest.exists():
+        dest.unlink()
+    shutil.move(source_path, dest)
     return str(dest)

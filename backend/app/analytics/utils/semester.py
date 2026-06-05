@@ -1,0 +1,41 @@
+"""Derive IIITD semester labels from timestamps."""
+
+from __future__ import annotations
+
+from datetime import datetime
+
+
+def semester_label_from_date(value: datetime | None) -> str:
+    if value is None:
+        return "Unknown"
+    month = value.month
+    year = value.year
+    if month in (1, 2, 3, 4, 5):
+        return f"Winter {year}"
+    if month in (7, 8, 9, 10, 11):
+        return f"Monsoon {year}"
+    return f"Summer {year}"
+
+
+def parse_semester_tag(tag: str) -> tuple[str, int] | None:
+    """Parse 'Monsoon 2024' → ('Monsoon', 2024)."""
+    parts = tag.strip().split()
+    if len(parts) < 2:
+        return None
+    term = parts[0].capitalize()
+    try:
+        year = int(parts[-1])
+    except ValueError:
+        return None
+    if term not in ("Monsoon", "Winter", "Summer"):
+        return None
+    return term, year
+
+
+def semester_sort_key(tag: str) -> tuple[int, int]:
+    parsed = parse_semester_tag(tag)
+    if not parsed:
+        return (0, 0)
+    term, year = parsed
+    order = {"Monsoon": 1, "Winter": 2, "Summer": 3}
+    return (year, order.get(term, 0))

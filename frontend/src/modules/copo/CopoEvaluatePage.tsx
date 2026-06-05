@@ -60,6 +60,8 @@ export default function CopoEvaluatePage() {
   const [newCourseCode, setNewCourseCode] = useState("");
   const [newCourseName, setNewCourseName] = useState("");
   const [courseMessage, setCourseMessage] = useState("");
+  const [semesterTerm, setSemesterTerm] = useState<"Monsoon" | "Winter" | "Summer">("Monsoon");
+  const [semesterYear, setSemesterYear] = useState(String(new Date().getFullYear()));
   const { parseMarksFile, parsing, error: parseError, setError: setParseError } = useMarksFileParse();
 
   const loadCourses = useCallback(async (mappingFile?: File) => {
@@ -158,6 +160,8 @@ export default function CopoEvaluatePage() {
     fd.append("remove_marks_after", removeMarksAfter ? "true" : "false");
     fd.append("skip_database_save", skipDatabaseSave ? "true" : "false");
     if (previewUploadId) fd.append("preview_upload_id", String(previewUploadId));
+    fd.append("semester_term", semesterTerm);
+    fd.append("semester_year", semesterYear);
 
     try {
       const r = await apiPostForm<EvalResult>("/copo/final-submit", fd);
@@ -262,8 +266,31 @@ export default function CopoEvaluatePage() {
             <span className="bg-teal-700 text-white w-6 h-6 rounded-full text-xs flex items-center justify-center">
               3
             </span>
-            Upload final consolidated marks file
+            Semester &amp; consolidated marks file
           </h3>
+          <div className="grid sm:grid-cols-2 gap-3 max-w-md">
+            <div>
+              <label className="text-xs text-slate-500">Semester</label>
+              <select
+                className="w-full border rounded-lg px-3 py-2 text-sm mt-1"
+                value={semesterTerm}
+                onChange={(e) => setSemesterTerm(e.target.value as "Monsoon" | "Winter" | "Summer")}
+              >
+                <option value="Monsoon">Monsoon</option>
+                <option value="Winter">Winter</option>
+                <option value="Summer">Summer</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-slate-500">Year</label>
+              <input
+                className="w-full border rounded-lg px-3 py-2 text-sm mt-1"
+                value={semesterYear}
+                onChange={(e) => setSemesterYear(e.target.value)}
+                placeholder="2025"
+              />
+            </div>
+          </div>
           <FileUploadField
             label="End-of-semester student marks (.xlsx)"
             file={marksFile}

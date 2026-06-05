@@ -11,6 +11,7 @@ const nav = [
   { to: "/publications/exports", label: "Publication Exports" },
   { to: "/projects", label: "BTP / IP Projects", exact: true },
   { to: "/awards", label: "Faculty Awards", exact: true },
+  { to: "/analytics", label: "Analytics", exact: true },
 ];
 
 function isNavActive(pathname: string, to: string, exact?: boolean): boolean {
@@ -103,6 +104,16 @@ export default function AppLayout() {
                 Users
               </Link>
               <Link
+                to="/admin/notifications"
+                className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
+                  location.pathname === "/admin/notifications"
+                    ? "bg-white text-teal-900 font-medium shadow-sm"
+                    : "text-teal-50 hover:bg-teal-700/80"
+                }`}
+              >
+                Notifications
+              </Link>
+              <Link
                 to="/admin/data"
                 className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
                   location.pathname === "/admin/data"
@@ -116,7 +127,7 @@ export default function AppLayout() {
           )}
         </nav>
       </header>
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 py-6">
+      <main className={`flex-1 w-full mx-auto px-4 py-6 ${location.pathname.startsWith("/analytics") ? "max-w-7xl" : "max-w-6xl"}`}>
         <Outlet />
       </main>
       <footer className="border-t border-slate-200 py-3 text-center text-xs text-slate-500">

@@ -10,6 +10,7 @@ from app.auth.service import bootstrap_admin_if_needed
 from app.config import get_settings
 from app.copo.download_tokens import cleanup_stale_tokens
 from app.analytics.router import router as analytics_router
+from app.notifications.routes.router import router as notifications_router
 from app.awards.routes.router import router as awards_router
 from app.copo.router import router as copo_router
 from app.courses.routes.router import router as courses_router
@@ -73,6 +74,7 @@ api.include_router(copo_router)
 api.include_router(courses_router)
 api.include_router(awards_router)
 api.include_router(analytics_router)
+api.include_router(notifications_router)
 api.include_router(publications_router)
 api.include_router(projects_router)
 

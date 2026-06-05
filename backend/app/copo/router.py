@@ -90,6 +90,8 @@ async def final_submit(
     remove_marks_after: bool = Form(False),
     skip_database_save: bool = Form(False),
     preview_upload_id: int = Form(0),
+    semester_term: str = Form(...),
+    semester_year: str = Form(...),
 ):
     """
     Faculty: one end-of-semester consolidated Excel → parse → CO/PO → report.
@@ -110,6 +112,14 @@ async def final_submit(
         mapping_path = tmp_mapping
         mapping_filename = mapping_file.filename or mapping_filename
 
+    term = semester_term.strip().capitalize()
+    if term not in ("Monsoon", "Winter", "Summer"):
+        raise HTTPException(status_code=400, detail="semester_term must be Monsoon, Winter, or Summer")
+    year = semester_year.strip()
+    if not year.isdigit() or len(year) != 4:
+        raise HTTPException(status_code=400, detail="semester_year must be a 4-digit year")
+    semester_label = f"{term} {year}"
+
     try:
         result = await submit_final_consolidated(
             db,
@@ -122,6 +132,7 @@ async def final_submit(
             branches,
             indirect_attainment,
             target_value=target_value,
+            semester_label=semester_label,
             remove_marks_after=remove_marks_after,
             skip_database_save=skip_database_save,
             preview_upload_id=preview_upload_id or None,
@@ -681,7 +692,12 @@ def archive_and_clear_marks(
     if not run or run.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Evaluation run not found")
     upload = copo_repo.get_marks_upload(db, run.marks_upload_id, current_user.id) if run.marks_upload_id else None
-    archive = copo_repo.archive_and_clear_marks(db, run, upload)
+    try:
+        archive = copo_repo.archive_and_clear_marks(db, run, upload)
+    except FileNotFoundError as exc:
+        run.excel_result_path = None
+        db.commit()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     if not archive:
         raise HTTPException(status_code=400, detail="No result file to archive")
     return {

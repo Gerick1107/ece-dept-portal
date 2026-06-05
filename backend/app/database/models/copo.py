@@ -71,6 +71,7 @@ class CopoEvaluationRun(Base):
     )
     target_value: Mapped[int] = mapped_column(Integer, default=50)
     scope_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    semester_label: Mapped[str | None] = mapped_column(String(32), nullable=True)
     result_summary: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     comparison_summary: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     excel_result_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)

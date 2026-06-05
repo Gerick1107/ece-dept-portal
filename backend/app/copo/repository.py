@@ -77,6 +77,7 @@ def create_evaluation_run(
     marks_upload_id: int | None = None,
     mapping_filename: str | None = None,
     scope_summary: str | None = None,
+    semester_label: str | None = None,
     target_value: int = 50,
 ) -> CopoEvaluationRun:
     run = CopoEvaluationRun(
@@ -87,6 +88,7 @@ def create_evaluation_run(
         evaluation_type=evaluation_type,
         mapping_filename=mapping_filename,
         scope_summary=scope_summary,
+        semester_label=semester_label,
         target_value=target_value,
         status=EvaluationStatus.pending,
     )
@@ -109,6 +111,8 @@ def complete_evaluation_run(
     run.result_summary = result_summary
     run.comparison_summary = comparison_summary
     run.excel_result_path = excel_path
+    if result_summary and result_summary.get("semester_label"):
+        run.semester_label = str(result_summary["semester_label"])
     db.commit()
     db.refresh(run)
     upsert_run_analytics_snapshot(db, run)
@@ -158,7 +162,6 @@ def archive_and_clear_marks(
     if upload and upload.status != UploadStatus.cleared:
         clear_marks_for_upload(db, upload)
         run.marks_cleared_at = datetime.now(timezone.utc)
-    remove_file_if_exists(run.excel_result_path)
     run.excel_result_path = None
     db.commit()
     db.refresh(archive)
