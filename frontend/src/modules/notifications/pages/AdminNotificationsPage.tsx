@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
 import {
   fetchAdminNotificationDetail,
@@ -72,8 +72,14 @@ export default function AdminNotificationsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold">Send notification</h2>
-        <p className="text-sm text-slate-600 mt-1">Create reminders for faculty. Email is sent when SMTP is enabled.</p>
+        <h2 className="text-xl font-semibold">Send notifications</h2>
+        <p className="text-sm text-slate-600 mt-1">
+          Create and send reminders to faculty. Email is sent when SMTP is enabled. Faculty view messages under{" "}
+          <Link to="/notifications" className="text-teal-700 underline">
+            Notifications
+          </Link>
+          .
+        </p>
       </div>
 
       {messageOk && <p className="text-sm text-teal-800 bg-teal-50 border border-teal-200 rounded-lg px-3 py-2">{messageOk}</p>}

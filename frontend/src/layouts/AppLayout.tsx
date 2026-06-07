@@ -12,6 +12,7 @@ const nav = [
   { to: "/projects", label: "BTP / IP Projects", exact: true },
   { to: "/awards", label: "Faculty Awards", exact: true },
   { to: "/analytics", label: "Analytics", exact: true },
+  { to: "/notifications", label: "Notifications", exact: true },
 ];
 
 function isNavActive(pathname: string, to: string, exact?: boolean): boolean {
@@ -111,7 +112,7 @@ export default function AppLayout() {
                     : "text-teal-50 hover:bg-teal-700/80"
                 }`}
               >
-                Notifications
+                Send Notifications
               </Link>
               <Link
                 to="/admin/data"

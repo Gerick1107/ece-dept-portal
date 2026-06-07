@@ -13,6 +13,7 @@ import PublicationsAdminPage from "./modules/publications/pages/PublicationsAdmi
 import ProjectsPage from "./modules/projects/pages/ProjectsPage";
 import AwardsPage from "./modules/awards/pages/AwardsPage";
 import AnalyticsPage from "./modules/analytics/pages/AnalyticsPage";
+import NotificationsPage from "./modules/notifications/pages/NotificationsPage";
 import AdminNotificationsPage from "./modules/notifications/pages/AdminNotificationsPage";
 import AdminDataPage from "./pages/AdminDataPage";
 import AdminUsersPage from "./pages/AdminUsersPage";
@@ -55,7 +56,7 @@ export default function App() {
         <Route path="/projects" element={<ProjectsPage />} />
         <Route path="/awards" element={<AwardsPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
-        <Route path="/notifications" element={<Navigate to="/admin/notifications" replace />} />
+        <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/admin/notifications" element={<AdminNotificationsPage />} />
         <Route path="/admin/users" element={<AdminUsersPage />} />
         <Route path="/admin/data" element={<AdminDataPage />} />
