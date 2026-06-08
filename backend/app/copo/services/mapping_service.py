@@ -7,12 +7,54 @@ from app.config import get_settings
 
 settings = get_settings()
 
+_COURSE_CODE_RE = re.compile(r"(?:ECE|ENG|CSE|CS|EVE|CSER)-?[\d/]+", re.IGNORECASE)
+
+
+def _normalize_course_code(code: str) -> str:
+    """ECE-573 and ECE573 compare equal."""
+    compact = re.sub(r"\s+", "", str(code).lower())
+    return re.sub(r"^(ece|eng|cse|cs|eve|cser)-", r"\1", compact)
+
+
+def _course_codes_in_text(text: str) -> list[str]:
+    return [_normalize_course_code(m.group(0)) for m in _COURSE_CODE_RE.finditer(str(text))]
+
 SHEET_PREFERENCE = [
     "Course outcome mapping UG",
     "CO mapping - PG",
     "Course mapping UG",
     "Course mapping PG",
 ]
+
+
+def normalize_course_text(value: str) -> str:
+    """Collapse spacing/punctuation variants from DB labels vs mapping sheet rows."""
+    text = re.sub(r"\s+", " ", str(value).strip().lower())
+    text = re.sub(r":\s*", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def course_title_matches(pattern: str, candidate: str) -> bool:
+    """
+  Match a selected course label to a mapping-sheet row.
+
+  Handles DB labels like ``ECE-366/566: (NEID…)`` vs sheet rows
+  ``ECE-366/566 (NEID…)`` (no colon).
+  """
+    p = normalize_course_text(pattern)
+    c = normalize_course_text(candidate)
+    if not p or not c:
+        return False
+    if p == c or p in c or c in p:
+        return True
+    pattern_codes = _course_codes_in_text(pattern)
+    candidate_codes = _course_codes_in_text(candidate)
+    if pattern_codes and candidate_codes:
+        for pc in pattern_codes:
+            for cc in candidate_codes:
+                if pc == cc or pc in cc or cc in pc:
+                    return True
+    return False
 
 
 def extract_course_names(mapping_path: str) -> list[str]:
@@ -59,7 +101,7 @@ def extract_cos_for_course(mapping_path: str, course_title: str) -> list[str]:
             hits = [
                 i
                 for i, v in enumerate(col0.values)
-                if isinstance(v, str) and course_title.lower() in v.lower()
+                if isinstance(v, str) and course_title_matches(course_title, v)
             ]
             if not hits:
                 continue
@@ -96,7 +138,7 @@ def lookup_indirect_values(
         indirect_df = pd.read_excel(path)
         match_row = None
         for idx, val in indirect_df.iloc[:, 0].items():
-            if isinstance(val, str) and course_title.lower() in val.lower():
+            if isinstance(val, str) and course_title_matches(course_title, val):
                 match_row = idx
                 break
         if match_row is not None:

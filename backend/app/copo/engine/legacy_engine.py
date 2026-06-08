@@ -22,6 +22,8 @@ import datetime
 import re
 from difflib import SequenceMatcher
 
+from app.copo.services.mapping_service import course_title_matches
+
 # Display uncropped output for pandas
 pd.set_option('display.max_columns', None)
 
@@ -84,14 +86,15 @@ def split_co_labels(value) -> list[str]:
 
 def get_co_row_key(df: pd.DataFrame):
     for k in df.index:
-        if str(k).strip().upper() == "CO":
+        label = str(k).strip().upper()
+        if label in ("CO", "CO TO BE ENTERED"):
             return k
     return None
 
 
 def get_max_marks_row_key(df: pd.DataFrame):
     for k in df.index:
-        if str(k).strip().upper() in ("MAX_MARKS", "MAX MARKS"):
+        if str(k).strip().upper() in ("MAX_MARKS", "MAX MARKS", "MARKS"):
             return k
     return None
 
@@ -276,7 +279,7 @@ def extract_course_co_po_mapping(mapping_xlsx_path: str, course_pattern: str):
         hits = [
             i
             for i, v in enumerate(col0.values)
-            if isinstance(v, str) and course_pattern.lower() in v.lower()
+            if isinstance(v, str) and course_title_matches(course_pattern, v)
         ]
         if not hits:
             continue
@@ -378,8 +381,16 @@ def main_process(course_file_path, mapping_file_path, course_title, included_rol
     # Step 4: Read Excel data
     df = pd.read_excel(source, header=0, index_col=0)
 
-    # Drop fully empty rows
-    df.dropna(how='all', inplace=True)
+    # Drop fully empty student rows, but keep CO / Max_Marks metadata even when blank
+    _metadata_row_labels = {
+        'CO', 'CO TO BE ENTERED', 'MAX_MARKS', 'MAX MARKS', 'MARKS', 'MAX_MARKS_SCALED',
+    }
+    empty_rows = [
+        idx for idx in df.index
+        if str(idx).strip().upper() not in _metadata_row_labels and df.loc[idx].isna().all()
+    ]
+    if empty_rows:
+        df.drop(index=empty_rows, inplace=True)
 
     # --- Pre-processing: normalize structure ---
 
@@ -394,6 +405,18 @@ def main_process(course_file_path, mapping_file_path, course_title, included_rol
     if unnamed_cols:
         print(f"Dropping unnamed metadata columns: {unnamed_cols}")
         df.drop(columns=unnamed_cols, inplace=True)
+
+    # 3b. Normalize metadata row aliases (CO to be entered, Marks, Max Marks)
+    index_alias_map = {}
+    for idx in df.index:
+        label = str(idx).strip().upper()
+        if label == 'CO TO BE ENTERED':
+            index_alias_map[idx] = 'CO'
+        elif label in ('MARKS', 'MAX MARKS'):
+            index_alias_map[idx] = 'Max_Marks'
+    if index_alias_map:
+        df.rename(index=index_alias_map, inplace=True)
+        print(f"Renamed metadata rows: {index_alias_map}")
 
     # 4. Accept Max_Marks_scaled as alias for Max_Marks (case-insensitive)
     index_upper_map = {str(idx).strip().upper(): idx for idx in df.index}
@@ -428,13 +451,37 @@ def main_process(course_file_path, mapping_file_path, course_title, included_rol
 
     original_data = df.copy()
 
-    # Normalize Result / Grade_Point column aliases (e.g. Result.1 from merged headers)
+    # Normalize Result / Grade_Point column aliases (e.g. Result.1, Grade, Final grade)
+    def _grade_column_alias(col_name: str) -> str | None:
+        norm = normalize_evaluation_name(col_name)
+        if norm in ("GRADEPOINT", "GRADE_POINT", "GRADE", "FINALGRADE", "FINAL_GRADE"):
+            return "Grade_Point"
+        if norm.startswith("GRADEPOINT."):
+            return "Grade_Point"
+        return None
+
     for col in list(df.columns):
         norm = normalize_evaluation_name(col)
         if norm.startswith("RESULT") and "Result" not in df.columns:
             df.rename(columns={col: "Result"}, inplace=True)
-        elif norm in ("GRADEPOINT", "GRADE_POINT") and "Grade_Point" not in df.columns:
-            df.rename(columns={col: "Grade_Point"}, inplace=True)
+            continue
+        grade_alias = _grade_column_alias(col)
+        if grade_alias and grade_alias not in df.columns:
+            df.rename(columns={col: grade_alias}, inplace=True)
+
+    if "Grade_Point" not in df.columns:
+        grade_candidates = [
+            c for c in df.columns
+            if normalize_evaluation_name(c).startswith("GRADEPOINT")
+            or normalize_evaluation_name(c) in ("GRADE", "FINALGRADE")
+        ]
+        if grade_candidates:
+            def _has_letter_grades(column_name: str) -> bool:
+                sample = df[column_name].dropna().astype(str).head(30)
+                return any(re.match(r"^[A-F][+-]?$", v.strip().upper()) for v in sample)
+
+            preferred = next((c for c in grade_candidates if _has_letter_grades(c)), grade_candidates[-1])
+            df.rename(columns={preferred: "Grade_Point"}, inplace=True)
 
     # --- Validate required structure ---
     errors = []
