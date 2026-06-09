@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, ComposedChart, Legend, Line, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { fetchAwardsAnalytics, type AwardsAnalyticsData } from "../services/analyticsApi";
-import { CHART_COLORS, ChartCard, KpiCard } from "./ChartCard";
+import { ChartCard, divergingCellStyle, getColours, KpiCard } from "./ChartCard";
 
 export default function AwardsAnalyticsTab() {
   const [data, setData] = useState<AwardsAnalyticsData | null>(null);
@@ -17,11 +17,13 @@ export default function AwardsAnalyticsTab() {
   }
 
   const maxHeat = Math.max(1, ...data.heatmap.cells.map((c) => c.count));
+  const categoryColors = getColours(data.filter_options.categories.length);
   const facultyBarData = data.faculty_chart.map((f) => ({
     faculty_name: f.faculty_name,
     total: f.total,
     ...f.by_category,
   }));
+  const yearLineColors = getColours(2);
 
   return (
     <div className="space-y-4">
@@ -46,7 +48,7 @@ export default function AwardsAnalyticsTab() {
               <Tooltip />
               <Legend />
               {data.filter_options.categories.map((cat, i) => (
-                <Bar key={cat} dataKey={cat} stackId="a" fill={CHART_COLORS[i % CHART_COLORS.length]} name={cat} />
+                <Bar key={cat} dataKey={cat} stackId="a" fill={categoryColors[i]} name={cat} />
               ))}
             </BarChart>
           </ResponsiveContainer>
@@ -57,7 +59,7 @@ export default function AwardsAnalyticsTab() {
             <PieChart>
               <Pie data={data.category_distribution} dataKey="count" nameKey="category" cx="50%" cy="50%" outerRadius={100} label>
                 {data.category_distribution.map((_, i) => (
-                  <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                  <Cell key={i} fill={categoryColors[i % categoryColors.length]} />
                 ))}
               </Pie>
               <Tooltip />
@@ -74,8 +76,8 @@ export default function AwardsAnalyticsTab() {
               <YAxis yAxisId="right" orientation="right" allowDecimals={false} />
               <Tooltip />
               <Legend />
-              <Bar yAxisId="left" dataKey="total" fill={CHART_COLORS[0]} name="Awards per year" />
-              <Line yAxisId="right" type="monotone" dataKey="cumulative" stroke={CHART_COLORS[6]} name="Cumulative" />
+              <Bar yAxisId="left" dataKey="total" fill={yearLineColors[0]} name="Awards per year" />
+              <Line yAxisId="right" type="monotone" dataKey="cumulative" stroke={yearLineColors[1]} name="Cumulative" />
             </ComposedChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -100,12 +102,11 @@ export default function AwardsAnalyticsTab() {
                     {data.heatmap.years.map((y) => {
                       const cell = data.heatmap.cells.find((c) => c.faculty_name === f && c.year === y);
                       const count = cell?.count ?? 0;
-                      const intensity = count / maxHeat;
                       return (
                         <td
                           key={y}
                           className="p-1 border text-center min-w-[2rem]"
-                          style={{ backgroundColor: `rgba(15, 118, 110, ${intensity * 0.9})`, color: intensity > 0.4 ? "#fff" : "#334155" }}
+                          style={divergingCellStyle(count, 0, maxHeat)}
                         >
                           {count || ""}
                         </td>

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import CoWarningsBanner from "../../components/CoWarningsBanner";
 import ConstraintMarksTemplatePanel from "../../components/ConstraintMarksTemplatePanel";
 import CopoFullResultsView from "../../components/CopoFullResultsView";
+import CopoAttainmentCharts from "../analytics/components/CopoAttainmentCharts";
 import EvaluationScopePanel from "../../components/EvaluationScopePanel";
 import FileUploadField from "../../components/FileUploadField";
 import CourseSearchSelect from "../../components/CourseSearchSelect";
@@ -417,6 +418,7 @@ export default function CopoEvaluatePage() {
             </div>
           </div>
           <CoWarningsBanner warnings={result.co_warnings ?? []} />
+          {result.public_id && <CopoAttainmentCharts publicId={result.public_id} />}
           <CopoFullResultsView
             courseTitle={result.course_title}
             courseFilename={result.course_filename}

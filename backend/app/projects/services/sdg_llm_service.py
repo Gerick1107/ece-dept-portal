@@ -42,8 +42,11 @@ def _sdg_embeddings() -> np.ndarray:
     return np.asarray(vectors, dtype=np.float32)
 
 
-def suggest_project_sdgs(project_title: str, project_type: str, project_abstract: str | None = None) -> list[dict]:
-    settings = get_settings()
+SDG_CONFIDENCE_THRESHOLD = 0.5
+
+
+def score_all_project_sdgs(project_title: str, project_type: str, project_abstract: str | None = None) -> list[dict]:
+    """Return confidence scores for all 17 SDGs."""
     model = _embedder()
     text_parts = [f"Project type: {project_type}", f"Project title: {project_title}"]
     if project_abstract and project_abstract.strip():
@@ -51,12 +54,19 @@ def suggest_project_sdgs(project_title: str, project_type: str, project_abstract
     query = "\n".join(text_parts)
     query_vec = model.encode(query, convert_to_numpy=True, normalize_embeddings=True).astype(np.float32)
     scores = _sdg_embeddings() @ query_vec
-    top_k = max(1, min(settings.sdg_top_k, len(SDG_REFERENCE)))
-    indices = np.argsort(scores)[::-1][:top_k]
     return [
         {
-            "sdg_number": SDG_REFERENCE[int(i)][0],
-            "confidence": float(max(0.0, min(1.0, scores[int(i)]))),
+            "sdg_number": SDG_REFERENCE[i][0],
+            "confidence": float(max(0.0, min(1.0, scores[i]))),
         }
-        for i in indices
+        for i in range(len(SDG_REFERENCE))
+    ]
+
+
+def suggest_project_sdgs(project_title: str, project_type: str, project_abstract: str | None = None) -> list[dict]:
+    """SDGs at or above the auto-assignment threshold (≥50%)."""
+    return [
+        item
+        for item in score_all_project_sdgs(project_title, project_type, project_abstract)
+        if item["confidence"] >= SDG_CONFIDENCE_THRESHOLD
     ]

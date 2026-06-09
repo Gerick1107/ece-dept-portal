@@ -2,346 +2,484 @@
   {
     "faculty_name": "A V Subramanyam",
     "year": "2023-2024",
-    "award": "Paper 'Layout Free Scene Graph to Image Generation' nominated in top 10 posters in BMVC 2025"
+    "award": "Paper 'Layout Free Scene Graph to Image Generation' nominated in top 10 posters in BMVC 2025",
+    "exact_year": 2025,
+    "awarded_by": "BMVC (British Machine Vision Conference)"
   },
   {
     "faculty_name": "A V Subramanyam",
     "year": "2023-2024",
-    "award": "Mentored best performing team in Smart City Surveillance challenge, NCVPRIPG 2024, by Vehant Technologies"
+    "award": "Mentored best performing team in Smart City Surveillance challenge, NCVPRIPG 2024, by Vehant Technologies",
+    "exact_year": 2024,
+    "awarded_by": "Vehant Technologies / NCVPRIPG 2024"
   },
   {
     "faculty_name": "A V Subramanyam",
     "year": "2022-2023",
-    "award": "Best Paper Award, IEEE International Conference on Multimedia Information Processing and Retrieval (MIPR), 2022"
+    "award": "Best Paper Award, IEEE International Conference on Multimedia Information Processing and Retrieval (MIPR), 2022",
+    "exact_year": 2022,
+    "awarded_by": "IEEE (MIPR 2022)"
   },
   {
     "faculty_name": "Abhijit Mitra",
     "year": "2024-2025",
-    "award": "First place in Student Tech Leadership Conference in IEEE Future Networks, Dubai, 2024"
+    "award": "First place in Student Tech Leadership Conference in IEEE Future Networks, Dubai, 2024",
+    "exact_year": 2024,
+    "awarded_by": "IEEE Future Networks"
   },
   {
     "faculty_name": "Abhijit Mitra",
     "year": "2024-2025",
-    "award": "Best Demo Award (Runners Up) in IEEE COMSNETS 2025, Bangalore"
+    "award": "Best Demo Award (Runners Up) in IEEE COMSNETS 2025, Bangalore",
+    "exact_year": 2025,
+    "awarded_by": "IEEE COMSNETS 2025"
   },
   {
     "faculty_name": "Abhijit Mitra",
     "year": "2024-2025",
-    "award": "TPC Chair for IEEE ANTS 2025, IIIT Delhi, India"
+    "award": "TPC Chair for IEEE ANTS 2025, IIIT Delhi, India",
+    "exact_year": 2025,
+    "awarded_by": "IEEE ANTS 2025 / IIIT Delhi"
   },
   {
     "faculty_name": "Abhijit Mitra",
     "year": "2023-2024",
-    "award": "Dean Innovation and Research Development (DIRD) Award 2024-2025 at IIIT Delhi"
+    "award": "Dean Innovation and Research Development (DIRD) Award 2024-2025 at IIIT Delhi",
+    "exact_year": 2025,
+    "awarded_by": "IIIT Delhi (DIRD)"
   },
   {
     "faculty_name": "Abhijit Mitra",
     "year": "2023-2024",
-    "award": "Honorable Mention Award in IEEE ANTS 2024, IIT Guwahati"
+    "award": "Honorable Mention Award in IEEE ANTS 2024, IIT Guwahati",
+    "exact_year": 2024,
+    "awarded_by": "IEEE ANTS 2024 / IIT Guwahati"
   },
   {
     "faculty_name": "Abhijit Mitra",
     "year": "2023-2024",
-    "award": "Invited Industry Forum Chair for IEEE ANTS 2024 at IIT Guwahati"
+    "award": "Invited Industry Forum Chair for IEEE ANTS 2024 at IIT Guwahati",
+    "exact_year": 2024,
+    "awarded_by": "IEEE ANTS 2024 / IIT Guwahati"
   },
   {
     "faculty_name": "Abhijit Mitra",
     "year": "2023-2024",
-    "award": "Invited Speaker at Second International Conclave on Quantum Technology (CDOT, TSDSI, DOT), Feb 2024"
+    "award": "Invited Speaker at Second International Conclave on Quantum Technology (CDOT, TSDSI, DOT), Feb 2024",
+    "exact_year": 2024,
+    "awarded_by": "CDOT, TSDSI, DOT"
   },
   {
     "faculty_name": "Abhijit Mitra",
     "year": "2023-2024",
-    "award": "Invited Panelist by CDOT on advances and challenges in Quantum Communication integration, March 2024"
+    "award": "Invited Panelist by CDOT on advances and challenges in Quantum Communication integration, March 2024",
+    "exact_year": 2024,
+    "awarded_by": "CDOT"
   },
   {
     "faculty_name": "Abhijit Mitra",
     "year": "2022-2023",
-    "award": "Best Demo Paper Runner-Up Award in IEEE COMSNETS 2022"
+    "award": "Best Demo Paper Runner-Up Award in IEEE COMSNETS 2022",
+    "exact_year": 2022,
+    "awarded_by": "IEEE COMSNETS 2022"
   },
   {
     "faculty_name": "Abhijit Mitra",
     "year": "2022-2023",
-    "award": "Felicitation as Consortium Member of Advanced Optical Communication (AOC) Testbed, Govt of India, 2023"
+    "award": "Felicitation as Consortium Member of Advanced Optical Communication (AOC) Testbed, Govt of India, 2023",
+    "exact_year": 2023,
+    "awarded_by": "Govt of India (AOC Testbed Consortium)"
   },
   {
     "faculty_name": "Abhijit Mitra",
     "year": "2022-2023",
-    "award": "Invited as Session Chair on Optical Networks by IIT Madras, workshop on Advances in Optical Communication, 2023"
+    "award": "Invited as Session Chair on Optical Networks by IIT Madras, workshop on Advances in Optical Communication, 2023",
+    "exact_year": 2023,
+    "awarded_by": "IIT Madras"
   },
   {
     "faculty_name": "Anubha Gupta",
     "year": "2023-2024",
-    "award": "Invited by Google to participate in Google Research Week, Bangalore, February 2024"
+    "award": "Invited by Google to participate in Google Research Week, Bangalore, February 2024",
+    "exact_year": 2024,
+    "awarded_by": "Google"
   },
   {
     "faculty_name": "Anubha Gupta",
     "year": "2023-2024",
-    "award": "Selected by ANRF, DST, Govt of India, for ASEAN Women Scientist Conclave in Singapore, April 2024"
+    "award": "Selected by ANRF, DST, Govt of India, for ASEAN Women Scientist Conclave in Singapore, April 2024",
+    "exact_year": 2024,
+    "awarded_by": "ANRF, DST, Govt of India"
   },
   {
     "faculty_name": "Anubha Gupta",
     "year": "2023-2024",
-    "award": "Top winner of IndiaAI 'lab2market' challenge 2023 for Explainable AI decision model for ECG data"
+    "award": "Top winner of IndiaAI 'lab2market' challenge 2023 for Explainable AI decision model for ECG data",
+    "exact_year": 2023,
+    "awarded_by": "IndiaAI"
   },
   {
     "faculty_name": "Anubha Gupta",
     "year": "2023-2024",
-    "award": "Best paper presentation award at ACM 2023 Asia Conference AIMLR 2023"
+    "award": "Best paper presentation award at ACM 2023 Asia Conference AIMLR 2023",
+    "exact_year": 2023,
+    "awarded_by": "ACM (AIMLR 2023)"
   },
   {
     "faculty_name": "Anubha Gupta",
     "year": "2022-2023",
-    "award": "2023 Research Excellence Award at IIIT-Delhi"
+    "award": "2023 Research Excellence Award at IIIT-Delhi",
+    "exact_year": 2023,
+    "awarded_by": "IIIT-Delhi"
   },
   {
     "faculty_name": "Anubha Gupta",
     "year": "2022-2023",
-    "award": "Awarded Institute Chair Position at IIIT-Delhi, December 2023, for 3 years"
+    "award": "Awarded Institute Chair Position at IIIT-Delhi, December 2023, for 3 years",
+    "exact_year": 2023,
+    "awarded_by": "IIIT-Delhi"
   },
   {
     "faculty_name": "Anubha Gupta",
     "year": "2022-2023",
-    "award": "IETE-Prof SVC Aiya Memorial Award 2022 for contributions to signal processing and biomedical research"
+    "award": "IETE-Prof SVC Aiya Memorial Award 2022 for contributions to signal processing and biomedical research",
+    "exact_year": 2022,
+    "awarded_by": "IETE"
   },
   {
     "faculty_name": "Anubha Gupta",
     "year": "2022-2023",
-    "award": "Dean's Research Award 2022 at IIIT-Delhi"
+    "award": "Dean's Research Award 2022 at IIIT-Delhi",
+    "exact_year": 2022,
+    "awarded_by": "IIIT-Delhi"
   },
   {
     "faculty_name": "Anubha Gupta",
     "year": "2022-2023",
-    "award": "SERB POWER Fellowship, March 2022, for outstanding research contributions"
+    "award": "SERB POWER Fellowship, March 2022, for outstanding research contributions",
+    "exact_year": 2022,
+    "awarded_by": "SERB (Govt of India)"
   },
   {
     "faculty_name": "Anuj Grover",
     "year": "2023-2024",
-    "award": "Teaching Excellence Award 2024"
+    "award": "Teaching Excellence Award 2024",
+    "exact_year": 2024,
+    "awarded_by": "IIIT-Delhi"
   },
   {
     "faculty_name": "Anuj Grover",
     "year": "2022-2023",
-    "award": "Prof. Rajeev Sangal Fellowship Award 2023"
+    "award": "Prof. Rajeev Sangal Fellowship Award 2023",
+    "exact_year": 2023,
+    "awarded_by": "IIIT-Delhi"
   },
   {
     "faculty_name": "Arani Bhattacharya",
     "year": "2023-2024",
-    "award": "Research Excellence Award at IIIT-Delhi 2023-24 for bringing funding"
+    "award": "Research Excellence Award at IIIT-Delhi 2023-24 for bringing funding",
+    "exact_year": 2024,
+    "awarded_by": "IIIT-Delhi"
   },
   {
     "faculty_name": "Arani Bhattacharya",
     "year": "2023-2024",
-    "award": "Teaching Excellence Award at IIIT-Delhi 2023-24 for high student evaluation scores"
+    "award": "Teaching Excellence Award at IIIT-Delhi 2023-24 for high student evaluation scores",
+    "exact_year": 2024,
+    "awarded_by": "IIIT-Delhi"
   },
   {
     "faculty_name": "Debidas Kundu",
     "year": "2024-2025",
-    "award": "Became IEEE Senior Member in 2025"
+    "award": "Became IEEE Senior Member in 2025",
+    "exact_year": 2025,
+    "awarded_by": "IEEE"
   },
   {
     "faculty_name": "Debidas Kundu",
     "year": "2023-2024",
-    "award": "Young Scientist Award at URSI General Assembly and Scientific Symposium (GASS), Aug 2023"
+    "award": "Young Scientist Award at URSI General Assembly and Scientific Symposium (GASS), Aug 2023",
+    "exact_year": 2023,
+    "awarded_by": "URSI (GASS)"
   },
   {
     "faculty_name": "Pragya Kosta",
     "year": "2022-2023",
-    "award": "Best Paper Award in Artificial Computation for 'Electrical Stimulation Induced Current Distribution in Peripheral Nerves...', IWINAC 2022"
+    "award": "Best Paper Award in Artificial Computation for 'Electrical Stimulation Induced Current Distribution in Peripheral Nerves...', IWINAC 2022",
+    "exact_year": 2022,
+    "awarded_by": "IWINAC 2022"
   },
   {
     "faculty_name": "Pravesh Biyani",
     "year": "2023-2024",
-    "award": "Project on Open Transit Data finalized for THE Awards Asia 2023"
+    "award": "Project on Open Transit Data finalized for THE Awards Asia 2023",
+    "exact_year": 2023,
+    "awarded_by": "THE Awards Asia 2023"
   },
   {
     "faculty_name": "Pravesh Biyani",
     "year": "2023-2024",
-    "award": "Winners of Transport4All Challenge organised by MoHUA, Govt of India"
+    "award": "Winners of Transport4All Challenge organised by MoHUA, Govt of India",
+    "exact_year": 2024,
+    "awarded_by": "MoHUA, Govt of India"
   },
   {
     "faculty_name": "Ranjitha Prasad",
     "year": "2024-2025",
-    "award": "Best Poster Award, ICDCN 2025"
+    "award": "Best Poster Award, ICDCN 2025",
+    "exact_year": 2025,
+    "awarded_by": "ICDCN 2025"
   },
   {
     "faculty_name": "Ranjitha Prasad",
     "year": "2022-2023",
-    "award": "Research Excellence Award - IIITD 2023"
+    "award": "Research Excellence Award - IIITD 2023",
+    "exact_year": 2023,
+    "awarded_by": "IIIT-Delhi"
   },
   {
     "faculty_name": "Sayan Basu Roy",
     "year": "2023-2024",
-    "award": "Session Co-chair of 'Nonlinear Adaptive Control' at IFAC World Congress, Japan, 2023"
+    "award": "Session Co-chair of 'Nonlinear Adaptive Control' at IFAC World Congress, Japan, 2023",
+    "exact_year": 2023,
+    "awarded_by": "IFAC World Congress"
   },
   {
     "faculty_name": "Sayan Basu Roy",
     "year": "2022-2023",
-    "award": "SERB SIRE Fellowship 2022 (visit to Prof. Anuradha Annaswamy's group at MIT, USA)"
+    "award": "SERB SIRE Fellowship 2022 (visit to Prof. Anuradha Annaswamy's group at MIT, USA)",
+    "exact_year": 2022,
+    "awarded_by": "SERB (Govt of India)"
   },
   {
     "faculty_name": "Shobha Sundar Ram",
     "year": "2024-2025",
-    "award": "Best Research Demo Winner: An RFSoC-Based Testbed for Over-the-Air Wireless Transceiver at Millimeter Wave Frequency, COMSNETS 2025"
+    "award": "Best Research Demo Winner: An RFSoC-Based Testbed for Over-the-Air Wireless Transceiver at Millimeter Wave Frequency, COMSNETS 2025",
+    "exact_year": 2025,
+    "awarded_by": "IEEE COMSNETS 2025"
   },
   {
     "faculty_name": "Shobha Sundar Ram",
     "year": "2024-2025",
-    "award": "Young Scientist Fellowship for Motion Compensation for MIMO ISAR Imaging of Automotive Targets, URSI AP-RASC 2025, Sydney (student: Akanksha Sneh)"
+    "award": "Young Scientist Fellowship for Motion Compensation for MIMO ISAR Imaging of Automotive Targets, URSI AP-RASC 2025, Sydney (student: Akanksha Sneh)",
+    "exact_year": 2025,
+    "awarded_by": "URSI AP-RASC 2025"
   },
   {
     "faculty_name": "Shobha Sundar Ram",
     "year": "2023-2024",
-    "award": "Joint 3rd prize in Student Paper Competition for 'Around-the-corner Radar Sensing Using RIS', IEEE MAPCON 2024"
+    "award": "Joint 3rd prize in Student Paper Competition for 'Around-the-corner Radar Sensing Using RIS', IEEE MAPCON 2024",
+    "exact_year": 2024,
+    "awarded_by": "IEEE MAPCON 2024"
   },
   {
     "faculty_name": "Shobha Sundar Ram",
     "year": "2023-2024",
-    "award": "Joint 3rd prize in Student Paper Competition for 'Performance Analysis of mmWave Radar Waveforms for ISAC', IEEE MAPCON 2024"
+    "award": "Joint 3rd prize in Student Paper Competition for 'Performance Analysis of mmWave Radar Waveforms for ISAC', IEEE MAPCON 2024",
+    "exact_year": 2024,
+    "awarded_by": "IEEE MAPCON 2024"
   },
   {
     "faculty_name": "Shobha Sundar Ram",
     "year": "2023-2024",
-    "award": "Qualcomm Innovation Fellowship India 2024, INR 10 lakhs (student: Jai Mangal)"
+    "award": "Qualcomm Innovation Fellowship India 2024, INR 10 lakhs (student: Jai Mangal)",
+    "exact_year": 2024,
+    "awarded_by": "Qualcomm"
   },
   {
     "faculty_name": "Shobha Sundar Ram",
     "year": "2023-2024",
-    "award": "Winner of TCS Research Scholar Program (RSP) scholarships Cycle 18, 2024-2028"
+    "award": "Winner of TCS Research Scholar Program (RSP) scholarships Cycle 18, 2024-2028",
+    "exact_year": 2024,
+    "awarded_by": "TCS (Research Scholar Program)"
   },
   {
     "faculty_name": "Shobha Sundar Ram",
     "year": "2023-2024",
-    "award": "Outstanding Contributions as Associate Editor for IEEE Transactions on Aerospace and Electronics Systems 2023-2024"
+    "award": "Outstanding Contributions as Associate Editor for IEEE Transactions on Aerospace and Electronics Systems 2023-2024",
+    "exact_year": 2024,
+    "awarded_by": "IEEE Transactions on Aerospace and Electronics Systems"
   },
   {
     "faculty_name": "Sneh Saurabh",
     "year": "2024-2025",
-    "award": "Program Track Chair, VDAT 2025, Chandigarh"
+    "award": "Program Track Chair, VDAT 2025, Chandigarh",
+    "exact_year": 2025,
+    "awarded_by": "VDAT 2025"
   },
   {
     "faculty_name": "Sneh Saurabh",
     "year": "2023-2024",
-    "award": "Outstanding Educator Award 2024 (sole recipient)"
+    "award": "Outstanding Educator Award 2024 (sole recipient)",
+    "exact_year": 2024,
+    "awarded_by": "IIIT-Delhi"
   },
   {
     "faculty_name": "Sneh Saurabh",
     "year": "2023-2024",
-    "award": "Tutorial Chair, IEEE-iSES 2024, New Delhi"
+    "award": "Tutorial Chair, IEEE-iSES 2024, New Delhi",
+    "exact_year": 2024,
+    "awarded_by": "IEEE-iSES 2024"
   },
   {
     "faculty_name": "Sneh Saurabh",
     "year": "2023-2024",
-    "award": "Semiconductor Research Corporation (SRC) Winning Proposal 2022"
+    "award": "Semiconductor Research Corporation (SRC) Winning Proposal 2022",
+    "exact_year": 2022,
+    "awarded_by": "Semiconductor Research Corporation (SRC)"
   },
   {
     "faculty_name": "Sujay Deb",
     "year": "2024-2025",
-    "award": "Best Tutorial Award at IEEE VLSID Conference 2025 for 'RISC V Introduction and its Value Proposition'"
+    "award": "Best Tutorial Award at IEEE VLSID Conference 2025 for 'RISC V Introduction and its Value Proposition'",
+    "exact_year": 2025,
+    "awarded_by": "IEEE VLSID 2025"
   },
   {
     "faculty_name": "Sujay Deb",
     "year": "2024-2025",
-    "award": "Best Paper Nominee at IEEE VLSID 2025"
+    "award": "Best Paper Nominee at IEEE VLSID 2025",
+    "exact_year": 2025,
+    "awarded_by": "IEEE VLSID 2025"
   },
   {
     "faculty_name": "Sujay Deb",
     "year": "2023-2024",
-    "award": "General Chair of IEEE iSES Conference 2024"
+    "award": "General Chair of IEEE iSES Conference 2024",
+    "exact_year": 2024,
+    "awarded_by": "IEEE iSES 2024"
   },
   {
     "faculty_name": "Sujay Deb",
     "year": "2023-2024",
-    "award": "Local Organizing Chair of IEEE ISICAS Conference 2024"
+    "award": "Local Organizing Chair of IEEE ISICAS Conference 2024",
+    "exact_year": 2024,
+    "awarded_by": "IEEE ISICAS 2024"
   },
   {
     "faculty_name": "Sujay Deb",
     "year": "2023-2024",
-    "award": "Invited Panelist at IEEE TENSYMP 2024, 28 September 2024"
+    "award": "Invited Panelist at IEEE TENSYMP 2024, 28 September 2024",
+    "exact_year": 2024,
+    "awarded_by": "IEEE TENSYMP 2024"
   },
   {
     "faculty_name": "Sujay Deb",
     "year": "2023-2024",
-    "award": "Invited to give talk at IEEE LMAG event, 24 December 2024"
+    "award": "Invited to give talk at IEEE LMAG event, 24 December 2024",
+    "exact_year": 2024,
+    "awarded_by": "IEEE LMAG"
   },
   {
     "faculty_name": "Sujay Deb",
     "year": "2022-2023",
-    "award": "Delivered Keynote at IEEE ICSC 2023, 23 December 2023, JIIT Noida"
+    "award": "Delivered Keynote at IEEE ICSC 2023, 23 December 2023, JIIT Noida",
+    "exact_year": 2023,
+    "awarded_by": "IEEE ICSC 2023 / JIIT Noida"
   },
   {
     "faculty_name": "Sujay Deb",
     "year": "2022-2023",
-    "award": "Presided as Guest of Honor at IEEE CASS Automotive Rally 2023"
+    "award": "Presided as Guest of Honor at IEEE CASS Automotive Rally 2023",
+    "exact_year": 2023,
+    "awarded_by": "IEEE CASS"
   },
   {
     "faculty_name": "Sujay Deb",
     "year": "2022-2023",
-    "award": "Technical Program Co-chair of NOCS 2023"
+    "award": "Technical Program Co-chair of NOCS 2023",
+    "exact_year": 2023,
+    "awarded_by": "NOCS 2023"
   },
   {
     "faculty_name": "Sujay Deb",
     "year": "2022-2023",
-    "award": "Fellowship Chair of APCCAS Conference 2023"
+    "award": "Fellowship Chair of APCCAS Conference 2023",
+    "exact_year": 2023,
+    "awarded_by": "APCCAS 2023"
   },
   {
     "faculty_name": "Sujay Deb",
     "year": "2022-2023",
-    "award": "Organizing Committee Chair of ICDCN 2022"
+    "award": "Organizing Committee Chair of ICDCN 2022",
+    "exact_year": 2022,
+    "awarded_by": "ICDCN 2022"
   },
   {
     "faculty_name": "Sumit J Darak",
     "year": "2024-2025",
-    "award": "COMSNETs 2025 Best Demo Award"
+    "award": "COMSNETs 2025 Best Demo Award",
+    "exact_year": 2025,
+    "awarded_by": "IEEE COMSNETs 2025"
   },
   {
     "faculty_name": "Sumit J Darak",
     "year": "2023-2024",
-    "award": "IIIT-Delhi Research Excellence Awards 2024"
+    "award": "IIIT-Delhi Research Excellence Awards 2024",
+    "exact_year": 2024,
+    "awarded_by": "IIIT-Delhi"
   },
   {
     "faculty_name": "Sumit J Darak",
     "year": "2023-2024",
-    "award": "Qualcomm Innovation Fellowship (QIF) Winner 2024"
+    "award": "Qualcomm Innovation Fellowship (QIF) Winner 2024",
+    "exact_year": 2024,
+    "awarded_by": "Qualcomm (QIF 2024)"
   },
   {
     "faculty_name": "Sumit J Darak",
     "year": "2023-2024",
-    "award": "IEEE MAPCON 2024 Best Student Paper Award (3rd Position)"
+    "award": "IEEE MAPCON 2024 Best Student Paper Award (3rd Position)",
+    "exact_year": 2024,
+    "awarded_by": "IEEE MAPCON 2024"
   },
   {
     "faculty_name": "Sumit J Darak",
     "year": "2023-2024",
-    "award": "Elevated to IEEE Senior Member grade"
+    "award": "Elevated to IEEE Senior Member grade",
+    "exact_year": 2024,
+    "awarded_by": "IEEE"
   },
   {
     "faculty_name": "Sumit J Darak",
     "year": "2022-2023",
-    "award": "IIIT-Delhi Research Excellence Award 2023"
+    "award": "IIIT-Delhi Research Excellence Award 2023",
+    "exact_year": 2023,
+    "awarded_by": "IIIT-Delhi"
   },
   {
     "faculty_name": "Sumit J Darak",
     "year": "2022-2023",
-    "award": "Qualcomm Innovation Fellowship (QIF) 2023 Winner"
+    "award": "Qualcomm Innovation Fellowship (QIF) 2023 Winner",
+    "exact_year": 2023,
+    "awarded_by": "Qualcomm (QIF 2023)"
   },
   {
     "faculty_name": "Sumit J Darak",
     "year": "2022-2023",
-    "award": "IEEE APCCAS 2023 Design Contest Winner"
+    "award": "IEEE APCCAS 2023 Design Contest Winner",
+    "exact_year": 2023,
+    "awarded_by": "IEEE APCCAS 2023"
   },
   {
     "faculty_name": "Sumit J Darak",
     "year": "2022-2023",
-    "award": "VLSID 2023 Conference Design Contest Runners-up"
+    "award": "VLSID 2023 Conference Design Contest Runners-up",
+    "exact_year": 2023,
+    "awarded_by": "VLSID 2023"
   },
   {
     "faculty_name": "Vivek Bohara",
     "year": "2024-2025",
-    "award": "Best Demonstration Award (Runners Up) in IEEE ComsNets 2024 conference"
+    "award": "Best Demonstration Award (Runners Up) in IEEE ComsNets 2024 conference",
+    "exact_year": 2024,
+    "awarded_by": "IEEE ComsNets 2024"
   },
   {
     "faculty_name": "Vivek Bohara",
     "year": "2023-2024",
-    "award": "TIH-IoT CHANAKYA Faculty Fellowship (TiH Foundation at IIT Bombay, DST), 2 years"
+    "award": "TIH-IoT CHANAKYA Faculty Fellowship (TiH Foundation at IIT Bombay, DST), 2 years",
+    "exact_year": 2024,
+    "awarded_by": "TiH Foundation / IIT Bombay / DST"
   }
 ]

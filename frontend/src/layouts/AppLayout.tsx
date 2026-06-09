@@ -59,19 +59,21 @@ export default function AppLayout() {
           </div>
         </div>
         <nav className="max-w-6xl mx-auto px-4 flex gap-1 pb-2 flex-wrap">
-          {nav.map((item) => (
-            <Link
-              key={item.to}
-              to={item.to}
-              className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
-                isNavActive(location.pathname, item.to, item.exact)
-                  ? "bg-white text-teal-900 font-medium shadow-sm"
-                  : "text-teal-50 hover:bg-teal-700/80"
-              }`}
-            >
-              {item.label}
-            </Link>
-          ))}
+          {nav
+            .filter((item) => !(user?.role === "admin" && item.to === "/notifications"))
+            .map((item) => (
+              <Link
+                key={item.to}
+                to={item.to}
+                className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
+                  isNavActive(location.pathname, item.to, item.exact)
+                    ? "bg-white text-teal-900 font-medium shadow-sm"
+                    : "text-teal-50 hover:bg-teal-700/80"
+                }`}
+              >
+                {item.label}
+              </Link>
+            ))}
           <Link
             to="/profile"
             className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${

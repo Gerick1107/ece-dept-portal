@@ -108,3 +108,21 @@ def get_copo_analytics(
         "course_titles": sorted(by_course.keys()),
         "courses": courses,
     }
+
+
+def get_copo_run_analytics(db: Session, public_id: str) -> dict | None:
+    """Parsed snapshot for a single evaluation run (used by Generator dashboard charts)."""
+    row = db.scalar(
+        select(CopoRunAnalyticsSnapshot).where(CopoRunAnalyticsSnapshot.public_id == public_id)
+    )
+    if not row:
+        return None
+    parsed = parse_copo_result_summary(row.result_summary)
+    if not parsed:
+        return None
+    return {
+        "public_id": row.public_id,
+        "course_title": row.course_title,
+        "semester_label": _resolve_semester_label(row),
+        **parsed,
+    }

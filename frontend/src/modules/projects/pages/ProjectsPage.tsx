@@ -19,13 +19,21 @@ import {
 } from "../services/projectsApi";
 import type { ImportSummary, Project, ProjectFilterOptions, SdgCatalogItem } from "../types/projects";
 
+const SDG_THRESHOLD = 0.5;
+
+function sdgLabel(s: { sdg_number: number; sdg_name?: string; confidence_score?: number | null }) {
+  const pct = s.confidence_score != null ? ` (${Math.round(s.confidence_score * 100)}%)` : "";
+  const name = s.sdg_name ? `: ${s.sdg_name}` : "";
+  return `SDG ${s.sdg_number}${name}${pct}`;
+}
+
 function formatSdgs(project: Project) {
   if (project.confirmed_sdgs.length) {
-    return project.confirmed_sdgs.map((s) => `SDG ${s.sdg_number}`).join(", ");
+    return project.confirmed_sdgs.map(sdgLabel).join(", ");
   }
   if (project.suggested_sdgs.length) {
     return project.suggested_sdgs
-      .map((s) => `SDG ${s.sdg_number}${s.confidence_score != null ? ` (${Math.round(s.confidence_score * 100)}%)` : ""}`)
+      .map((s) => sdgLabel(s))
       .join(", ");
   }
   return "—";
@@ -239,7 +247,7 @@ export default function ProjectsPage() {
     const nums =
       p.confirmed_sdgs.length > 0
         ? p.confirmed_sdgs.map((s) => s.sdg_number)
-        : p.suggested_sdgs.map((s) => s.sdg_number);
+        : p.suggested_sdgs.filter((s) => (s.confidence_score ?? 0) >= SDG_THRESHOLD).map((s) => s.sdg_number);
     setEditSdgsSelection(nums);
   }
 
@@ -707,28 +715,66 @@ export default function ProjectsPage() {
 
       {reviewProject && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-lg max-w-md w-full p-6 space-y-3">
+          <div className="bg-white rounded-xl shadow-lg max-w-lg w-full p-6 space-y-3">
             <h3 className="font-semibold">{llmEnabled ? "SDG review" : "Edit SDGs"}</h3>
             <p className="text-sm text-slate-600">{reviewProject.project_title}</p>
-            <div className="max-h-32 overflow-y-auto border rounded-lg p-2 space-y-1">
-              {sdgCatalog.map((s) => (
-                <label key={s.id} className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={editSdgsSelection.includes(s.sdg_number)}
-                    onChange={(e) => {
-                      if (e.target.checked) setEditSdgsSelection([...editSdgsSelection, s.sdg_number]);
-                      else setEditSdgsSelection(editSdgsSelection.filter((n) => n !== s.sdg_number));
-                    }}
-                  />
-                  SDG {s.sdg_number} — {s.sdg_name}
-                </label>
-              ))}
+            <p className="text-xs text-slate-500">
+              All 17 SDGs are shown with model confidence. Items at or above 50% are auto-selected; you may override freely.
+            </p>
+            <div className="max-h-80 overflow-y-auto border rounded-lg divide-y divide-slate-100">
+              {sdgCatalog.map((s) => {
+                const scoreEntry =
+                  reviewProject.confirmed_sdgs.find((x) => x.sdg_number === s.sdg_number) ??
+                  reviewProject.suggested_sdgs.find((x) => x.sdg_number === s.sdg_number);
+                const confidence = scoreEntry?.confidence_score;
+                const pct = confidence != null ? Math.round(confidence * 100) : null;
+                const aboveThreshold = confidence != null && confidence >= SDG_THRESHOLD;
+                const isChecked = editSdgsSelection.includes(s.sdg_number);
+                return (
+                  <label
+                    key={s.id}
+                    data-selected={aboveThreshold ? "true" : "false"}
+                    className={`flex items-center gap-2.5 px-2.5 py-1.5 text-sm cursor-pointer ${
+                      aboveThreshold
+                        ? "bg-sky-50 border-l-[3px] border-l-[#1a6fba] font-medium text-slate-800"
+                        : "opacity-60 text-slate-600"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      className="shrink-0"
+                      checked={isChecked}
+                      onChange={(e) => {
+                        if (e.target.checked) setEditSdgsSelection([...editSdgsSelection, s.sdg_number]);
+                        else setEditSdgsSelection(editSdgsSelection.filter((n) => n !== s.sdg_number));
+                      }}
+                    />
+                    <span className="flex-1 min-w-0 truncate">
+                      SDG {s.sdg_number}: {s.sdg_name}
+                    </span>
+                    <span className="min-w-[42px] text-right font-semibold tabular-nums shrink-0">
+                      {pct != null ? `${pct}%` : "—"}
+                    </span>
+                  </label>
+                );
+              })}
             </div>
             <div className="flex flex-wrap gap-2">
               {llmEnabled && reviewProject.suggested_sdgs.length > 0 && (
                 <>
-                  <button type="button" className="text-sm bg-teal-700 text-white px-3 py-1.5 rounded-lg" onClick={async () => { await acceptSdgs(reviewProject.id); setReviewProject(null); await load(); }}>
+                  <button
+                    type="button"
+                    className="text-sm bg-teal-700 text-white px-3 py-1.5 rounded-lg"
+                    onClick={async () => {
+                      try {
+                        await acceptSdgs(reviewProject.id, editSdgsSelection);
+                        setReviewProject(null);
+                        await load();
+                      } catch (e) {
+                        setError(e instanceof Error ? e.message : "Could not accept SDGs");
+                      }
+                    }}
+                  >
                     Accept
                   </button>
                   <button type="button" className="text-sm border px-3 py-1.5 rounded-lg" onClick={async () => { await rejectSdgs(reviewProject.id); setReviewProject(null); await load(); }}>

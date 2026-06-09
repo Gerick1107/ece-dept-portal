@@ -341,14 +341,9 @@ def apply_sdg_suggestions(db: Session, project: Project, suggestions: list[dict]
     db.commit()
 
 
-def confirm_sdgs(db: Session, project: Project) -> Project:
-    for link in project.sdg_links:
-        if not link.is_confirmed:
-            link.is_confirmed = True
-    project.sdg_review_status = "confirmed"
-    db.commit()
-    db.refresh(project)
-    return project
+def confirm_sdgs(db: Session, project: Project, sdg_numbers: list[int]) -> Project:
+    """Confirm only the SDGs selected in the review UI."""
+    return edit_confirmed_sdgs(db, project, sdg_numbers)
 
 
 def reject_sdgs(db: Session, project: Project) -> Project:
@@ -360,6 +355,10 @@ def reject_sdgs(db: Session, project: Project) -> Project:
 
 
 def edit_confirmed_sdgs(db: Session, project: Project, sdg_numbers: list[int]) -> Project:
+    old_confidence: dict[int, float | None] = {}
+    for link in project.sdg_links:
+        if link.sdg:
+            old_confidence[link.sdg.sdg_number] = link.confidence_score
     clear_sdg_links(db, project.id)
     unique = sorted(set(sdg_numbers))
     for num in unique:
@@ -367,7 +366,14 @@ def edit_confirmed_sdgs(db: Session, project: Project, sdg_numbers: list[int]) -
             raise ValueError(f"Invalid SDG number: {num}")
         sdg = db.scalar(select(Sdg).where(Sdg.sdg_number == num))
         if sdg:
-            db.add(ProjectSdg(project_id=project.id, sdg_id=sdg.id, is_confirmed=True, confidence_score=None))
+            db.add(
+                ProjectSdg(
+                    project_id=project.id,
+                    sdg_id=sdg.id,
+                    is_confirmed=True,
+                    confidence_score=old_confidence.get(num),
+                )
+            )
     project.sdg_review_status = "confirmed" if unique else "none"
     db.commit()
     db.refresh(project)

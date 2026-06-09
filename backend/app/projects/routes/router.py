@@ -286,12 +286,16 @@ def generate_sdgs(
 @router.post("/{project_id}/accept-sdgs", response_model=ProjectResponse)
 def accept_sdgs(
     project_id: int,
+    body: SdgEditRequest,
     db: Annotated[Session, Depends(get_db)],
     _: Annotated[User, Depends(get_current_user)],
 ):
     _assert_sdg_access()
     project = _load_project(db, project_id)
-    project = confirm_sdgs(db, project)
+    try:
+        project = confirm_sdgs(db, project, body.sdg_numbers)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return ProjectResponse.model_validate(project_to_dict(db, project))
 
 

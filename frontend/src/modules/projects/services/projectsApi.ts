@@ -86,8 +86,8 @@ export function generateSdgs(projectId: number) {
   return apiPostJson<Project>(`/projects/${projectId}/generate-sdgs`, {});
 }
 
-export function acceptSdgs(projectId: number) {
-  return apiPostJson<Project>(`/projects/${projectId}/accept-sdgs`, {});
+export function acceptSdgs(projectId: number, sdgNumbers: number[]) {
+  return apiPostJson<Project>(`/projects/${projectId}/accept-sdgs`, { sdg_numbers: sdgNumbers });
 }
 
 export function rejectSdgs(projectId: number) {

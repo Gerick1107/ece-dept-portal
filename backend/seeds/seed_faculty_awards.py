@@ -36,12 +36,26 @@ def seed_faculty_awards(db: Session) -> dict:
                 FacultyAward.award == award,
             )
         )
+        exact_year = row.get("exact_year")
+        awarded_by = (row.get("awarded_by") or "").strip() or None
         if existing:
+            if exact_year is not None and existing.exact_year != exact_year:
+                existing.exact_year = int(exact_year)
+            if awarded_by and existing.awarded_by != awarded_by:
+                existing.awarded_by = awarded_by
             skipped += 1
             continue
-        db.add(FacultyAward(faculty_name=faculty_name, year=year, award=award))
+        db.add(
+            FacultyAward(
+                faculty_name=faculty_name,
+                year=year,
+                award=award,
+                exact_year=int(exact_year) if exact_year is not None else None,
+                awarded_by=awarded_by,
+            )
+        )
         inserted += 1
-    db.commit()
+    db.commit()  # includes backfills on skipped duplicate rows
     return {"inserted": inserted, "skipped": skipped, "total": len(payload)}
 
 

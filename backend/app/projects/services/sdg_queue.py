@@ -11,7 +11,7 @@ from app.config import get_settings
 from app.database.session import SessionLocal
 from app.projects.models.entities import Project
 from app.projects.services.project_service import apply_sdg_suggestions
-from app.projects.services.sdg_llm_service import suggest_project_sdgs
+from app.projects.services.sdg_llm_service import score_all_project_sdgs
 
 logger = logging.getLogger(__name__)
 
@@ -33,9 +33,9 @@ def _process_project(project_id: int) -> None:
         project = db.get(Project, project_id)
         if project is None:
             return
-        suggestions = suggest_project_sdgs(project.project_title, project.project_type)
-        if suggestions:
-            apply_sdg_suggestions(db, project, suggestions)
+        all_scores = score_all_project_sdgs(project.project_title, project.project_type)
+        if all_scores:
+            apply_sdg_suggestions(db, project, all_scores)
     except Exception as exc:
         logger.warning("SDG auto-tag failed for project %s: %s", project_id, exc)
     finally:
@@ -83,7 +83,7 @@ def tag_project_now(db: Session, project: Project) -> None:
         raise ValueError(
             "AI SDG tagging is disabled. Select SDGs manually and click Save edited SDGs."
         )
-    suggestions = suggest_project_sdgs(project.project_title, project.project_type)
-    if not suggestions:
+    all_scores = score_all_project_sdgs(project.project_title, project.project_type)
+    if not all_scores:
         raise ValueError("No SDGs returned from model")
-    apply_sdg_suggestions(db, project, suggestions)
+    apply_sdg_suggestions(db, project, all_scores)

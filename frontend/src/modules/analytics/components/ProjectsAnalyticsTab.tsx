@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { fetchProjectsAnalytics, type ProjectsAnalyticsData } from "../services/analyticsApi";
-import { CHART_COLORS, ChartCard, KpiCard } from "./ChartCard";
+import { CHART_COLORS, ChartCard, getColours, KpiCard } from "./ChartCard";
 
 export default function ProjectsAnalyticsTab() {
   const [data, setData] = useState<ProjectsAnalyticsData | null>(null);
@@ -28,10 +28,14 @@ export default function ProjectsAnalyticsTab() {
   }
 
   const facultySlice = showAllFaculty ? data.faculty_load : data.faculty_load.slice(0, 15);
+  const themeRows = data.theme_distribution.filter((t) => t.count > 0);
+  const themeColors = getColours(themeRows.length);
+  const sdgColors = getColours(data.sdg_distribution.length);
   const typeDonut = [
     { name: "Thesis", value: data.kpis.thesis_count },
     { name: "IP/IS/UR", value: data.kpis.ip_is_ur_count },
   ];
+  const typeDonutColors = getColours(typeDonut.length);
 
   return (
     <div className="space-y-4">
@@ -58,8 +62,8 @@ export default function ProjectsAnalyticsTab() {
               <YAxis allowDecimals={false} />
               <Tooltip />
               <Legend />
-              <Bar dataKey="thesis" stackId="a" fill={CHART_COLORS[0]} name="Thesis" />
-              <Bar dataKey="ip_is_ur" stackId="a" fill={CHART_COLORS[2]} name="IP/IS/UR" />
+              <Bar dataKey="thesis" stackId="a" fill={getColours(2)[0]} name="Thesis" />
+              <Bar dataKey="ip_is_ur" stackId="a" fill={getColours(2)[1]} name="IP/IS/UR" />
             </BarChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -69,7 +73,7 @@ export default function ProjectsAnalyticsTab() {
             <PieChart>
               <Pie data={typeDonut} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label>
                 {typeDonut.map((_, i) => (
-                  <Cell key={i} fill={CHART_COLORS[i]} />
+                  <Cell key={i} fill={typeDonutColors[i]} />
                 ))}
               </Pie>
               <Tooltip />
@@ -121,14 +125,34 @@ export default function ProjectsAnalyticsTab() {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Top research themes" subtitle="From project titles">
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={data.top_keywords.slice(0, 15)} layout="vertical" margin={{ left: 80 }}>
+        <ChartCard title="ECE research themes" subtitle="Mapped from project titles">
+          <ResponsiveContainer width="100%" height={Math.max(260, data.theme_distribution.length * 28)}>
+            <BarChart data={data.theme_distribution.filter((t) => t.count > 0)} layout="vertical" margin={{ left: 140 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis type="number" allowDecimals={false} />
-              <YAxis type="category" dataKey="keyword" width={70} tick={{ fontSize: 10 }} />
+              <YAxis type="category" dataKey="theme" width={130} tick={{ fontSize: 9 }} />
               <Tooltip />
-              <Bar dataKey="count" fill={CHART_COLORS[1]} />
+              <Bar dataKey="count" name="Projects">
+                {themeRows.map((entry, i) => (
+                  <Cell key={entry.theme} fill={themeColors[i]} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartCard>
+
+        <ChartCard title="Projects by SDG" subtitle="Confirmed SDG mappings" className="lg:col-span-2">
+          <ResponsiveContainer width="100%" height={320}>
+            <BarChart data={data.sdg_distribution}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="sdg_number" tickFormatter={(n) => `SDG ${n}`} />
+              <YAxis allowDecimals={false} />
+              <Tooltip labelFormatter={(n) => `SDG ${n}`} />
+              <Bar dataKey="count" name="Projects">
+                {data.sdg_distribution.map((entry, i) => (
+                  <Cell key={entry.sdg_number} fill={sdgColors[i]} />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </ChartCard>

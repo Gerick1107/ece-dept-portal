@@ -1,21 +1,14 @@
 from __future__ import annotations
 
-import re
 from collections import Counter
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
+from app.analytics.utils.ece_themes import theme_distribution
 from app.analytics.utils.semester import semester_sort_key
-from app.projects.models.entities import Project
+from app.projects.models.entities import Project, ProjectSdg, Sdg
 from app.publications.models.entities import Faculty
-
-_STOP_WORDS = frozenset(
-    "a an the and or of in on for to with by from at is are was were be been being "
-    "using based study design analysis system implementation via into over under "
-    "iiitd iiit delhi project thesis".split()
-)
-
 
 def _split_csv(value: str | None) -> list[str]:
     if not value:
@@ -43,14 +36,21 @@ def _matches_project_type(project_type: str, filter_type: str | None) -> bool:
     return ft in pt or pt in ft
 
 
-def _top_keywords(titles: list[str], limit: int = 20) -> list[dict]:
-    counter: Counter[str] = Counter()
-    for title in titles:
-        words = re.findall(r"[A-Za-z][A-Za-z0-9\-]{2,}", title.lower())
-        for w in words:
-            if w not in _STOP_WORDS and not w.isdigit():
-                counter[w] += 1
-    return [{"keyword": k, "count": v} for k, v in counter.most_common(limit)]
+def _sdg_project_counts(db: Session, project_ids: list[int]) -> list[dict]:
+    if not project_ids:
+        return [{"sdg_number": n, "sdg_name": "", "count": 0} for n in range(1, 18)]
+    rows = db.execute(
+        select(Sdg.sdg_number, Sdg.sdg_name, func.count(func.distinct(ProjectSdg.project_id)))
+        .join(ProjectSdg, ProjectSdg.sdg_id == Sdg.id)
+        .where(
+            ProjectSdg.project_id.in_(project_ids),
+            ProjectSdg.is_confirmed.is_(True),
+        )
+        .group_by(Sdg.sdg_number, Sdg.sdg_name)
+        .order_by(Sdg.sdg_number)
+    ).all()
+    counts = {int(r[0]): {"sdg_number": int(r[0]), "sdg_name": r[1], "count": int(r[2])} for r in rows}
+    return [counts.get(n, {"sdg_number": n, "sdg_name": "", "count": 0}) for n in range(1, 18)]
 
 
 def get_projects_analytics(
@@ -184,7 +184,8 @@ def get_projects_analytics(
             "IP/IS/UR": [{"credit": k, "count": v} for k, v in sorted(credit_by_type["IP/IS/UR"].items())],
         },
         "sdg_review_status": [{"status": k, "count": v} for k, v in sdg_status.items()],
-        "top_keywords": _top_keywords(titles),
+        "sdg_distribution": _sdg_project_counts(db, [p.id for p in filtered]),
+        "theme_distribution": theme_distribution(titles),
         "filter_options": {
             "semesters": semester_timeline,
             "faculty": faculty_options,

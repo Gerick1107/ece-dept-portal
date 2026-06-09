@@ -18,7 +18,7 @@ import {
   YAxis,
 } from "recharts";
 import { fetchCopoAnalytics, type CopoAnalyticsData, type CopoRun } from "../services/analyticsApi";
-import { CHART_COLORS, ChartCard, KpiCard } from "./ChartCard";
+import { CHART_COLORS, ChartCard, getColours, divergingCellStyle, KpiCard } from "./ChartCard";
 
 function findRunBySemester(runs: CopoRun[], semester: string): CopoRun | null {
   if (!runs.length) return null;
@@ -141,12 +141,14 @@ export default function CopoAnalyticsTab() {
   }, [course, cos.join(",")]);
 
   const runSeries = useMemo(
-    () =>
-      (selected?.runs ?? []).map((run: CopoRun, i) => ({
+    () => {
+      const colors = getColours((selected?.runs ?? []).length);
+      return (selected?.runs ?? []).map((run: CopoRun, i) => ({
         key: run.run_key || `${run.semester_label} · ${run.public_id.slice(0, 8)}`,
         label: run.semester_label,
-        color: CHART_COLORS[i % CHART_COLORS.length],
-      })),
+        color: colors[i] ?? CHART_COLORS[i % CHART_COLORS.length],
+      }));
+    },
     [selected]
   );
 
@@ -323,21 +325,23 @@ export default function CopoAnalyticsTab() {
                 <Tooltip content={<CoTrendTooltip />} />
                 <ReferenceLine y={threshold} stroke="#f59e0b" strokeDasharray="4 4" label="Target" />
                 <Legend />
-                {cos
-                  .filter((co) => visibleCos.has(co))
-                  .map((co, i) => (
+                {(() => {
+                  const visible = cos.filter((c) => visibleCos.has(c));
+                  const lineColors = getColours(visible.length);
+                  return visible.map((co, i) => (
                     <Line
                       key={co}
                       type="monotone"
                       dataKey={co}
-                      stroke={CHART_COLORS[i % CHART_COLORS.length]}
+                      stroke={lineColors[i] ?? CHART_COLORS[i % CHART_COLORS.length]}
                       strokeWidth={2}
                       dot={{ r: 4 }}
                       activeDot={{ r: 6 }}
                       connectNulls
                       isAnimationActive={false}
                     />
-                  ))}
+                  ));
+                })()}
               </LineChart>
             </ResponsiveContainer>
           </ChartCard>
@@ -383,15 +387,11 @@ export default function CopoAnalyticsTab() {
                       <td className="p-1 border font-medium bg-slate-50">{co}</td>
                       {heatPos.map((po) => {
                         const val = heatmap[co]?.[po] ?? 0;
-                        const intensity = Math.min(1, val / 3);
                         return (
                           <td
                             key={po}
                             className="p-1 border text-center"
-                            style={{
-                              backgroundColor: `rgba(15, 118, 110, ${intensity * 0.85})`,
-                              color: intensity > 0.5 ? "#fff" : "#334155",
-                            }}
+                            style={divergingCellStyle(val, 0, 3)}
                             title={`${co} → ${po}: ${val}`}
                           >
                             {val || "—"}
@@ -468,8 +468,8 @@ export default function CopoAnalyticsTab() {
             <YAxis domain={[0, 100]} />
             <Tooltip formatter={(v) => `${Number(v ?? 0).toFixed(1)}%`} />
             <Legend />
-            <Bar dataKey="seriesA" fill={CHART_COLORS[0]} name={compareLabelA} />
-            <Bar dataKey="seriesB" fill={CHART_COLORS[1]} name={compareLabelB} />
+            <Bar dataKey="seriesA" fill={getColours(2)[0]} name={compareLabelA} />
+            <Bar dataKey="seriesB" fill={getColours(2)[1]} name={compareLabelB} />
           </BarChart>
         </ResponsiveContainer>
       </ChartCard>

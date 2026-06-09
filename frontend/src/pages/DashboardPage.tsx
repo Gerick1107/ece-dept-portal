@@ -14,6 +14,8 @@ const modules = [
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+  const notificationsPath = isAdmin ? "/admin/notifications" : "/notifications";
   const [unread, setUnread] = useState(0);
 
   useEffect(() => {
@@ -29,12 +31,20 @@ export default function DashboardPage() {
         <p className="text-slate-600 mt-1">
           Role: <span className="font-medium capitalize">{user?.role}</span> — departmental automation hub.
         </p>
-        {unread > 0 && (
+        {unread > 0 && !isAdmin && (
           <Link
-            to="/notifications"
+            to={notificationsPath}
             className="inline-flex mt-3 text-sm font-medium text-teal-800 bg-teal-50 border border-teal-200 rounded-lg px-3 py-2 hover:bg-teal-100"
           >
             {unread} unread notification{unread === 1 ? "" : "s"} — view now
+          </Link>
+        )}
+        {isAdmin && (
+          <Link
+            to={notificationsPath}
+            className="inline-flex mt-3 text-sm font-medium text-teal-800 bg-teal-50 border border-teal-200 rounded-lg px-3 py-2 hover:bg-teal-100"
+          >
+            Send notifications to faculty
           </Link>
         )}
       </section>
@@ -42,19 +52,21 @@ export default function DashboardPage() {
         <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">Modules</h3>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {modules.map((m) => {
+            const path = m.name === "Notifications" && isAdmin ? "/admin/notifications" : m.path;
+            const label = m.name === "Notifications" && isAdmin ? "Send Notifications" : m.name;
             const inner = (
               <>
-                <p className="font-medium">{m.name}</p>
+                <p className="font-medium">{label}</p>
                 <p className={`text-xs mt-1 ${m.status === "Active" ? "text-teal-700" : "text-amber-700"}`}>
                   {m.status}
-                  {m.name === "Notifications" && unread > 0 && ` · ${unread} unread`}
+                  {m.name === "Notifications" && !isAdmin && unread > 0 && ` · ${unread} unread`}
                 </p>
               </>
             );
             return m.link ? (
               <Link
                 key={m.name}
-                to={m.path}
+                to={path}
                 className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm hover:border-teal-400 hover:shadow transition-colors block"
               >
                 {inner}

@@ -8,6 +8,7 @@ import {
   sendAdminNotification,
   type AdminNotificationSummary,
 } from "../services/notificationsApi";
+import { NOTIFICATION_TEMPLATES } from "../notificationTemplates";
 
 export default function AdminNotificationsPage() {
   const { user } = useAuth();
@@ -86,14 +87,36 @@ export default function AdminNotificationsPage() {
       {error && <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
 
       <section className="bg-white border rounded-xl p-6 space-y-3">
+        <div>
+          <p className="text-sm font-medium text-slate-700 mb-2">Use a template</p>
+          <div className="flex flex-wrap gap-2">
+            {NOTIFICATION_TEMPLATES.map((tpl) => (
+              <button
+                key={tpl.id}
+                type="button"
+                className="text-xs px-2 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50"
+                onClick={() => {
+                  setTitle(tpl.subject);
+                  setMessage(tpl.body);
+                }}
+              >
+                {tpl.label}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-slate-500 mt-2">
+            Placeholders like <span className="font-mono bg-amber-50 px-1 rounded">[Faculty Name]</span> and{" "}
+            <span className="font-mono bg-amber-50 px-1 rounded">[Date]</span> are shown in brackets — replace them before sending.
+          </p>
+        </div>
         <input
           className="w-full border rounded-lg px-3 py-2 text-sm"
-          placeholder="Title"
+          placeholder="Title / Subject"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
         />
         <textarea
-          className="w-full border rounded-lg px-3 py-2 text-sm min-h-[120px]"
+          className="w-full border rounded-lg px-3 py-2 text-sm min-h-[160px] font-mono text-[13px]"
           placeholder="Message"
           value={message}
           onChange={(e) => setMessage(e.target.value)}

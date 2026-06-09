@@ -78,11 +78,14 @@ export type FacultyAward = {
   id: number;
   faculty_name: string;
   year: string;
+  exact_year?: number | null;
+  awarded_by?: string | null;
   award: string;
 };
 
 export type AwardsListResponse = {
   items: FacultyAward[];
   years: string[];
+  exact_years: number[];
   faculty_names: string[];
 };

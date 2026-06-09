@@ -9,19 +9,28 @@ export function createCourse(courseCode: string, courseName: string) {
   return apiPostJson<CourseRecord>("/courses", { course_code: courseCode, course_name: courseName });
 }
 
-export function listAwards(query?: string, year?: string) {
+export function listAwards(query?: string, year?: string, exactYear?: number) {
   const p = new URLSearchParams();
   if (query) p.set("query", query);
   if (year) p.set("year", year);
+  if (exactYear != null) p.set("exact_year", String(exactYear));
   const s = p.toString();
   return apiGet<AwardsListResponse>(`/awards${s ? `?${s}` : ""}`);
 }
 
-export function createAward(body: { faculty_name: string; year: string; award: string }) {
+export type AwardFormBody = {
+  faculty_name: string;
+  year: string;
+  exact_year?: number | null;
+  awarded_by?: string | null;
+  award: string;
+};
+
+export function createAward(body: AwardFormBody) {
   return apiPostJson<FacultyAward>("/awards", body);
 }
 
-export function updateAward(id: number, body: { faculty_name: string; year: string; award: string }) {
+export function updateAward(id: number, body: AwardFormBody) {
   const API_BASE = import.meta.env.VITE_API_BASE ?? "/api/v1";
   return fetch(`${API_BASE}/awards/${id}`, {
     method: "PUT",
@@ -46,6 +55,9 @@ export function deleteAward(id: number) {
 export type AwardsExportFilters = {
   query?: string;
   year?: string;
+  exact_year?: number;
+  exact_year_from?: number;
+  exact_year_to?: number;
   year_from?: string;
   year_to?: string;
   faculty_names?: string[];
@@ -56,6 +68,9 @@ export async function downloadAwardsExport(filters: AwardsExportFilters = {}) {
   const p = new URLSearchParams();
   if (filters.query) p.set("query", filters.query);
   if (filters.year) p.set("year", filters.year);
+  if (filters.exact_year != null) p.set("exact_year", String(filters.exact_year));
+  if (filters.exact_year_from != null) p.set("exact_year_from", String(filters.exact_year_from));
+  if (filters.exact_year_to != null) p.set("exact_year_to", String(filters.exact_year_to));
   if (filters.year_from) p.set("year_from", filters.year_from);
   if (filters.year_to) p.set("year_to", filters.year_to);
   if (filters.faculty_names?.length) p.set("faculty_names", filters.faculty_names.join(","));

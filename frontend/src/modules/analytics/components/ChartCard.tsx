@@ -52,15 +52,4 @@ export function KpiCard({ label, value, hint }: { label: string; value: string |
   );
 }
 
-export const CHART_COLORS = [
-  "#0f766e",
-  "#0d9488",
-  "#14b8a6",
-  "#2dd4bf",
-  "#115e59",
-  "#6366f1",
-  "#f59e0b",
-  "#ec4899",
-  "#8b5cf6",
-  "#64748b",
-];
+export { CHART_COLORS, divergingCellStyle, divergingColor, getColours } from "../utils/chartColours";

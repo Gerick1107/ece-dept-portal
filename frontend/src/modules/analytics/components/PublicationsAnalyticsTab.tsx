@@ -80,7 +80,7 @@ export default function PublicationsAnalyticsTab() {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Top venues">
+        <ChartCard title="Top venues / journals">
           <div className="flex gap-2 mb-2">
             {(["conference", "journal", "publisher"] as const).map((t) => (
               <button
@@ -134,7 +134,7 @@ export default function PublicationsAnalyticsTab() {
                   <th className="py-2 pr-2 min-w-[14rem]">Title</th>
                   <th className="py-2 pr-2 min-w-[10rem]">Authors</th>
                   <th className="py-2 pr-2 w-16">Year</th>
-                  <th className="py-2 pr-2 min-w-[8rem]">Venue</th>
+                  <th className="py-2 pr-2 min-w-[8rem]">Venue / Journal</th>
                   <th className="py-2 w-20">Citations</th>
                 </tr>
               </thead>

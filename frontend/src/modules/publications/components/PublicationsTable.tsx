@@ -99,7 +99,7 @@ export default function PublicationsTable({
             ) : mode === "publications" ? (
               <>
                 <th className="py-2 px-3 font-medium w-[25%]">Authors</th>
-                <th className="py-2 px-3 font-medium w-[20%]">Venue</th>
+                <th className="py-2 px-3 font-medium w-[20%]">Venue / Journal</th>
               </>
             ) : (
               <th className="py-2 px-3 font-medium w-[30%]">Authors/Inventors</th>

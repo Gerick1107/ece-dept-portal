@@ -17,6 +17,10 @@ export function invalidateAnalyticsCache() {
   cache.clear();
 }
 
+export function fetchCopoRunAnalytics(publicId: string) {
+  return apiGet<{ success: boolean; data: CopoRun }>(`/analytics/copo/run/${publicId}`).then((res) => res.data);
+}
+
 export function fetchCopoAnalytics(params: Record<string, string | undefined> = {}) {
   const p = new URLSearchParams();
   Object.entries(params).forEach(([k, v]) => {
@@ -90,7 +94,8 @@ export type ProjectsAnalyticsData = {
   faculty_load: Array<{ faculty_name: string; as_guide: number; as_co_guide: number; total: number }>;
   specialization_distribution: Array<{ name: string; count: number }>;
   sdg_review_status: Array<{ status: string; count: number }>;
-  top_keywords: Array<{ keyword: string; count: number }>;
+  sdg_distribution: Array<{ sdg_number: number; sdg_name: string; count: number }>;
+  theme_distribution: Array<{ theme: string; count: number }>;
   filter_options: { semesters: string[]; faculty: Array<{ id: number; name: string }>; course_codes: string[] };
 };
 

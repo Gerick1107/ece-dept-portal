@@ -11,13 +11,15 @@ export default function AwardsPage() {
 
   const [awards, setAwards] = useState<FacultyAward[]>([]);
   const [years, setYears] = useState<string[]>([]);
+  const [exactYears, setExactYears] = useState<number[]>([]);
   const [facultyNames, setFacultyNames] = useState<string[]>([]);
   const [eceFaculty, setEceFaculty] = useState<Faculty[]>([]);
   const [query, setQuery] = useState("");
   const [yearFilter, setYearFilter] = useState("");
+  const [exactYearFilter, setExactYearFilter] = useState("");
   const [selectedFaculty, setSelectedFaculty] = useState("");
-  const [exportYearFrom, setExportYearFrom] = useState("");
-  const [exportYearTo, setExportYearTo] = useState("");
+  const [exportExactYearFrom, setExportExactYearFrom] = useState("");
+  const [exportExactYearTo, setExportExactYearTo] = useState("");
   const [exportFaculty, setExportFaculty] = useState<string[]>([]);
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportBusy, setExportBusy] = useState(false);
@@ -25,19 +27,24 @@ export default function AwardsPage() {
   const [message, setMessage] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<FacultyAward | null>(null);
-  const [form, setForm] = useState({ faculty_name: "", year: "", award: "" });
+  const [form, setForm] = useState({ faculty_name: "", year: "", exact_year: "", awarded_by: "", award: "" });
 
   const load = useCallback(async () => {
     setError("");
     try {
-      const r = await listAwards(query || undefined, yearFilter || undefined);
+      const r = await listAwards(
+        query || undefined,
+        yearFilter || undefined,
+        exactYearFilter ? Number(exactYearFilter) : undefined
+      );
       setAwards(r.items);
       setYears(r.years);
+      setExactYears(r.exact_years ?? []);
       setFacultyNames(r.faculty_names);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load awards");
     }
-  }, [query, yearFilter]);
+  }, [query, yearFilter, exactYearFilter]);
 
   useEffect(() => {
     load();
@@ -62,23 +69,41 @@ export default function AwardsPage() {
 
   function openAdd() {
     setEditing(null);
-    setForm({ faculty_name: "", year: "", award: "" });
+    setForm({ faculty_name: "", year: "", exact_year: "", awarded_by: "", award: "" });
     setShowModal(true);
   }
 
   function openEdit(row: FacultyAward) {
     setEditing(row);
-    setForm({ faculty_name: row.faculty_name, year: row.year, award: row.award });
+    setForm({
+      faculty_name: row.faculty_name,
+      year: row.year,
+      exact_year: row.exact_year != null ? String(row.exact_year) : "",
+      awarded_by: row.awarded_by ?? "",
+      award: row.award,
+    });
     setShowModal(true);
   }
 
   async function saveAward() {
     try {
       if (editing) {
-        await updateAward(editing.id, form);
+        await updateAward(editing.id, {
+          faculty_name: form.faculty_name,
+          year: form.year,
+          exact_year: form.exact_year ? Number(form.exact_year) : null,
+          awarded_by: form.awarded_by || null,
+          award: form.award,
+        });
         setMessage("Award updated.");
       } else {
-        await createAward(form);
+        await createAward({
+          faculty_name: form.faculty_name,
+          year: form.year,
+          exact_year: form.exact_year ? Number(form.exact_year) : null,
+          awarded_by: form.awarded_by || null,
+          award: form.award,
+        });
         setMessage("Award added.");
       }
       setShowModal(false);
@@ -99,8 +124,8 @@ export default function AwardsPage() {
           <button
             type="button"
             onClick={() => {
-              setExportYearFrom(yearFilter);
-              setExportYearTo(yearFilter);
+              setExportExactYearFrom(exactYearFilter);
+              setExportExactYearTo(exactYearFilter);
               setExportFaculty(selectedFaculty ? [selectedFaculty] : []);
               setShowExportModal(true);
             }}
@@ -119,7 +144,7 @@ export default function AwardsPage() {
       {message && <p className="text-sm text-teal-800 bg-teal-50 border border-teal-200 rounded-lg px-3 py-2">{message}</p>}
       {error && <p className="text-sm text-red-800 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
 
-      <section className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm grid sm:grid-cols-3 gap-3">
+      <section className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <input
           placeholder="Search faculty or award…"
           className="border rounded-lg px-3 py-2 text-sm"
@@ -127,8 +152,20 @@ export default function AwardsPage() {
           onChange={(e) => setQuery(e.target.value)}
         />
         <select className="border rounded-lg px-3 py-2 text-sm" value={yearFilter} onChange={(e) => setYearFilter(e.target.value)}>
-          <option value="">All years</option>
+          <option value="">All academic years</option>
           {years.map((y) => (
+            <option key={y} value={y}>
+              {y}
+            </option>
+          ))}
+        </select>
+        <select
+          className="border rounded-lg px-3 py-2 text-sm"
+          value={exactYearFilter}
+          onChange={(e) => setExactYearFilter(e.target.value)}
+        >
+          <option value="">All years</option>
+          {exactYears.map((y) => (
             <option key={y} value={y}>
               {y}
             </option>
@@ -154,7 +191,8 @@ export default function AwardsPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50 text-slate-600 text-left">
-                    <th className="px-4 py-2 font-medium w-32">Year</th>
+                    <th className="px-4 py-2 font-medium w-24">Year</th>
+                    <th className="px-4 py-2 font-medium w-36">Awarding Agency / Awarded By</th>
                     <th className="px-4 py-2 font-medium">Award / Recognition</th>
                     {isAdmin && <th className="px-4 py-2 font-medium w-32">Actions</th>}
                   </tr>
@@ -162,7 +200,8 @@ export default function AwardsPage() {
                 <tbody>
                   {rows.map((row) => (
                     <tr key={row.id} className="border-t border-slate-100">
-                      <td className="px-4 py-2 align-top">{row.year}</td>
+                      <td className="px-4 py-2 align-top">{row.exact_year ?? row.year}</td>
+                      <td className="px-4 py-2 align-top text-slate-600">{row.awarded_by || "—"}</td>
                       <td className="px-4 py-2">{row.award}</td>
                       {isAdmin && (
                         <td className="px-4 py-2 whitespace-nowrap">
@@ -204,19 +243,21 @@ export default function AwardsPage() {
               <div>
                 <label className="text-xs text-slate-500">Year from</label>
                 <input
+                  type="number"
                   className="w-full border rounded-lg px-3 py-2 text-sm mt-1"
-                  placeholder="e.g. 2020-2021"
-                  value={exportYearFrom}
-                  onChange={(e) => setExportYearFrom(e.target.value)}
+                  placeholder="e.g. 2020"
+                  value={exportExactYearFrom}
+                  onChange={(e) => setExportExactYearFrom(e.target.value)}
                 />
               </div>
               <div>
                 <label className="text-xs text-slate-500">Year to</label>
                 <input
+                  type="number"
                   className="w-full border rounded-lg px-3 py-2 text-sm mt-1"
-                  placeholder="e.g. 2024-2025"
-                  value={exportYearTo}
-                  onChange={(e) => setExportYearTo(e.target.value)}
+                  placeholder="e.g. 2025"
+                  value={exportExactYearTo}
+                  onChange={(e) => setExportExactYearTo(e.target.value)}
                 />
               </div>
             </div>
@@ -252,9 +293,12 @@ export default function AwardsPage() {
                   try {
                     await downloadAwardsExport({
                       query: query || undefined,
-                      year: exportYearFrom && exportYearFrom === exportYearTo ? exportYearFrom : undefined,
-                      year_from: exportYearFrom || undefined,
-                      year_to: exportYearTo || undefined,
+                      exact_year:
+                        exportExactYearFrom && exportExactYearFrom === exportExactYearTo
+                          ? Number(exportExactYearFrom)
+                          : undefined,
+                      exact_year_from: exportExactYearFrom ? Number(exportExactYearFrom) : undefined,
+                      exact_year_to: exportExactYearTo ? Number(exportExactYearTo) : undefined,
                       faculty_names: exportFaculty.length ? exportFaculty : undefined,
                     });
                     setShowExportModal(false);
@@ -291,9 +335,22 @@ export default function AwardsPage() {
             </select>
             <input
               className="w-full border rounded-lg px-3 py-2 text-sm"
-              placeholder="2024-2025"
+              placeholder="Academic year (e.g. 2024-2025)"
               value={form.year}
               onChange={(e) => setForm({ ...form, year: e.target.value })}
+            />
+            <input
+              type="number"
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+              placeholder="Year (e.g. 2025)"
+              value={form.exact_year}
+              onChange={(e) => setForm({ ...form, exact_year: e.target.value })}
+            />
+            <input
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+              placeholder="Awarding Agency / Awarded By"
+              value={form.awarded_by}
+              onChange={(e) => setForm({ ...form, awarded_by: e.target.value })}
             />
             <textarea
               className="w-full border rounded-lg px-3 py-2 text-sm min-h-[100px]"

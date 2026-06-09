@@ -13,6 +13,9 @@ def export_awards_xlsx(
     *,
     query: str | None = None,
     year: str | None = None,
+    exact_year: int | None = None,
+    exact_year_from: int | None = None,
+    exact_year_to: int | None = None,
     year_from: str | None = None,
     year_to: str | None = None,
     faculty_names: list[str] | None = None,
@@ -21,6 +24,9 @@ def export_awards_xlsx(
         db,
         query=query,
         year=year,
+        exact_year=exact_year,
+        exact_year_from=exact_year_from,
+        exact_year_to=exact_year_to,
         year_from=year_from,
         year_to=year_to,
         faculty_names=faculty_names,
@@ -29,7 +35,9 @@ def export_awards_xlsx(
         [
             {
                 "Faculty Name": r.faculty_name,
-                "Year": r.year,
+                "Academic Year": r.year,
+                "Year": r.exact_year,
+                "Awarding Agency / Awarded By": r.awarded_by,
                 "Award / Recognition": r.award,
             }
             for r in rows

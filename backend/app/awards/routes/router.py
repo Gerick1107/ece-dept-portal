@@ -13,6 +13,8 @@ from app.awards.services.award_service import (
     delete_award,
     get_award,
     list_awards,
+    list_awards_filtered,
+    list_distinct_exact_years,
     list_distinct_years,
     list_faculty_with_awards,
     update_award,
@@ -28,6 +30,8 @@ class AwardResponse(BaseModel):
     id: int
     faculty_name: str
     year: str
+    exact_year: int | None = None
+    awarded_by: str | None = None
     award: str
 
     model_config = {"from_attributes": True}
@@ -36,6 +40,8 @@ class AwardResponse(BaseModel):
 class AwardCreateRequest(BaseModel):
     faculty_name: str = Field(min_length=1, max_length=200)
     year: str = Field(min_length=1, max_length=20)
+    exact_year: int | None = None
+    awarded_by: str | None = Field(default=None, max_length=500)
     award: str = Field(min_length=1)
 
 
@@ -46,6 +52,7 @@ class AwardUpdateRequest(AwardCreateRequest):
 class AwardListResponse(BaseModel):
     items: list[AwardResponse]
     years: list[str]
+    exact_years: list[int]
     faculty_names: list[str]
 
 
@@ -55,6 +62,9 @@ def export_awards(
     _: Annotated[User, Depends(get_current_user)],
     query: str | None = None,
     year: str | None = None,
+    exact_year: int | None = None,
+    exact_year_from: int | None = None,
+    exact_year_to: int | None = None,
     year_from: str | None = None,
     year_to: str | None = None,
     faculty_names: str | None = Query(
@@ -67,6 +77,9 @@ def export_awards(
         db,
         query=query,
         year=year,
+        exact_year=exact_year,
+        exact_year_from=exact_year_from,
+        exact_year_to=exact_year_to,
         year_from=year_from,
         year_to=year_to,
         faculty_names=names,
@@ -84,11 +97,18 @@ def list_all_awards(
     _: Annotated[User, Depends(get_current_user)],
     query: str | None = None,
     year: str | None = None,
+    exact_year: int | None = None,
 ):
-    items = list_awards(db, query=query, year=year)
+    items = list_awards_filtered(
+        db,
+        query=query,
+        year=year,
+        exact_year=exact_year,
+    )
     return AwardListResponse(
         items=[AwardResponse.model_validate(a) for a in items],
         years=list_distinct_years(db),
+        exact_years=list_distinct_exact_years(db),
         faculty_names=list_faculty_with_awards(db),
     )
 
@@ -100,7 +120,14 @@ def add_award(
     _: Annotated[User, Depends(require_roles(UserRole.admin))],
 ):
     try:
-        row = create_award(db, body.faculty_name, body.year, body.award)
+        row = create_award(
+            db,
+            body.faculty_name,
+            body.year,
+            body.award,
+            exact_year=body.exact_year,
+            awarded_by=body.awarded_by,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return AwardResponse.model_validate(row)
@@ -117,7 +144,15 @@ def edit_award(
     if not row:
         raise HTTPException(status_code=404, detail="Award not found")
     try:
-        row = update_award(db, row, body.faculty_name, body.year, body.award)
+        row = update_award(
+            db,
+            row,
+            body.faculty_name,
+            body.year,
+            body.award,
+            exact_year=body.exact_year,
+            awarded_by=body.awarded_by,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return AwardResponse.model_validate(row)

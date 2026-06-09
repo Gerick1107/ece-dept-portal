@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.analytics.services.awards_service import get_awards_analytics
-from app.analytics.services.copo_service import get_copo_analytics
+from app.analytics.services.copo_service import get_copo_analytics, get_copo_run_analytics
 from app.analytics.services.projects_service import get_projects_analytics
 from app.analytics.services.publications_service import get_publications_analytics
 from app.auth.dependencies import get_current_user
@@ -38,6 +38,16 @@ def analytics_copo(
     )
 
 
+@router.get("/copo/run/{public_id}")
+def analytics_copo_run(
+    public_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_user)],
+):
+    data = get_copo_run_analytics(db, public_id)
+    return _envelope(data or {})
+
+
 @router.get("/projects")
 def analytics_projects(
     db: Annotated[Session, Depends(get_db)],
@@ -67,16 +77,19 @@ def analytics_awards(
     _: Annotated[User, Depends(get_current_user)],
     faculty_name: str | None = Query(default=None, description="Comma-separated faculty names"),
     year: str | None = Query(default=None, description="Comma-separated academic years"),
+    exact_year: str | None = Query(default=None, description="Comma-separated exact years"),
     category: str | None = Query(default=None, description="Comma-separated categories"),
 ):
     faculty_names = [s.strip() for s in (faculty_name or "").split(",") if s.strip()] or None
     years = [s.strip() for s in (year or "").split(",") if s.strip()] or None
+    exact_years = [int(s) for s in (exact_year or "").split(",") if s.strip().isdigit()] or None
     categories = [s.strip() for s in (category or "").split(",") if s.strip()] or None
     return _envelope(
         get_awards_analytics(
             db,
             faculty_names=faculty_names,
             years=years,
+            exact_years=exact_years,
             categories=categories,
         )
     )
