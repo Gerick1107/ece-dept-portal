@@ -347,7 +347,7 @@ def confirm_sdgs(db: Session, project: Project, sdg_numbers: list[int]) -> Proje
 
 
 def reject_sdgs(db: Session, project: Project) -> Project:
-    clear_sdg_links(db, project.id, confirmed_only=False)
+    clear_sdg_links(db, project.id)
     project.sdg_review_status = "rejected"
     db.commit()
     db.refresh(project)

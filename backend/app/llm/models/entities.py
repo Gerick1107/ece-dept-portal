@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, String, Text, func
+from sqlalchemy import DateTime, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.base import Base
@@ -17,3 +17,4 @@ class LlmInsightsCache(Base):
     prompt_used: Mapped[str | None] = mapped_column(Text, nullable=True)
     llm_response: Mapped[str] = mapped_column(Text, nullable=False)
     generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    prompt_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import LlmComparisonVisuals from "../components/LlmComparisonVisuals";
 import {
   fetchCachedInsights,
   fetchCourseComparison,
@@ -220,10 +221,14 @@ export default function LlmInsightsPage() {
         <>
           {comparison.insufficient_history && (
             <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-              No previous semester available for comparison — showing current attainments and general improvement
-              strategies.
+              Only one semester available — comparison visuals and delta cards are hidden. Current attainments are shown
+              below.
             </p>
           )}
+
+          <section className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+            <LlmComparisonVisuals comparison={comparison} />
+          </section>
 
           <section className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-6">
             <ComparisonTable
@@ -267,6 +272,12 @@ export default function LlmInsightsPage() {
                 )}
               </div>
             </div>
+
+            {!comparison.co_descriptions_available && (
+              <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
+                CO descriptions not configured. Contact admin to add CO definitions for richer insights.
+              </p>
+            )}
 
             {loadingInsights ? (
               <p className="text-sm text-slate-500 animate-pulse py-8 text-center">Generating AI insights…</p>

@@ -9,6 +9,12 @@ class GenerateInsightsRequest(BaseModel):
     regenerate: bool = False
 
 
+class AssessmentSummaryItem(BaseModel):
+    component_type: str
+    component_count: int
+    total_questions: int
+
+
 class ComparisonRow(BaseModel):
     metric: str
     previous: float | None = None
@@ -26,6 +32,8 @@ class CourseComparison(BaseModel):
     co_comparison: list[ComparisonRow]
     po_comparison: list[ComparisonRow]
     insufficient_history: bool
+    co_descriptions_available: bool = False
+    assessment_summary: list[AssessmentSummaryItem] = Field(default_factory=list)
 
 
 class InsightCourseOption(BaseModel):

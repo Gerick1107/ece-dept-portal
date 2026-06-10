@@ -8,6 +8,12 @@ export type ComparisonRow = {
   trend: "up" | "down" | "neutral";
 };
 
+export type AssessmentSummaryItem = {
+  component_type: string;
+  component_count: number;
+  total_questions: number;
+};
+
 export type CourseComparison = {
   course_title: string;
   has_previous: boolean;
@@ -17,6 +23,8 @@ export type CourseComparison = {
   co_comparison: ComparisonRow[];
   po_comparison: ComparisonRow[];
   insufficient_history: boolean;
+  co_descriptions_available: boolean;
+  assessment_summary: AssessmentSummaryItem[];
 };
 
 export type InsightCourseOption = {

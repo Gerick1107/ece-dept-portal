@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections import defaultdict
 from datetime import datetime
 
@@ -12,17 +13,23 @@ from app.analytics.utils.semester import semester_sort_key
 from app.database.models.copo_analytics import CopoRunAnalyticsSnapshot
 from app.database.models.user import User, UserRole
 from app.llm.models.entities import LlmInsightsCache
+from app.llm.services.assessment_summary import format_assessment_summary_block, summarize_assessment_ids
 from app.llm.services.groq_service import LlmError, generate_llm_text
 from app.llm.services.mapping_descriptions import extract_co_descriptions_for_course, extract_po_descriptions
 
+logger = logging.getLogger(__name__)
+
 _PO_PSO_ORDER = [f"PO{i}" for i in range(1, 13)] + ["PSO1", "PSO2", "PSO3"]
 _ATTAINMENT_TARGET = 60.0
+PROMPT_VERSION = 2
 
 
 def _parse_run(row: CopoRunAnalyticsSnapshot) -> dict | None:
     parsed = parse_copo_result_summary(row.result_summary)
     if not parsed:
         return None
+    intermediate = (row.result_summary or {}).get("intermediate") or {}
+    assessment_ids = intermediate.get("assessment_ids") or []
     run_at = row.run_created_at
     return {
         "public_id": row.public_id,
@@ -30,6 +37,7 @@ def _parse_run(row: CopoRunAnalyticsSnapshot) -> dict | None:
         "semester_label": _resolve_semester_label(row),
         "run_created_at": run_at.isoformat() if run_at else None,
         "user_id": row.user_id,
+        "assessment_ids": assessment_ids if isinstance(assessment_ids, list) else [],
         **parsed,
     }
 
@@ -133,6 +141,9 @@ def get_course_comparison(db: Session, user: User, course_title: str) -> dict:
     current = per_sem[semesters[-1]]
     previous = per_sem[semesters[-2]] if len(semesters) >= 2 else None
 
+    co_descriptions, co_desc_available, _co_src = extract_co_descriptions_for_course(course_title)
+    assessment_summary = summarize_assessment_ids(current.get("assessment_ids") or [])
+
     return {
         "course_title": course_title,
         "has_previous": previous is not None,
@@ -142,6 +153,8 @@ def get_course_comparison(db: Session, user: User, course_title: str) -> dict:
         "co_comparison": _comparison_rows(previous, current, "co_attainment"),
         "po_comparison": _comparison_rows(previous, current, "po_attainment", sort_po=True),
         "insufficient_history": len(semesters) < 2,
+        "co_descriptions_available": co_desc_available and bool(co_descriptions),
+        "assessment_summary": assessment_summary,
     }
 
 
@@ -173,17 +186,27 @@ def build_llm_prompt(
     faculty_name: str,
     comparison: dict,
     co_descriptions: dict[str, str],
+    co_descriptions_available: bool,
     po_descriptions: dict[str, str],
+    assessment_summary: list[dict],
 ) -> str:
-    co_desc_block = "\n".join(co_descriptions.values()) if co_descriptions else (
-        "CO descriptions: Not available for this course."
-    )
+    if co_descriptions_available and co_descriptions:
+        co_desc_block = "\n".join(co_descriptions[k] for k in sorted(co_descriptions))
+    else:
+        co_desc_block = (
+            "CO identifiers only (no descriptions configured): "
+            + ", ".join(row["metric"] for row in comparison["co_comparison"] if row.get("current") is not None)
+        )
+
     po_desc_block = "\n".join(
         po_descriptions.get(k, k) for k in _PO_PSO_ORDER if k in po_descriptions
-    ) if po_descriptions else "PO descriptions: Standard PO1-PO12 as per NBA guidelines."
+    ) or "PO descriptions: Standard PO1-PO12 as per NBA guidelines."
+    pso_lines = [po_descriptions[k] for k in ("PSO1", "PSO2", "PSO3") if k in po_descriptions]
+    pso_desc_block = "\n".join(pso_lines) if pso_lines else ""
 
     co_table = _format_comparison_lines(comparison["co_comparison"])
     po_table = _format_comparison_lines(comparison["po_comparison"])
+    assessment_block = format_assessment_summary_block(assessment_summary)
 
     if comparison["has_previous"]:
         comparison_intro = (
@@ -195,7 +218,20 @@ def build_llm_prompt(
 2. For each CO that has IMPROVED, briefly note what may be working well and how to sustain it.
 3. Based on PO/PSO attainment trends, suggest any overall course delivery improvements.
 4. Keep suggestions specific to the CO topics — do not give generic advice.
-5. Format your response with a clear heading for each CO, followed by a final Overall Recommendations section."""
+5. Format your response with a clear heading for each CO, followed by a final Overall Recommendations section.
+
+Based on the PO/PSO attainment data above:
+6. Identify which Programme Outcomes have declined and suggest course-level interventions that could improve student performance on those POs. Be specific about which teaching activities, assessments, or learning experiences map to each declining PO.
+7. If PSO data is available, analyse PSO trends and suggest programme-specific improvements.
+8. Note any POs that are consistently strong across both semesters.
+
+Based on the assessment structure above and the CO/PO attainment trends:
+9. Evaluate whether the current assessment structure is appropriate for the number of COs being assessed.
+10. Suggest whether any component types should be added, removed, or reweighted (connect suggestions to CO/PO performance).
+11. For components with a high number of questions, suggest whether reducing question count might improve assessment quality without reducing coverage.
+12. For components with very few questions, suggest whether increasing question count could provide more reliable attainment measurement.
+13. If a component type is entirely missing that could benefit learning outcomes, suggest adding it.
+14. Keep all suggestions grounded in the attainment data shown above."""
     else:
         co_table_single = "\n".join(
             f"{row['metric']}: current={row['current']:.1f}%"
@@ -220,8 +256,22 @@ Programme Outcome (PO) descriptions:
 
 PO/PSO Attainment:
 {po_table}
+{f"PSO descriptions:{chr(10)}{pso_desc_block}{chr(10)}" if pso_desc_block else ""}
+Assessment Structure for This Course (latest semester):
+{assessment_block}
+
+Note: CO-to-assessment mappings are not available; analyse assessment structure from a pedagogical and workload perspective.
 
 Based on typical attainment targets of 60%, suggest teaching and learning strategies to improve attainment for any COs currently below target. Format with clear headings per CO and an Overall Recommendations section."""
+
+    assessment_section = ""
+    if assessment_summary:
+        assessment_section = f"""
+Assessment Structure for This Course (latest semester):
+{assessment_block}
+
+Note: CO-to-assessment mappings are not available; analyse assessment structure from a pedagogical and workload perspective.
+"""
 
     return f"""You are an academic course improvement advisor for an engineering college (Electronics & Communication Engineering department).
 
@@ -232,13 +282,13 @@ Course Outcome (CO) descriptions for this course:
 
 Programme Outcome (PO) descriptions:
 {po_desc_block}
-
+{f"Programme Specific Outcome (PSO) descriptions:{chr(10)}{pso_desc_block}{chr(10)}" if pso_desc_block else ""}
 CO Attainment Comparison:
 {co_table}
 
 PO/PSO Attainment Comparison:
 {po_table}
-
+{assessment_section}
 {task_block}"""
 
 
@@ -260,13 +310,14 @@ def get_cached_insights(db: Session, user: User, course_title: str) -> dict:
     comparison = get_course_comparison(db, user, course_title)
     run_identifier = _run_identifier(course_title, comparison["current_semester"])
     cached = _get_cache(db, course_title, run_identifier)
+    valid_cache = cached if cached and cached.prompt_version == PROMPT_VERSION else None
     return {
         "course_title": course_title,
         "run_id": comparison["current_run_id"],
         "comparison": comparison,
-        "insights": cached.llm_response if cached else None,
-        "generated_at": cached.generated_at.isoformat() if cached and cached.generated_at else None,
-        "cached": cached is not None,
+        "insights": valid_cache.llm_response if valid_cache else None,
+        "generated_at": valid_cache.generated_at.isoformat() if valid_cache and valid_cache.generated_at else None,
+        "cached": valid_cache is not None,
     }
 
 
@@ -287,7 +338,7 @@ async def generate_insights(
 
     if not regenerate:
         cached = _get_cache(db, course_title, run_identifier)
-        if cached:
+        if cached and cached.prompt_version == PROMPT_VERSION:
             return {
                 "course_title": course_title,
                 "run_id": snapshot_run_id,
@@ -297,14 +348,23 @@ async def generate_insights(
                 "cached": True,
             }
 
-    co_descriptions = extract_co_descriptions_for_course(course_title)
-    po_descriptions = extract_po_descriptions()
+    co_descriptions, co_desc_available, co_source = extract_co_descriptions_for_course(course_title)
+    po_descriptions, po_source = extract_po_descriptions()
+    assessment_summary = comparison.get("assessment_summary") or []
+    logger.info(
+        "LLM prompt sources — CO: %s | PO: %s | assessments: %d types",
+        co_source or "NOT FOUND — omitted from prompt",
+        po_source,
+        len(assessment_summary),
+    )
     prompt = build_llm_prompt(
         course_title=course_title,
         faculty_name=user.full_name,
         comparison=comparison,
         co_descriptions=co_descriptions,
+        co_descriptions_available=co_desc_available,
         po_descriptions=po_descriptions,
+        assessment_summary=assessment_summary,
     )
 
     try:
@@ -319,6 +379,7 @@ async def generate_insights(
         existing.course_id = course_title
         existing.run_id = run_identifier
         existing.generated_at = datetime.utcnow()
+        existing.prompt_version = PROMPT_VERSION
     else:
         db.add(
             LlmInsightsCache(
@@ -326,6 +387,7 @@ async def generate_insights(
                 course_id=course_title,
                 prompt_used=prompt,
                 llm_response=llm_response,
+                prompt_version=PROMPT_VERSION,
             )
         )
     db.commit()
