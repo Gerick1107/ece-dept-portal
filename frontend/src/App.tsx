@@ -13,6 +13,7 @@ import PublicationsAdminPage from "./modules/publications/pages/PublicationsAdmi
 import ProjectsPage from "./modules/projects/pages/ProjectsPage";
 import AwardsPage from "./modules/awards/pages/AwardsPage";
 import AnalyticsPage from "./modules/analytics/pages/AnalyticsPage";
+import LlmInsightsPage from "./modules/llm/pages/LlmInsightsPage";
 import NotificationsPage from "./modules/notifications/pages/NotificationsPage";
 import AdminNotificationsPage from "./modules/notifications/pages/AdminNotificationsPage";
 import AdminDataPage from "./pages/AdminDataPage";
@@ -56,6 +57,7 @@ export default function App() {
         <Route path="/projects" element={<ProjectsPage />} />
         <Route path="/awards" element={<AwardsPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
+        <Route path="/llm-insights" element={<LlmInsightsPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/admin/notifications" element={<AdminNotificationsPage />} />
         <Route path="/admin/users" element={<AdminUsersPage />} />

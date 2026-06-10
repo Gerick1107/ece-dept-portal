@@ -3,7 +3,7 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import quote_plus
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -119,6 +119,8 @@ class Settings(BaseSettings):
     sdg_embedding_model: str = "BAAI/bge-large-en-v1.5"
     sdg_top_k: int = 5
     sdg_request_delay_seconds: float = 0.5
+
+    groq_api_key: str = Field(default="", validation_alias="GROQ_API_KEY")
 
     @model_validator(mode="after")
     def _assemble_database_url(self) -> "Settings":

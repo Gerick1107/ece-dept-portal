@@ -1,3 +1,4 @@
+import logging
 import threading
 import time
 from contextlib import asynccontextmanager
@@ -19,10 +20,12 @@ from app.database.base import Base
 from app.database.session import SessionLocal, engine
 from app.publications.routes.router import router as publications_router
 from app.projects.routes.router import router as projects_router
+from app.llm.routes.router import router as llm_insights_router
 from app.projects.services.file_manager import ensure_projects_upload_dir
 from app.publications.scheduler import ensure_scheduler_started
 
 settings = get_settings()
+logger = logging.getLogger("uvicorn.error")
 
 
 def _periodic_cleanup_loop():
@@ -47,6 +50,8 @@ async def lifespan(_app: FastAPI):
         db.close()
     if settings.enable_scheduler:
         ensure_scheduler_started()
+    if not settings.groq_api_key:
+        logger.warning("GROQ_API_KEY is not set — LLM insights generation will be unavailable.")
     thread = threading.Thread(target=_periodic_cleanup_loop, daemon=True)
     thread.start()
     yield
@@ -77,6 +82,7 @@ api.include_router(analytics_router)
 api.include_router(notifications_router)
 api.include_router(publications_router)
 api.include_router(projects_router)
+api.include_router(llm_insights_router)
 
 app.mount(settings.api_v1_prefix, api)
 

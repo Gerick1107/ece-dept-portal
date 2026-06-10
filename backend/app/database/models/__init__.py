@@ -13,6 +13,7 @@ from app.publications.models.entities import (
     ScrapeLog,
 )
 from app.projects.models.entities import Project, ProjectSdg, ProjectStudent, ProjectUpload, Sdg
+from app.llm.models.entities import LlmInsightsCache
 
 __all__ = [
     "User",
@@ -36,4 +37,5 @@ __all__ = [
     "ProjectSdg",
     "ProjectUpload",
     "Sdg",
+    "LlmInsightsCache",
 ]

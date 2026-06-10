@@ -12,6 +12,7 @@ const nav = [
   { to: "/projects", label: "BTP / IP Projects", exact: true },
   { to: "/awards", label: "Faculty Awards", exact: true },
   { to: "/analytics", label: "Analytics", exact: true },
+  { to: "/llm-insights", label: "LLM Insights", exact: true },
   { to: "/notifications", label: "Notifications", exact: true },
 ];
 

@@ -1,1 +1,1 @@
-"""LLM-assisted workflows (SDG tagging, etc.) — future module."""
+"""LLM-assisted workflows (Groq insights, SDG tagging)."""

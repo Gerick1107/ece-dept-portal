@@ -9,7 +9,7 @@ const modules = [
   { name: "BTP / IP", status: "Active", path: "/projects", link: true },
   { name: "Analytics", status: "Active", path: "/analytics", link: true },
   { name: "Notifications", status: "Active", path: "/notifications", link: true },
-  { name: "LLM Workflows", status: "Planned", path: "#", link: false },
+  { name: "LLM Insights", status: "Active", path: "/llm-insights", link: true },
 ];
 
 export default function DashboardPage() {

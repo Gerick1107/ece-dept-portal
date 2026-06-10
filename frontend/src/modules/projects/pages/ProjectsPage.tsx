@@ -20,23 +20,65 @@ import {
 import type { ImportSummary, Project, ProjectFilterOptions, SdgCatalogItem } from "../types/projects";
 
 const SDG_THRESHOLD = 0.5;
+const SDG_TABLE_MAX = 3;
 
-function sdgLabel(s: { sdg_number: number; sdg_name?: string; confidence_score?: number | null }) {
-  const pct = s.confidence_score != null ? ` (${Math.round(s.confidence_score * 100)}%)` : "";
-  const name = s.sdg_name ? `: ${s.sdg_name}` : "";
-  return `SDG ${s.sdg_number}${name}${pct}`;
+function effectiveSdgStatus(project: Project): string {
+  if (project.sdg_review_status === "none" && project.suggested_sdgs.length > 0) {
+    return "pending_review";
+  }
+  return project.sdg_review_status;
 }
 
-function formatSdgs(project: Project) {
-  if (project.confirmed_sdgs.length) {
-    return project.confirmed_sdgs.map(sdgLabel).join(", ");
+function showRegenerateButton(project: Project, llmEnabled: boolean): boolean {
+  if (!llmEnabled) return false;
+  const status = effectiveSdgStatus(project);
+  return status === "none" || status === "rejected";
+}
+
+function sdgTableLine(s: { sdg_number: number; confidence_score?: number | null }) {
+  const pct = s.confidence_score != null ? ` (${Math.round(s.confidence_score * 100)}%)` : "";
+  return `SDG ${s.sdg_number}${pct}`;
+}
+
+function SdgTableCell({ project, onReview }: { project: Project; onReview: () => void }) {
+  const status = effectiveSdgStatus(project);
+
+  const renderLines = (lines: string[]) => {
+    const visible = lines.slice(0, SDG_TABLE_MAX);
+    const more = lines.length - SDG_TABLE_MAX;
+    return (
+      <div className="flex flex-col gap-0.5 text-xs leading-snug">
+        {visible.map((line) => (
+          <span key={line}>{line}</span>
+        ))}
+        {more > 0 && (
+          <button type="button" className="text-teal-700 text-left hover:underline" onClick={onReview}>
+            +{more} more
+          </button>
+        )}
+      </div>
+    );
+  };
+
+  if (status === "rejected") {
+    return <span className="text-xs italic text-slate-400">No SDGs assigned</span>;
   }
-  if (project.suggested_sdgs.length) {
-    return project.suggested_sdgs
-      .map((s) => sdgLabel(s))
-      .join(", ");
+
+  if (status === "confirmed") {
+    if (!project.confirmed_sdgs.length) {
+      return <span className="text-xs italic text-slate-400">No SDGs assigned</span>;
+    }
+    return renderLines(project.confirmed_sdgs.map(sdgTableLine));
   }
-  return "—";
+
+  const filtered = project.suggested_sdgs.filter(
+    (s) => s.confidence_score != null && s.confidence_score >= SDG_THRESHOLD
+  );
+  if (!filtered.length) {
+    return <span className="text-xs italic text-slate-400">No SDGs assigned</span>;
+  }
+
+  return renderLines(filtered.map(sdgTableLine));
 }
 
 function CommaCell({ value }: { value: string | null | undefined }) {
@@ -497,9 +539,7 @@ export default function ProjectsPage() {
                     <CommaCell value={p.student_names} />
                   </td>
                   <td className="px-3 py-2 align-top min-w-[14rem] max-w-[18rem]">
-                    <span className="block text-xs leading-snug whitespace-normal break-words" title={p.sdg_review_status}>
-                      {formatSdgs(p)}
-                    </span>
+                    <SdgTableCell project={p} onReview={() => openSdgReview(p)} />
                   </td>
                   <td className="px-3 py-2">{p.credit ?? "—"}</td>
                   {canReviewSdgs && (
@@ -513,7 +553,7 @@ export default function ProjectsPage() {
                         <button type="button" className="text-xs px-2 py-1 rounded bg-teal-50 text-teal-800" onClick={() => openSdgReview(p)}>
                           {llmEnabled ? "Review SDGs" : "Edit SDGs"}
                         </button>
-                        {llmEnabled && (
+                        {showRegenerateButton(p, llmEnabled) && (
                           <button
                             type="button"
                             className="text-xs px-2 py-1 rounded bg-amber-50 text-amber-800"
@@ -760,7 +800,7 @@ export default function ProjectsPage() {
               })}
             </div>
             <div className="flex flex-wrap gap-2">
-              {llmEnabled && reviewProject.suggested_sdgs.length > 0 && (
+              {llmEnabled ? (
                 <>
                   <button
                     type="button"
@@ -769,6 +809,7 @@ export default function ProjectsPage() {
                       try {
                         await acceptSdgs(reviewProject.id, editSdgsSelection);
                         setReviewProject(null);
+                        setMessage("SDGs saved successfully.");
                         await load();
                       } catch (e) {
                         setError(e instanceof Error ? e.message : "Could not accept SDGs");
@@ -777,26 +818,48 @@ export default function ProjectsPage() {
                   >
                     Accept
                   </button>
-                  <button type="button" className="text-sm border px-3 py-1.5 rounded-lg" onClick={async () => { await rejectSdgs(reviewProject.id); setReviewProject(null); await load(); }}>
+                  <button
+                    type="button"
+                    className="text-sm border px-3 py-1.5 rounded-lg"
+                    onClick={async () => {
+                      if (
+                        !window.confirm(
+                          "Are you sure you want to reject all SDGs for this project? This will clear all assigned SDGs."
+                        )
+                      ) {
+                        return;
+                      }
+                      try {
+                        await rejectSdgs(reviewProject.id);
+                        setReviewProject(null);
+                        setMessage("SDGs rejected. You can regenerate them if needed.");
+                        await load();
+                      } catch (e) {
+                        setError(e instanceof Error ? e.message : "Could not reject SDGs");
+                      }
+                    }}
+                  >
                     Reject
                   </button>
                 </>
+              ) : (
+                <button
+                  type="button"
+                  className="text-sm bg-teal-700 text-white px-3 py-1.5 rounded-lg"
+                  onClick={async () => {
+                    try {
+                      await editSdgs(reviewProject.id, editSdgsSelection);
+                      setReviewProject(null);
+                      setMessage("SDGs saved successfully.");
+                      await load();
+                    } catch (e) {
+                      setError(e instanceof Error ? e.message : "Could not save SDGs");
+                    }
+                  }}
+                >
+                  Save SDGs
+                </button>
               )}
-              <button
-                type="button"
-                className="text-sm bg-teal-700 text-white px-3 py-1.5 rounded-lg"
-                onClick={async () => {
-                  try {
-                    await editSdgs(reviewProject.id, editSdgsSelection);
-                    setReviewProject(null);
-                    await load();
-                  } catch (e) {
-                    setError(e instanceof Error ? e.message : "Could not save SDGs");
-                  }
-                }}
-              >
-                Save SDGs
-              </button>
               <button type="button" className="text-sm ml-auto" onClick={() => setReviewProject(null)}>
                 Close
               </button>
