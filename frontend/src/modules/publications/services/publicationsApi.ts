@@ -70,6 +70,14 @@ export async function listAllPublications(params?: {
   return all;
 }
 
+export async function fetchFacultyAffiliations(facultyId: number) {
+  return apiGet<{
+    faculty_id: number;
+    faculty_name: string;
+    items: Array<{ id: number; name: string; url: string; category: string }>;
+  }>(`/publications/faculty/${facultyId}/affiliations`);
+}
+
 export async function deletePublication(publicationId: number): Promise<void> {
   await apiDelete(`/publications/publications/${publicationId}`);
 }

@@ -7,6 +7,10 @@ class GenerateInsightsRequest(BaseModel):
     course_title: str = Field(min_length=1)
     run_id: str | None = None
     regenerate: bool = False
+    current_semester: str | None = None
+    current_section: str | None = None
+    previous_semester: str | None = None
+    previous_section: str | None = None
 
 
 class AssessmentSummaryItem(BaseModel):
@@ -25,20 +29,30 @@ class ComparisonRow(BaseModel):
 
 class CourseComparison(BaseModel):
     course_title: str
+    course_key: str | None = None
+    section_label: str | None = None
     has_previous: bool
     current_semester: str
     previous_semester: str | None = None
+    current_section: str | None = None
+    previous_section: str | None = None
     current_run_id: str
+    previous_run_id: str | None = None
     co_comparison: list[ComparisonRow]
     po_comparison: list[ComparisonRow]
     insufficient_history: bool
     co_descriptions_available: bool = False
     assessment_summary: list[AssessmentSummaryItem] = Field(default_factory=list)
+    available_semesters: list[str] = Field(default_factory=list)
+    available_sections: list[str] = Field(default_factory=list)
 
 
 class InsightCourseOption(BaseModel):
     course_title: str
+    course_key: str
+    section_label: str | None = None
     semester_count: int
+    semesters: list[str] = Field(default_factory=list)
     latest_semester: str
     latest_run_id: str
 

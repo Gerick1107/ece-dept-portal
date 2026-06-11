@@ -38,9 +38,21 @@ def course_comparison(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(get_current_user)],
     course_title: str = Query(..., min_length=1),
+    current_semester: str | None = Query(None),
+    current_section: str | None = Query(None),
+    previous_semester: str | None = Query(None),
+    previous_section: str | None = Query(None),
 ):
     try:
-        data = insights_service.get_course_comparison(db, user, course_title)
+        data = insights_service.get_course_comparison(
+            db,
+            user,
+            course_title,
+            current_semester=current_semester,
+            current_section=current_section or None,
+            previous_semester=previous_semester,
+            previous_section=previous_section,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return _envelope(CourseComparison.model_validate(data).model_dump())
@@ -51,9 +63,21 @@ def cached_insights(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(get_current_user)],
     course_title: str = Query(..., min_length=1),
+    current_semester: str | None = Query(None),
+    current_section: str | None = Query(None),
+    previous_semester: str | None = Query(None),
+    previous_section: str | None = Query(None),
 ):
     try:
-        data = insights_service.get_cached_insights(db, user, course_title.strip())
+        data = insights_service.get_cached_insights(
+            db,
+            user,
+            course_title.strip(),
+            current_semester=current_semester,
+            current_section=current_section or None,
+            previous_semester=previous_semester,
+            previous_section=previous_section,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return _envelope(GenerateInsightsResponse.model_validate(data).model_dump())
@@ -72,6 +96,10 @@ async def generate_insights(
             course_title=body.course_title.strip(),
             run_id=body.run_id.strip() if body.run_id else None,
             regenerate=body.regenerate,
+            current_semester=body.current_semester,
+            current_section=body.current_section,
+            previous_semester=body.previous_semester,
+            previous_section=body.previous_section,
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

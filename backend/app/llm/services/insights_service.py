@@ -7,11 +7,12 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.analytics.services.copo_service import _resolve_semester_label
+from app.analytics.services.copo_service import _resolve_row_section, _resolve_semester_label
 from app.analytics.utils.copo_parser import parse_copo_result_summary
+from app.analytics.utils.course_key import course_display_key, normalize_section
 from app.analytics.utils.semester import semester_sort_key
 from app.database.models.copo_analytics import CopoRunAnalyticsSnapshot
-from app.database.models.user import User, UserRole
+from app.database.models.user import User
 from app.llm.models.entities import LlmInsightsCache
 from app.llm.services.assessment_summary import format_assessment_summary_block, summarize_assessment_ids
 from app.llm.services.groq_service import LlmError, generate_llm_text
@@ -20,8 +21,7 @@ from app.llm.services.mapping_descriptions import extract_co_descriptions_for_co
 logger = logging.getLogger(__name__)
 
 _PO_PSO_ORDER = [f"PO{i}" for i in range(1, 13)] + ["PSO1", "PSO2", "PSO3"]
-_ATTAINMENT_TARGET = 60.0
-PROMPT_VERSION = 2
+PROMPT_VERSION = 3
 
 
 def _parse_run(row: CopoRunAnalyticsSnapshot) -> dict | None:
@@ -30,10 +30,13 @@ def _parse_run(row: CopoRunAnalyticsSnapshot) -> dict | None:
         return None
     intermediate = (row.result_summary or {}).get("intermediate") or {}
     assessment_ids = intermediate.get("assessment_ids") or []
+    section = _resolve_row_section(row)
     run_at = row.run_created_at
     return {
         "public_id": row.public_id,
         "course_title": row.course_title,
+        "course_key": course_display_key(row.course_title, section),
+        "section_label": section,
         "semester_label": _resolve_semester_label(row),
         "run_created_at": run_at.isoformat() if run_at else None,
         "user_id": row.user_id,
@@ -42,20 +45,41 @@ def _parse_run(row: CopoRunAnalyticsSnapshot) -> dict | None:
     }
 
 
-def _snapshot_query(db: Session, user: User):
-    stmt = select(CopoRunAnalyticsSnapshot).order_by(CopoRunAnalyticsSnapshot.run_created_at.asc())
-    if user.role not in (UserRole.admin, UserRole.hod):
-        stmt = stmt.where(CopoRunAnalyticsSnapshot.user_id == user.id)
-    return list(db.scalars(stmt).all())
+def _snapshot_query(db: Session, _user: User):
+    return list(
+        db.scalars(
+            select(CopoRunAnalyticsSnapshot).order_by(CopoRunAnalyticsSnapshot.run_created_at.asc())
+        ).all()
+    )
 
 
-def _latest_per_semester(runs: list[dict]) -> dict[str, dict]:
-    grouped: dict[str, list[dict]] = defaultdict(list)
+def _section_matches(run_section: str | None, requested: str | None) -> bool:
+    return normalize_section(run_section) == normalize_section(requested)
+
+
+def _find_run(
+    runs: list[dict],
+    *,
+    semester_label: str,
+    section_label: str | None = None,
+) -> dict | None:
+    matches = [
+        r
+        for r in runs
+        if r["semester_label"] == semester_label and _section_matches(r.get("section_label"), section_label)
+    ]
+    if not matches:
+        return None
+    return max(matches, key=lambda r: r.get("run_created_at") or "")
+
+
+def _latest_per_semester_section(runs: list[dict]) -> dict[tuple[str, str | None], dict]:
+    grouped: dict[tuple[str, str | None], list[dict]] = defaultdict(list)
     for run in runs:
-        grouped[run["semester_label"]].append(run)
-    latest: dict[str, dict] = {}
-    for semester, sem_runs in grouped.items():
-        latest[semester] = max(sem_runs, key=lambda r: r.get("run_created_at") or "")
+        grouped[(run["semester_label"], normalize_section(run.get("section_label")))].append(run)
+    latest: dict[tuple[str, str | None], dict] = {}
+    for key, sem_runs in grouped.items():
+        latest[key] = max(sem_runs, key=lambda r: r.get("run_created_at") or "")
     return latest
 
 
@@ -105,56 +129,143 @@ def _comparison_rows(
     return rows
 
 
+def _filter_runs_for_course(
+    all_runs: list[dict],
+    *,
+    course_title: str,
+    section_label: str | None = None,
+) -> list[dict]:
+    return [
+        r
+        for r in all_runs
+        if r["course_title"] == course_title and _section_matches(r.get("section_label"), section_label)
+    ]
+
+
 def list_insight_courses(db: Session, user: User) -> list[dict]:
-    by_course: dict[str, list[dict]] = defaultdict(list)
-    for row in _snapshot_query(db, user):
-        parsed = _parse_run(row)
-        if parsed:
-            by_course[parsed["course_title"]].append(parsed)
+    all_parsed = [parsed for row in _snapshot_query(db, user) if (parsed := _parse_run(row))]
+    by_course: dict[tuple[str, str | None], list[dict]] = defaultdict(list)
+    for run in all_parsed:
+        by_course[(run["course_title"], normalize_section(run.get("section_label")))].append(run)
 
     courses: list[dict] = []
-    for title, runs in by_course.items():
-        per_sem = _latest_per_semester(runs)
-        sems = sorted(per_sem.keys(), key=semester_sort_key)
+    for (title, section), runs in by_course.items():
+        per_key = _latest_per_semester_section(runs)
+        sems = sorted({k[0] for k in per_key}, key=semester_sort_key)
         if not sems:
             continue
-        latest = per_sem[sems[-1]]
+        latest_sem = sems[-1]
+        latest = per_key[(latest_sem, section)]
         courses.append(
             {
                 "course_title": title,
+                "course_key": course_display_key(title, section),
+                "section_label": section,
                 "semester_count": len(sems),
+                "semesters": sems,
                 "latest_semester": latest["semester_label"],
                 "latest_run_id": latest["public_id"],
             }
         )
-    return sorted(courses, key=lambda c: c["course_title"])
+    return sorted(courses, key=lambda c: c["course_key"])
 
 
-def get_course_comparison(db: Session, user: User, course_title: str) -> dict:
-    rows = [r for r in _snapshot_query(db, user) if r.course_title == course_title]
-    runs = [parsed for r in rows if (parsed := _parse_run(r))]
+def get_course_options(db: Session, user: User, course_title: str, section_label: str | None = None) -> dict:
+    all_parsed = [parsed for row in _snapshot_query(db, user) if (parsed := _parse_run(row))]
+    runs = _filter_runs_for_course(
+        all_parsed,
+        course_title=course_title,
+        section_label=section_label,
+    )
+    if not runs:
+        raise ValueError("No attainment snapshots found for this course")
+    per_key = _latest_per_semester_section(runs)
+    semesters = sorted({k[0] for k in per_key}, key=semester_sort_key)
+    return {
+        "course_title": course_title,
+        "section_label": normalize_section(section_label),
+        "semesters": semesters,
+        "sections": sorted(
+            {
+                normalize_section(r.get("section_label"))
+                for r in all_parsed
+                if r["course_title"] == course_title and normalize_section(r.get("section_label"))
+            }
+        ),
+    }
+
+
+def get_course_comparison(
+    db: Session,
+    user: User,
+    course_title: str,
+    *,
+    current_semester: str | None = None,
+    current_section: str | None = None,
+    previous_semester: str | None = None,
+    previous_section: str | None = None,
+) -> dict:
+    all_parsed = [parsed for row in _snapshot_query(db, user) if (parsed := _parse_run(row))]
+    section = normalize_section(current_section)
+    runs = _filter_runs_for_course(all_parsed, course_title=course_title, section_label=section)
     if not runs:
         raise ValueError("No attainment snapshots found for this course")
 
-    per_sem = _latest_per_semester(runs)
-    semesters = sorted(per_sem.keys(), key=semester_sort_key)
-    current = per_sem[semesters[-1]]
-    previous = per_sem[semesters[-2]] if len(semesters) >= 2 else None
+    per_key = _latest_per_semester_section(runs)
+    semesters = sorted({k[0] for k in per_key}, key=semester_sort_key)
+
+    if current_semester:
+        current = _find_run(runs, semester_label=current_semester, section_label=section)
+        if not current:
+            raise ValueError("No run found for the selected current semester and section")
+    else:
+        latest_sem = semesters[-1]
+        current = per_key[(latest_sem, section)]
+
+    previous = None
+    if previous_semester:
+        if previous_section is None:
+            prev_section = section
+        elif not str(previous_section).strip():
+            prev_section = None
+        else:
+            prev_section = normalize_section(previous_section)
+        previous = _find_run(
+            _filter_runs_for_course(all_parsed, course_title=course_title, section_label=prev_section),
+            semester_label=previous_semester,
+            section_label=prev_section,
+        )
+    elif len(semesters) >= 2:
+        prev_sem = semesters[semesters.index(current["semester_label"]) - 1]
+        previous = per_key.get((prev_sem, section))
 
     co_descriptions, co_desc_available, _co_src = extract_co_descriptions_for_course(course_title)
     assessment_summary = summarize_assessment_ids(current.get("assessment_ids") or [])
 
     return {
         "course_title": course_title,
+        "course_key": course_display_key(course_title, section),
+        "section_label": section,
         "has_previous": previous is not None,
         "current_semester": current["semester_label"],
         "previous_semester": previous["semester_label"] if previous else None,
+        "current_section": section,
+        "previous_section": normalize_section(previous.get("section_label")) if previous else None,
         "current_run_id": current["public_id"],
+        "previous_run_id": previous["public_id"] if previous else None,
         "co_comparison": _comparison_rows(previous, current, "co_attainment"),
         "po_comparison": _comparison_rows(previous, current, "po_attainment", sort_po=True),
-        "insufficient_history": len(semesters) < 2,
+        "insufficient_history": previous is None,
         "co_descriptions_available": co_desc_available and bool(co_descriptions),
         "assessment_summary": assessment_summary,
+        "available_semesters": semesters,
+        "available_sections": sorted(
+            {
+                normalize_section(r.get("section_label"))
+                for r in all_parsed
+                if r["course_title"] == course_title and normalize_section(r.get("section_label"))
+            }
+        ),
     }
 
 
@@ -178,6 +289,10 @@ def _format_comparison_lines(rows: list[dict]) -> str:
             f"{row['metric']}: previous={prev_txt}, current={curr:.1f}%, delta={delta_txt} [{status}]"
         )
     return "\n".join(lines) or "No attainment data available."
+
+
+def _section_label_text(section: str | None) -> str:
+    return f"Section {section}" if section else "No section"
 
 
 def build_llm_prompt(
@@ -208,10 +323,13 @@ def build_llm_prompt(
     po_table = _format_comparison_lines(comparison["po_comparison"])
     assessment_block = format_assessment_summary_block(assessment_summary)
 
+    current_section_txt = _section_label_text(comparison.get("current_section"))
+    previous_section_txt = _section_label_text(comparison.get("previous_section"))
+
     if comparison["has_previous"]:
         comparison_intro = (
-            f"Current semester: {comparison['current_semester']}\n"
-            f"Previous semester: {comparison['previous_semester']}\n"
+            f"Current: {comparison['current_semester']} ({current_section_txt})\n"
+            f"Previous: {comparison['previous_semester']} ({previous_section_txt})\n"
         )
         task_block = """Based on the data above:
 1. For each CO that has DECLINED compared to the previous semester, identify likely academic/pedagogical reasons specific to that CO's topic, and suggest 3-4 concrete teaching or learning strategies the faculty can adopt next semester to improve attainment for that specific CO.
@@ -238,14 +356,16 @@ Based on the assessment structure above and the CO/PO attainment trends:
             for row in comparison["co_comparison"]
             if row.get("current") is not None
         ) or "No CO data."
-        comparison_intro = f"Current semester: {comparison['current_semester']}\n"
+        comparison_intro = (
+            f"Current: {comparison['current_semester']} ({current_section_txt})\n"
+        )
         co_table = co_table_single
         po_table = _format_comparison_lines(comparison["po_comparison"])
         return f"""You are an academic course improvement advisor for an engineering college (Electronics & Communication Engineering department).
 
 Course: {course_title}
 {comparison_intro}
-Only one semester of data is available for this course. Current CO attainments:
+Only one semester of data is available for this course/section. Current CO attainments:
 {co_table_single}
 
 Course Outcome (CO) descriptions for this course:
@@ -292,24 +412,54 @@ PO/PSO Attainment Comparison:
 {task_block}"""
 
 
-def _run_identifier(course_title: str, semester: str) -> str:
-    return f"{course_title}_{semester}".replace(" ", "_")
+def _run_identifier(
+    course_title: str,
+    semester: str,
+    section_label: str | None = None,
+    *,
+    previous_semester: str | None = None,
+    previous_section: str | None = None,
+) -> str:
+    section = normalize_section(section_label) or "none"
+    if previous_semester:
+        prev_section = normalize_section(previous_section) or "none"
+        return (
+            f"{course_title}_{semester}_{section}_vs_{previous_semester}_{prev_section}"
+        ).replace(" ", "_")
+    return f"{course_title}_{semester}_{section}".replace(" ", "_")
 
 
-def _get_cache(db: Session, course_title: str, run_identifier: str) -> LlmInsightsCache | None:
-    return db.scalar(
-        select(LlmInsightsCache).where(
-            LlmInsightsCache.course_id == course_title,
-            LlmInsightsCache.run_id == run_identifier,
-        )
+def _get_cache(db: Session, run_identifier: str) -> LlmInsightsCache | None:
+    return db.scalar(select(LlmInsightsCache).where(LlmInsightsCache.run_id == run_identifier))
+
+
+def get_cached_insights(
+    db: Session,
+    user: User,
+    course_title: str,
+    *,
+    current_semester: str | None = None,
+    current_section: str | None = None,
+    previous_semester: str | None = None,
+    previous_section: str | None = None,
+) -> dict:
+    comparison = get_course_comparison(
+        db,
+        user,
+        course_title,
+        current_semester=current_semester,
+        current_section=current_section,
+        previous_semester=previous_semester,
+        previous_section=previous_section,
     )
-
-
-def get_cached_insights(db: Session, user: User, course_title: str) -> dict:
-    """Return cached LLM text only — never calls the LLM API."""
-    comparison = get_course_comparison(db, user, course_title)
-    run_identifier = _run_identifier(course_title, comparison["current_semester"])
-    cached = _get_cache(db, course_title, run_identifier)
+    run_identifier = _run_identifier(
+        course_title,
+        comparison["current_semester"],
+        comparison.get("current_section"),
+        previous_semester=comparison.get("previous_semester"),
+        previous_section=comparison.get("previous_section"),
+    )
+    cached = _get_cache(db, run_identifier)
     valid_cache = cached if cached and cached.prompt_version == PROMPT_VERSION else None
     return {
         "course_title": course_title,
@@ -328,16 +478,34 @@ async def generate_insights(
     course_title: str,
     run_id: str | None = None,
     regenerate: bool = False,
+    current_semester: str | None = None,
+    current_section: str | None = None,
+    previous_semester: str | None = None,
+    previous_section: str | None = None,
 ) -> dict:
-    comparison = get_course_comparison(db, user, course_title)
+    comparison = get_course_comparison(
+        db,
+        user,
+        course_title,
+        current_semester=current_semester,
+        current_section=current_section,
+        previous_semester=previous_semester,
+        previous_section=previous_section,
+    )
     if run_id and comparison["current_run_id"] != run_id:
-        raise ValueError("run_id does not match the latest semester run for this course")
+        raise ValueError("run_id does not match the selected semester/section run for this course")
 
-    run_identifier = _run_identifier(course_title, comparison["current_semester"])
+    run_identifier = _run_identifier(
+        course_title,
+        comparison["current_semester"],
+        comparison.get("current_section"),
+        previous_semester=comparison.get("previous_semester"),
+        previous_section=comparison.get("previous_section"),
+    )
     snapshot_run_id = comparison["current_run_id"]
 
     if not regenerate:
-        cached = _get_cache(db, course_title, run_identifier)
+        cached = _get_cache(db, run_identifier)
         if cached and cached.prompt_version == PROMPT_VERSION:
             return {
                 "course_title": course_title,
@@ -372,7 +540,7 @@ async def generate_insights(
     except LlmError:
         raise
 
-    existing = _get_cache(db, course_title, run_identifier)
+    existing = _get_cache(db, run_identifier)
     if existing:
         existing.prompt_used = prompt
         existing.llm_response = llm_response
@@ -391,7 +559,7 @@ async def generate_insights(
             )
         )
     db.commit()
-    cached = _get_cache(db, course_title, run_identifier)
+    cached = _get_cache(db, run_identifier)
     return {
         "course_title": course_title,
         "run_id": snapshot_run_id,

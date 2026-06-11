@@ -60,6 +60,8 @@ export function fetchPublicationsAnalytics(params: Record<string, string | undef
 export type CopoRun = {
   public_id: string;
   course_title: string;
+  course_key?: string;
+  section_label?: string | null;
   semester_label: string;
   run_key?: string;
   run_created_at: string | null;
@@ -77,7 +79,13 @@ export type CopoAnalyticsData = {
     avg_po_attainment: number | null;
   };
   course_titles: string[];
-  courses: Array<{ course_title: string; runs: CopoRun[]; latest_run: CopoRun | null }>;
+  courses: Array<{
+    course_title: string;
+    course_key: string;
+    section_label?: string | null;
+    runs: CopoRun[];
+    latest_run: CopoRun | null;
+  }>;
 };
 
 export type ProjectsAnalyticsData = {

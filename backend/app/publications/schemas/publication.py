@@ -55,6 +55,19 @@ class FacultyListResponse(BaseModel):
     pagination: PaginationMeta
 
 
+class FacultyAffiliationResponse(BaseModel):
+    id: int
+    name: str
+    url: str
+    category: str
+
+
+class FacultyAffiliationsResponse(BaseModel):
+    faculty_id: int
+    faculty_name: str
+    items: list[FacultyAffiliationResponse] = Field(default_factory=list)
+
+
 class PublicationBase(BaseModel):
     title: str = Field(min_length=1, max_length=1024)
     authors: str | None = None

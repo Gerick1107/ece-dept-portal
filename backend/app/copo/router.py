@@ -92,6 +92,7 @@ async def final_submit(
     preview_upload_id: int = Form(0),
     semester_term: str = Form(...),
     semester_year: str = Form(...),
+    section_label: str = Form(""),
 ):
     """
     Faculty: one end-of-semester consolidated Excel → parse → CO/PO → report.
@@ -119,6 +120,9 @@ async def final_submit(
     if not year.isdigit() or len(year) != 4:
         raise HTTPException(status_code=400, detail="semester_year must be a 4-digit year")
     semester_label = f"{term} {year}"
+    section = section_label.strip().upper() or None
+    if section and section.startswith("SECTION "):
+        section = section[8:].strip() or None
 
     try:
         result = await submit_final_consolidated(
@@ -133,6 +137,7 @@ async def final_submit(
             indirect_attainment,
             target_value=target_value,
             semester_label=semester_label,
+            section_label=section,
             remove_marks_after=remove_marks_after,
             skip_database_save=skip_database_save,
             preview_upload_id=preview_upload_id or None,

@@ -21,6 +21,7 @@ class CopoRunAnalyticsSnapshot(Base):
     evaluation_type: Mapped[str] = mapped_column(String(32), nullable=False, default="standard")
     scope_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     semester_label: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    section_label: Mapped[str | None] = mapped_column(String(32), nullable=True)
     result_summary: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     run_created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     preserved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

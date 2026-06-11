@@ -21,6 +21,7 @@ def upsert_run_analytics_snapshot(db: Session, run: CopoEvaluationRun) -> None:
         existing.evaluation_type = run.evaluation_type
         existing.scope_summary = run.scope_summary
         existing.semester_label = run.semester_label or (run.result_summary or {}).get("semester_label")
+        existing.section_label = run.section_label or (run.result_summary or {}).get("section_label")
         existing.result_summary = run.result_summary
         existing.run_created_at = run.created_at
     else:
@@ -32,6 +33,7 @@ def upsert_run_analytics_snapshot(db: Session, run: CopoEvaluationRun) -> None:
                 evaluation_type=run.evaluation_type,
                 scope_summary=run.scope_summary,
                 semester_label=run.semester_label or (run.result_summary or {}).get("semester_label"),
+                section_label=run.section_label or (run.result_summary or {}).get("section_label"),
                 result_summary=run.result_summary,
                 run_created_at=run.created_at,
             )

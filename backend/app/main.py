@@ -46,6 +46,12 @@ async def lifespan(_app: FastAPI):
     db = SessionLocal()
     try:
         bootstrap_admin_if_needed(db)
+        from app.publications.services.affiliations_import_service import import_faculty_affiliations
+
+        try:
+            import_faculty_affiliations(db)
+        except Exception as exc:
+            logger.warning("Faculty affiliations import skipped: %s", exc)
     finally:
         db.close()
     if settings.enable_scheduler:

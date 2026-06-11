@@ -1,22 +1,38 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../modules/auth/AuthContext";
 import { fetchUnreadCount } from "../modules/notifications/services/notificationsApi";
 
-const modules = [
-  { name: "CO-PO Attainment", status: "Active", path: "/copo", link: true },
-  { name: "Publications", status: "Active", path: "/publications/faculty", link: true },
-  { name: "BTP / IP", status: "Active", path: "/projects", link: true },
-  { name: "Analytics", status: "Active", path: "/analytics", link: true },
-  { name: "Notifications", status: "Active", path: "/notifications", link: true },
-  { name: "LLM Insights", status: "Active", path: "/llm-insights", link: true },
-];
+type ModuleCard = {
+  name: string;
+  path: string;
+  status: string;
+};
 
 export default function DashboardPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
   const notificationsPath = isAdmin ? "/admin/notifications" : "/notifications";
   const [unread, setUnread] = useState(0);
+
+  const modules = useMemo<ModuleCard[]>(() => {
+    const base: ModuleCard[] = [
+      { name: "CO-PO Attainment", path: "/modules/copo", status: "Active" },
+      { name: "Publications", path: "/modules/publications", status: "Active" },
+      { name: "BTP / IP", path: "/projects", status: "Active" },
+      { name: "Analytics", path: "/modules/analytics", status: "Active" },
+      { name: "LLM Insights", path: "/llm-insights", status: "Active" },
+      {
+        name: isAdmin ? "Send Notifications" : "Notifications",
+        path: notificationsPath,
+        status: "Active",
+      },
+    ];
+    if (isAdmin) {
+      base.push({ name: "Admin", path: "/modules/admin", status: "Active" });
+    }
+    return base;
+  }, [isAdmin, notificationsPath]);
 
   useEffect(() => {
     fetchUnreadCount()
@@ -51,32 +67,19 @@ export default function DashboardPage() {
       <section>
         <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">Modules</h3>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {modules.map((m) => {
-            const path = m.name === "Notifications" && isAdmin ? "/admin/notifications" : m.path;
-            const label = m.name === "Notifications" && isAdmin ? "Send Notifications" : m.name;
-            const inner = (
-              <>
-                <p className="font-medium">{label}</p>
-                <p className={`text-xs mt-1 ${m.status === "Active" ? "text-teal-700" : "text-amber-700"}`}>
-                  {m.status}
-                  {m.name === "Notifications" && !isAdmin && unread > 0 && ` · ${unread} unread`}
-                </p>
-              </>
-            );
-            return m.link ? (
-              <Link
-                key={m.name}
-                to={path}
-                className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm hover:border-teal-400 hover:shadow transition-colors block"
-              >
-                {inner}
-              </Link>
-            ) : (
-              <div key={m.name} className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm opacity-80">
-                {inner}
-              </div>
-            );
-          })}
+          {modules.map((m) => (
+            <Link
+              key={m.name}
+              to={m.path}
+              className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm hover:border-teal-400 hover:shadow transition-colors block"
+            >
+              <p className="font-medium">{m.name}</p>
+              <p className="text-xs mt-1 text-teal-700">
+                {m.status}
+                {m.name === "Notifications" && !isAdmin && unread > 0 && ` · ${unread} unread`}
+              </p>
+            </Link>
+          ))}
         </div>
       </section>
     </div>

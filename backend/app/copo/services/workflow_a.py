@@ -30,6 +30,7 @@ async def submit_final_consolidated(
     indirect_attainment: dict[str, float],
     target_value: int = 50,
     semester_label: str | None = None,
+    section_label: str | None = None,
     remove_marks_after: bool = False,
     skip_database_save: bool = False,
     preview_upload_id: int | None = None,
@@ -66,6 +67,7 @@ async def submit_final_consolidated(
             mapping_filename=mapping_filename,
             scope_summary=scope,
             semester_label=semester_label,
+            section_label=section_label,
             target_value=target_value,
         )
 
@@ -95,6 +97,7 @@ async def submit_final_consolidated(
                     "mapping_filename": mapping_filename,
                     "scope_summary": scope,
                     "semester_label": semester_label,
+                    "section_label": section_label,
                     "target_value": target_value,
                     "unique_COs": payload["unique_COs"],
                     "intermediate": payload["intermediate"],

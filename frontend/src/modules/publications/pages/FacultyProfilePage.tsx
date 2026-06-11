@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
 import PublicationsTable from "../components/PublicationsTable";
 import { deletePublication, listAllPublications, listFaculty } from "../services/publicationsApi";
@@ -82,7 +82,7 @@ export default function FacultyProfilePage() {
             <div className="mt-2 text-sm text-slate-700">
               Citations: {faculty.total_citations} · h-index: {faculty.h_index} · i10-index: {faculty.i10_index}
             </div>
-            <div className="mt-3 flex gap-2">
+            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
               {faculty.profile_link && (
                 <a
                   href={faculty.profile_link}
@@ -101,6 +101,9 @@ export default function FacultyProfilePage() {
               >
                 View Google Scholar Profile
               </a>
+              <Link to={`/publications/faculty/${id}/affiliations`} className="text-sm text-teal-700 hover:underline">
+                Affiliations
+              </Link>
             </div>
           </div>
         </div>

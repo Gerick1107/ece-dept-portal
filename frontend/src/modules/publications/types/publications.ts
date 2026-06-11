@@ -4,6 +4,13 @@ export type PaginationMeta = {
   total: number;
 };
 
+export type FacultyAffiliation = {
+  id: number;
+  name: string;
+  url: string;
+  category: string;
+};
+
 export type Faculty = {
   id: number;
   name: string;

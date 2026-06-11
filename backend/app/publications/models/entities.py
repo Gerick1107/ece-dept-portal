@@ -17,6 +17,38 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database.base import Base
 
 
+class Affiliation(Base):
+    __tablename__ = "affiliations"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(512), nullable=False)
+    url: Mapped[str] = mapped_column(String(1024), nullable=False)
+    category: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    faculty_links: Mapped[list[FacultyAffiliation]] = relationship(
+        "FacultyAffiliation",
+        back_populates="affiliation",
+        cascade="all, delete-orphan",
+    )
+
+
+class FacultyAffiliation(Base):
+    __tablename__ = "faculty_affiliations"
+    __table_args__ = (UniqueConstraint("faculty_id", "affiliation_id", name="uq_faculty_affiliation"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    faculty_id: Mapped[int] = mapped_column(ForeignKey("faculty.id", ondelete="CASCADE"), index=True)
+    affiliation_id: Mapped[int] = mapped_column(ForeignKey("affiliations.id", ondelete="CASCADE"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    faculty: Mapped[Faculty] = relationship("Faculty", back_populates="affiliation_links")
+    affiliation: Mapped[Affiliation] = relationship("Affiliation", back_populates="faculty_links")
+
+
 class Faculty(Base):
     __tablename__ = "faculty"
 
@@ -45,6 +77,11 @@ class Faculty(Base):
     )
     scrape_logs: Mapped[list[ScrapeLog]] = relationship(
         "ScrapeLog",
+        back_populates="faculty",
+        cascade="all, delete-orphan",
+    )
+    affiliation_links: Mapped[list[FacultyAffiliation]] = relationship(
+        "FacultyAffiliation",
         back_populates="faculty",
         cascade="all, delete-orphan",
     )

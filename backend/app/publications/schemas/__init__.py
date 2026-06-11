@@ -2,6 +2,8 @@ from app.publications.schemas.publication import (
     BulkDeleteRequest,
     CsvImportSummary,
     DeletionResponse,
+    FacultyAffiliationResponse,
+    FacultyAffiliationsResponse,
     FacultyCreate,
     FacultyListResponse,
     FacultyResponse,
@@ -16,6 +18,8 @@ from app.publications.schemas.publication import (
 )
 
 __all__ = [
+    "FacultyAffiliationResponse",
+    "FacultyAffiliationsResponse",
     "FacultyCreate",
     "FacultyUpdate",
     "FacultyResponse",

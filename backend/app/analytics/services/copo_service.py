@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.analytics.utils.copo_parser import parse_copo_result_summary
+from app.analytics.utils.course_key import course_display_key, normalize_section, resolve_section_label
 from app.analytics.utils.semester import semester_label_from_date, semester_sort_key
 from app.database.models.copo_analytics import CopoRunAnalyticsSnapshot
 
@@ -28,6 +29,13 @@ def _resolve_semester_label(row: CopoRunAnalyticsSnapshot) -> str:
     return semester_label_from_date(row.run_created_at)
 
 
+def _resolve_row_section(row: CopoRunAnalyticsSnapshot) -> str | None:
+    return resolve_section_label(
+        section_label=row.section_label,
+        result_summary=row.result_summary if isinstance(row.result_summary, dict) else None,
+    )
+
+
 def get_copo_analytics(
     db: Session,
     *,
@@ -43,7 +51,9 @@ def get_copo_analytics(
 
     runs: list[dict] = []
     for row in rows:
-        if course_title and course_title.lower() not in (row.course_title or "").lower():
+        section = _resolve_row_section(row)
+        display_key = course_display_key(row.course_title, section)
+        if course_title and course_title.lower() not in display_key.lower():
             continue
         run_at = row.run_created_at
         if from_dt and run_at and run_at < from_dt:
@@ -54,11 +64,14 @@ def get_copo_analytics(
         if not parsed:
             continue
         semester = _resolve_semester_label(row)
-        run_key = f"{semester} · {row.public_id[:8]}"
+        section_suffix = f" · Sec {section}" if section else ""
+        run_key = f"{semester}{section_suffix} · {row.public_id[:8]}"
         runs.append(
             {
                 "public_id": row.public_id,
                 "course_title": row.course_title,
+                "course_key": display_key,
+                "section_label": section,
                 "scope_summary": row.scope_summary,
                 "semester_label": semester,
                 "run_key": run_key,
@@ -69,7 +82,7 @@ def get_copo_analytics(
 
     by_course: dict[str, list[dict]] = {}
     for run in runs:
-        by_course.setdefault(run["course_title"], []).append(run)
+        by_course.setdefault(run["course_key"], []).append(run)
 
     for title in by_course:
         by_course[title].sort(
@@ -80,7 +93,9 @@ def get_copo_analytics(
     for title, course_runs in sorted(by_course.items()):
         courses.append(
             {
-                "course_title": title,
+                "course_title": course_runs[0]["course_title"],
+                "course_key": title,
+                "section_label": course_runs[0].get("section_label"),
                 "runs": course_runs,
                 "latest_run": course_runs[-1] if course_runs else None,
             }
@@ -120,9 +135,12 @@ def get_copo_run_analytics(db: Session, public_id: str) -> dict | None:
     parsed = parse_copo_result_summary(row.result_summary)
     if not parsed:
         return None
+    section = _resolve_row_section(row)
     return {
         "public_id": row.public_id,
         "course_title": row.course_title,
+        "course_key": course_display_key(row.course_title, section),
+        "section_label": section,
         "semester_label": _resolve_semester_label(row),
         **parsed,
     }

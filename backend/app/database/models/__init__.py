@@ -5,8 +5,10 @@ from app.database.models.user import User
 from app.awards.models.entities import FacultyAward
 from app.notifications.models.entities import Notification, NotificationAttachment, NotificationRecipient
 from app.publications.models.entities import (
+    Affiliation,
     BlockedPublication,
     Faculty,
+    FacultyAffiliation,
     Publication,
     PublicationAuditLog,
     PublicationFaculty,
@@ -26,7 +28,9 @@ __all__ = [
     "Notification",
     "NotificationAttachment",
     "NotificationRecipient",
+    "Affiliation",
     "Faculty",
+    "FacultyAffiliation",
     "Publication",
     "PublicationFaculty",
     "ScrapeLog",

@@ -63,6 +63,7 @@ export default function CopoEvaluatePage() {
   const [courseMessage, setCourseMessage] = useState("");
   const [semesterTerm, setSemesterTerm] = useState<"Monsoon" | "Winter" | "Summer">("Monsoon");
   const [semesterYear, setSemesterYear] = useState(String(new Date().getFullYear()));
+  const [sectionLabel, setSectionLabel] = useState("");
   const { parseMarksFile, parsing, error: parseError, setError: setParseError } = useMarksFileParse();
 
   const loadCourses = useCallback(async (mappingFile?: File) => {
@@ -163,6 +164,7 @@ export default function CopoEvaluatePage() {
     if (previewUploadId) fd.append("preview_upload_id", String(previewUploadId));
     fd.append("semester_term", semesterTerm);
     fd.append("semester_year", semesterYear);
+    if (sectionLabel.trim()) fd.append("section_label", sectionLabel.trim());
 
     try {
       const r = await apiPostForm<EvalResult>("/copo/final-submit", fd);
@@ -269,7 +271,7 @@ export default function CopoEvaluatePage() {
             </span>
             Semester &amp; consolidated marks file
           </h3>
-          <div className="grid sm:grid-cols-2 gap-3 max-w-md">
+          <div className="grid sm:grid-cols-3 gap-3 max-w-2xl">
             <div>
               <label className="text-xs text-slate-500">Semester</label>
               <select
@@ -289,6 +291,15 @@ export default function CopoEvaluatePage() {
                 value={semesterYear}
                 onChange={(e) => setSemesterYear(e.target.value)}
                 placeholder="2025"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-slate-500">Section (optional)</label>
+              <input
+                className="w-full border rounded-lg px-3 py-2 text-sm mt-1"
+                value={sectionLabel}
+                onChange={(e) => setSectionLabel(e.target.value)}
+                placeholder="e.g. A or B"
               />
             </div>
           </div>

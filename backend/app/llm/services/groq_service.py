@@ -39,7 +39,7 @@ def _call_groq_sync(prompt: str) -> str:
                 ],
                 model=_MODEL,
                 temperature=0.7,
-                max_tokens=1024,
+                max_tokens=8192,
             )
             content = chat_completion.choices[0].message.content
             if not content:

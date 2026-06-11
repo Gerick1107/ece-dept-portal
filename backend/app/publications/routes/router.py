@@ -25,6 +25,7 @@ from app.publications.schemas import (
     BulkDeleteRequest,
     CsvImportSummary,
     DeletionResponse,
+    FacultyAffiliationsResponse,
     FacultyCreate,
     FacultyListResponse,
     FacultyResponse,
@@ -40,6 +41,7 @@ from app.publications.schemas import (
 from app.publications.scheduler.jobs import scheduler_status
 from app.publications.services.gap_fill_service import run_gap_fill_background
 from app.publications.scraper.scholar_scraper import sync_faculty_publications
+from app.publications.services.affiliations_import_service import list_faculty_affiliations
 from app.publications.services.faculty_import_service import import_faculty_csv
 from app.publications.services.publication_service import (
     create_faculty,
@@ -135,6 +137,23 @@ def get_faculty(
     return FacultyListResponse(
         items=items,
         pagination={"page": page, "page_size": page_size, "total": total},
+    )
+
+
+@router.get("/faculty/{faculty_id}/affiliations", response_model=FacultyAffiliationsResponse)
+def get_faculty_affiliations(
+    faculty_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_user)],
+):
+    faculty = db.scalar(select(Faculty).where(Faculty.id == faculty_id))
+    if faculty is None:
+        raise HTTPException(status_code=404, detail="Faculty not found")
+    items = list_faculty_affiliations(db, faculty_id)
+    return FacultyAffiliationsResponse(
+        faculty_id=faculty_id,
+        faculty_name=faculty.name,
+        items=items,
     )
 
 

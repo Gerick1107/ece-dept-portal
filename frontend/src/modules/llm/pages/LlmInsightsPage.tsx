@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import LlmComparisonVisuals from "../components/LlmComparisonVisuals";
 import {
   fetchCachedInsights,
@@ -101,7 +101,11 @@ function ComparisonTable({
 
 export default function LlmInsightsPage() {
   const [courses, setCourses] = useState<InsightCourseOption[]>([]);
-  const [selected, setSelected] = useState("");
+  const [selectedKey, setSelectedKey] = useState("");
+  const [currentSemester, setCurrentSemester] = useState("");
+  const [currentSection, setCurrentSection] = useState("");
+  const [previousSemester, setPreviousSemester] = useState("");
+  const [previousSection, setPreviousSection] = useState("");
   const [comparison, setComparison] = useState<CourseComparison | null>(null);
   const [insights, setInsights] = useState("");
   const [generatedAt, setGeneratedAt] = useState<string | null>(null);
@@ -111,6 +115,22 @@ export default function LlmInsightsPage() {
   const [error, setError] = useState("");
   const loadTokenRef = useRef(0);
 
+  const selectedCourse = useMemo(
+    () => courses.find((c) => c.course_key === selectedKey) ?? null,
+    [courses, selectedKey]
+  );
+
+  const comparisonParams = useMemo(() => {
+    if (!selectedCourse) return null;
+    return {
+      course_title: selectedCourse.course_title,
+      current_semester: currentSemester || undefined,
+      current_section: currentSection || selectedCourse.section_label || undefined,
+      previous_semester: previousSemester || undefined,
+      previous_section: previousSection || undefined,
+    };
+  }, [selectedCourse, currentSemester, currentSection, previousSemester, previousSection]);
+
   useEffect(() => {
     fetchInsightCourses()
       .then((items) => setCourses(items))
@@ -119,7 +139,27 @@ export default function LlmInsightsPage() {
   }, []);
 
   useEffect(() => {
-    if (!selected) {
+    if (!selectedCourse) {
+      setCurrentSemester("");
+      setCurrentSection("");
+      setPreviousSemester("");
+      setPreviousSection("");
+      return;
+    }
+    const sems = selectedCourse.semesters.length ? selectedCourse.semesters : [selectedCourse.latest_semester];
+    setCurrentSemester(sems[sems.length - 1]);
+    setCurrentSection(selectedCourse.section_label ?? "");
+    if (sems.length >= 2) {
+      setPreviousSemester(sems[sems.length - 2]);
+      setPreviousSection(selectedCourse.section_label ?? "");
+    } else {
+      setPreviousSemester("");
+      setPreviousSection("");
+    }
+  }, [selectedKey, selectedCourse]);
+
+  useEffect(() => {
+    if (!comparisonParams?.current_semester) {
       setComparison(null);
       setInsights("");
       setGeneratedAt(null);
@@ -133,7 +173,7 @@ export default function LlmInsightsPage() {
     setLoadingComparison(true);
     setError("");
 
-    Promise.all([fetchCourseComparison(selected), fetchCachedInsights(selected)])
+    Promise.all([fetchCourseComparison(comparisonParams), fetchCachedInsights(comparisonParams)])
       .then(([comp, cached]) => {
         if (token !== loadTokenRef.current) return;
         setComparison(comp);
@@ -149,18 +189,15 @@ export default function LlmInsightsPage() {
       .finally(() => {
         if (token === loadTokenRef.current) setLoadingComparison(false);
       });
-  }, [selected]);
+  }, [comparisonParams]);
 
   const loadInsights = useCallback(
     async (regenerate = false) => {
-      if (!selected) return;
+      if (!comparisonParams) return;
       setLoadingInsights(true);
       setError("");
       try {
-        const result = await generateLlmInsights({
-          course_title: selected,
-          regenerate,
-        });
+        const result = await generateLlmInsights({ ...comparisonParams, regenerate });
         if (result.comparison) setComparison(result.comparison);
         setInsights(result.insights ?? "");
         setGeneratedAt(result.generated_at);
@@ -170,10 +207,18 @@ export default function LlmInsightsPage() {
         setLoadingInsights(false);
       }
     },
-    [selected]
+    [comparisonParams]
   );
 
-  const selectedCourse = courses.find((c) => c.course_title === selected);
+  const availableSemesters = comparison?.available_semesters ?? selectedCourse?.semesters ?? [];
+  const availableSections = comparison?.available_sections ?? [];
+
+  const previousLabel = comparison?.previous_semester
+    ? `${comparison.previous_semester}${comparison.previous_section ? ` · Sec ${comparison.previous_section}` : ""}`
+    : "Previous";
+  const currentLabel = comparison
+    ? `${comparison.current_semester}${comparison.current_section ? ` · Sec ${comparison.current_section}` : ""}`
+    : "Current";
 
   return (
     <div className="space-y-6">
@@ -182,8 +227,7 @@ export default function LlmInsightsPage() {
           <span aria-hidden>✨</span> LLM Insights
         </h2>
         <p className="text-sm text-slate-600 mt-1">
-          Select a course to view CO/PO comparison tables, then click <strong>Generate Insights</strong> for
-          AI recommendations. Insights are generated one course at a time to stay within API limits.
+          Select a course, semester, and optional section to compare attainment and generate AI recommendations.
         </p>
       </div>
 
@@ -191,29 +235,90 @@ export default function LlmInsightsPage() {
         <p className="text-sm text-red-800 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>
       )}
 
-      <section className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-        <label className="text-sm font-medium text-slate-700">Select course</label>
-        {loadingCourses ? (
-          <p className="text-sm text-slate-500 mt-2 animate-pulse">Loading courses…</p>
-        ) : !courses.length ? (
-          <p className="text-sm text-slate-500 mt-2">No CO-PO evaluation snapshots yet. Run evaluations first.</p>
-        ) : (
-          <select
-            className="mt-2 w-full max-w-xl border rounded-lg px-3 py-2 text-sm"
-            value={selected}
-            onChange={(e) => setSelected(e.target.value)}
-          >
-            <option value="">— Choose a course —</option>
-            {courses.map((c) => (
-              <option key={c.course_title} value={c.course_title}>
-                {c.course_title} — latest: {c.latest_semester}
-              </option>
-            ))}
-          </select>
+      <section className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-4">
+        <div>
+          <label className="text-sm font-medium text-slate-700">Select course</label>
+          {loadingCourses ? (
+            <p className="text-sm text-slate-500 mt-2 animate-pulse">Loading courses…</p>
+          ) : !courses.length ? (
+            <p className="text-sm text-slate-500 mt-2">No CO-PO evaluation snapshots yet. Run evaluations first.</p>
+          ) : (
+            <select
+              className="mt-2 w-full max-w-xl border rounded-lg px-3 py-2 text-sm"
+              value={selectedKey}
+              onChange={(e) => setSelectedKey(e.target.value)}
+            >
+              <option value="">— Choose a course —</option>
+              {courses.map((c) => (
+                <option key={c.course_key} value={c.course_key}>
+                  {c.course_key} — latest: {c.latest_semester}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+
+        {selectedCourse && (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2 border-t border-slate-100">
+            <div>
+              <label className="text-xs text-slate-500">Current semester</label>
+              <select
+                className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
+                value={currentSemester}
+                onChange={(e) => setCurrentSemester(e.target.value)}
+              >
+                {availableSemesters.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-slate-500">Current section (optional)</label>
+              <input
+                className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
+                value={currentSection}
+                onChange={(e) => setCurrentSection(e.target.value.toUpperCase())}
+                placeholder={selectedCourse.section_label ? `Default: ${selectedCourse.section_label}` : "None"}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-slate-500">Compare with semester</label>
+              <select
+                className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
+                value={previousSemester}
+                onChange={(e) => setPreviousSemester(e.target.value)}
+              >
+                <option value="">— Auto / none —</option>
+                {availableSemesters.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-slate-500">Previous section (optional)</label>
+              <input
+                className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
+                value={previousSection}
+                onChange={(e) => setPreviousSection(e.target.value.toUpperCase())}
+                placeholder="Same as current if blank"
+                disabled={!previousSemester}
+              />
+            </div>
+          </div>
+        )}
+
+        {availableSections.length > 0 && selectedCourse && (
+          <p className="text-xs text-slate-500">
+            Sections recorded for this course: {availableSections.map((s) => `Section ${s}`).join(", ")}
+          </p>
         )}
       </section>
 
-      {selected && loadingComparison && (
+      {selectedCourse && loadingComparison && (
         <p className="text-sm text-slate-500 animate-pulse">Loading attainment comparison…</p>
       )}
 
@@ -221,8 +326,8 @@ export default function LlmInsightsPage() {
         <>
           {comparison.insufficient_history && (
             <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-              Only one semester available — comparison visuals and delta cards are hidden. Current attainments are shown
-              below.
+              No previous semester selected or available — comparison visuals and delta cards reflect single-semester data
+              only.
             </p>
           )}
 
@@ -234,21 +339,21 @@ export default function LlmInsightsPage() {
             <ComparisonTable
               title="CO attainment comparison"
               rows={comparison.co_comparison}
-              previousLabel={comparison.previous_semester ?? "Previous"}
-              currentLabel={comparison.current_semester}
+              previousLabel={previousLabel}
+              currentLabel={currentLabel}
             />
             <ComparisonTable
               title="PO / PSO attainment comparison"
               rows={comparison.po_comparison}
-              previousLabel={comparison.previous_semester ?? "Previous"}
-              currentLabel={comparison.current_semester}
+              previousLabel={previousLabel}
+              currentLabel={currentLabel}
             />
           </section>
 
           <section className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
             <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
               <h3 className="font-semibold text-slate-800">
-                AI Insights — {selectedCourse.course_title} ({comparison.current_semester})
+                AI Insights — {selectedCourse.course_key} ({currentLabel})
               </h3>
               <div className="flex flex-wrap gap-2">
                 {!insights && !loadingInsights && (
@@ -285,7 +390,7 @@ export default function LlmInsightsPage() {
               <InsightsBody text={insights} />
             ) : (
               <p className="text-sm text-slate-500 py-6 text-center">
-                No insights yet for this course. Click <strong>Generate Insights</strong> above when you are ready.
+                No insights yet for this selection. Click <strong>Generate Insights</strong> above when you are ready.
               </p>
             )}
 

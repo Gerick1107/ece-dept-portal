@@ -25,8 +25,13 @@ function findRunBySemester(runs: CopoRun[], semester: string): CopoRun | null {
   return runs.find((r) => r.semester_label === semester) ?? runs[runs.length - 1];
 }
 
-function courseSemesters(data: CopoAnalyticsData | null, courseTitle: string): string[] {
-  const course = data?.courses.find((c) => c.course_title === courseTitle);
+function findCourse(data: CopoAnalyticsData | null, courseKey: string) {
+  if (!data) return null;
+  return data.courses.find((c) => c.course_key === courseKey || c.course_title === courseKey) ?? null;
+}
+
+function courseSemesters(data: CopoAnalyticsData | null, courseKey: string): string[] {
+  const course = findCourse(data, courseKey);
   if (!course) return [];
   return [...new Set(course.runs.map((r) => r.semester_label))];
 }
@@ -117,10 +122,7 @@ export default function CopoAnalyticsTab() {
     };
   }, []);
 
-  const selected = useMemo(
-    () => data?.courses.find((c) => c.course_title === course),
-    [data, course]
-  );
+  const selected = useMemo(() => findCourse(data, course), [data, course]);
 
   const cos = useMemo(() => {
     if (!selected?.runs.length) return [];
@@ -207,21 +209,17 @@ export default function CopoAnalyticsTab() {
   }, [semestersB, compareSemesterB]);
 
   const compareARun = useMemo(() => {
-    const c = data?.courses.find((x) => x.course_title === compareCourseA);
+    const c = findCourse(data, compareCourseA);
     return c ? findRunBySemester(c.runs, compareSemesterA) : null;
   }, [data, compareCourseA, compareSemesterA]);
 
   const compareBRun = useMemo(() => {
-    const c = data?.courses.find((x) => x.course_title === compareCourseB);
+    const c = findCourse(data, compareCourseB);
     return c ? findRunBySemester(c.runs, compareSemesterB) : null;
   }, [data, compareCourseB, compareSemesterB]);
 
-  const compareLabelA = compareARun
-    ? `${compareCourseA.split(":")[0]?.trim() || compareCourseA} · ${compareARun.semester_label}`
-    : "Series A";
-  const compareLabelB = compareBRun
-    ? `${compareCourseB.split(":")[0]?.trim() || compareCourseB} · ${compareBRun.semester_label}`
-    : "Series B";
+  const compareLabelA = compareARun ? `${compareCourseA} · ${compareARun.semester_label}` : "Series A";
+  const compareLabelB = compareBRun ? `${compareCourseB} · ${compareBRun.semester_label}` : "Series B";
 
   const compareData = useMemo(() => {
     if (!compareARun || !compareBRun) return [];
@@ -282,7 +280,7 @@ export default function CopoAnalyticsTab() {
 
       {selected && (
         <div className="grid lg:grid-cols-2 gap-4">
-          <ChartCard title="CO attainment radar" subtitle={course}>
+          <ChartCard title="CO attainment radar" subtitle={selected.course_key || course}>
             <ResponsiveContainer width="100%" height={320}>
               <RadarChart data={radarData}>
                 <PolarGrid />

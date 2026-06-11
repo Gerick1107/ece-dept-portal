@@ -78,6 +78,7 @@ def create_evaluation_run(
     mapping_filename: str | None = None,
     scope_summary: str | None = None,
     semester_label: str | None = None,
+    section_label: str | None = None,
     target_value: int = 50,
 ) -> CopoEvaluationRun:
     run = CopoEvaluationRun(
@@ -89,6 +90,7 @@ def create_evaluation_run(
         mapping_filename=mapping_filename,
         scope_summary=scope_summary,
         semester_label=semester_label,
+        section_label=section_label,
         target_value=target_value,
         status=EvaluationStatus.pending,
     )
@@ -113,6 +115,8 @@ def complete_evaluation_run(
     run.excel_result_path = excel_path
     if result_summary and result_summary.get("semester_label"):
         run.semester_label = str(result_summary["semester_label"])
+    if result_summary and result_summary.get("section_label"):
+        run.section_label = str(result_summary["section_label"])
     db.commit()
     db.refresh(run)
     upsert_run_analytics_snapshot(db, run)
