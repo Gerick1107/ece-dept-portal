@@ -38,6 +38,7 @@ class Project(Base):
     project_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     semesters: Mapped[str] = mapped_column(Text, nullable=False, index=True)
     faculty_id: Mapped[int] = mapped_column(ForeignKey("faculty.id", ondelete="RESTRICT"), nullable=False, index=True)
+    guide_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     co_guide: Mapped[str | None] = mapped_column(String(255), nullable=True)
     course_code: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
     course_name: Mapped[str | None] = mapped_column(String(100), nullable=True)

@@ -59,7 +59,14 @@ DEPARTMENT_FIELD_ALIASES = {
     "credit": ["credit", "credits"],
     "student_roll_no": ["student roll number", "student roll no", "roll number"],
     "student_name": ["student name"],
-    "guide_name": ["guide name", "guide"],
+    "guide_name": [
+        "guide name",
+        "guide",
+        "project guide",
+        "faculty name",
+        "supervisor",
+        "project supervisor",
+    ],
     "co_guide": ["co-guide", "co guide", "coguide"],
     "title": ["title", "project title", "project topic"],
     "grade": ["grade"],
@@ -82,6 +89,20 @@ def map_department_headers(raw_headers: list[str]) -> dict[str, str]:
 DEPARTMENT_REQUIRED_FIELDS = frozenset(
     {"title", "guide_name", "student_roll_no", "student_name", "course_code"}
 )
+
+GUIDE_NAME_ALIASES = DEPARTMENT_FIELD_ALIASES["guide_name"]
+
+
+def find_guide_columns(raw_headers: list[str]) -> list[str]:
+    """Return every spreadsheet column that looks like a guide/supervisor name."""
+    normalized = {_normalize_header(h): h for h in raw_headers if h and str(h).strip()}
+    columns: list[str] = []
+    for alias in GUIDE_NAME_ALIASES:
+        key = _normalize_header(alias)
+        col = normalized.get(key)
+        if col and col not in columns:
+            columns.append(col)
+    return columns
 
 
 def score_department_header_row(row_values: list) -> int:

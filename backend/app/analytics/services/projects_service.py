@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.analytics.utils.ece_themes import theme_distribution
 from app.analytics.utils.semester import semester_sort_key
 from app.projects.models.entities import Project, ProjectSdg, Sdg
+from app.projects.utils.course_name import normalize_course_name
 from app.publications.models.entities import Faculty
 
 def _split_csv(value: str | None) -> list[str]:
@@ -70,7 +71,7 @@ def get_projects_analytics(
     for p in projects:
         if not _matches_project_type(p.project_type, project_type):
             continue
-        if course_name and (p.course_name or "").lower().find(course_name.lower()) < 0:
+        if course_name and normalize_course_name(p.course_name or "") != normalize_course_name(course_name):
             continue
         if faculty_id and p.faculty_id != faculty_id:
             continue
@@ -101,7 +102,7 @@ def get_projects_analytics(
     for p in filtered:
         rolls = _split_csv(p.student_roll_nos)
         all_rolls.update(rolls)
-        guide_name = p.faculty.name if p.faculty else f"Faculty #{p.faculty_id}"
+        guide_name = p.guide_name or (p.faculty.name if p.faculty else f"Faculty #{p.faculty_id}")
         guides.add(guide_name)
         guide_counts[guide_name] += 1
         if p.co_guide:

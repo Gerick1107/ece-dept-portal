@@ -1,20 +1,56 @@
+import { useEffect, useRef, useState } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../modules/auth/AuthContext";
 
-const nav = [
-  { to: "/dashboard", label: "Dashboard" },
-  { to: "/copo", label: "CO-PO Generator", exact: true },
-  { to: "/copo/compare", label: "Compare Evaluation" },
-  { to: "/copo/bulk", label: "Bulk Evaluation" },
-  { to: "/publications/faculty", label: "Faculty Directory", exact: true },
-  { to: "/publications/search", label: "Publications Search" },
-  { to: "/publications/exports", label: "Publication Exports" },
-  { to: "/projects", label: "BTP / IP Projects", exact: true },
-  { to: "/awards", label: "Faculty Awards", exact: true },
-  { to: "/analytics", label: "Analytics", exact: true },
-  { to: "/llm-insights", label: "LLM Insights", exact: true },
-  { to: "/notifications", label: "Notifications", exact: true },
+type NavLink = { to: string; label: string; exact?: boolean };
+
+type NavItem =
+  | { kind: "link"; to: string; label: string; exact?: boolean }
+  | { kind: "group"; label: string; links: NavLink[] };
+
+const navItems: NavItem[] = [
+  { kind: "link", to: "/dashboard", label: "Dashboard", exact: true },
+  {
+    kind: "group",
+    label: "CO-PO Attainment",
+    links: [
+      { to: "/copo", label: "CO-PO Generator", exact: true },
+      { to: "/copo/compare", label: "Compare Evaluation" },
+      { to: "/copo/bulk", label: "Bulk Evaluation" },
+    ],
+  },
+  {
+    kind: "group",
+    label: "Publications",
+    links: [
+      { to: "/publications/faculty", label: "Faculty Directory", exact: true },
+      { to: "/publications/search", label: "Publications Search" },
+      { to: "/publications/exports", label: "Publication Exports" },
+    ],
+  },
+  { kind: "link", to: "/projects", label: "BTP / IP Projects", exact: true },
+  {
+    kind: "group",
+    label: "Analytics",
+    links: [
+      { to: "/awards", label: "Faculty Awards", exact: true },
+      { to: "/analytics", label: "Analytics Dashboard", exact: true },
+    ],
+  },
+  { kind: "link", to: "/llm-insights", label: "LLM Insights", exact: true },
+  { kind: "link", to: "/notifications", label: "Notifications", exact: true },
 ];
+
+const adminNavGroup: NavItem = {
+  kind: "group",
+  label: "Admin",
+  links: [
+    { to: "/publications/admin", label: "Publications Admin", exact: true },
+    { to: "/admin/users", label: "Users", exact: true },
+    { to: "/admin/notifications", label: "Send Notifications", exact: true },
+    { to: "/admin/data", label: "Data & Archives", exact: true },
+  ],
+};
 
 function isNavActive(pathname: string, to: string, exact?: boolean): boolean {
   if (exact) {
@@ -27,9 +63,70 @@ function isNavActive(pathname: string, to: string, exact?: boolean): boolean {
   return pathname === to || pathname.startsWith(`${to}/`);
 }
 
+function isGroupActive(pathname: string, links: NavLink[]): boolean {
+  return links.some((link) => isNavActive(pathname, link.to, link.exact));
+}
+
+function NavDropdown({ label, links, pathname }: { label: string; links: NavLink[]; pathname: string }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const active = isGroupActive(pathname, links);
+
+  useEffect(() => {
+    function handleClick(event: MouseEvent) {
+      if (ref.current && !ref.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className={`px-3 py-1.5 rounded-lg text-sm transition-colors inline-flex items-center gap-1 ${
+          active ? "bg-white text-teal-900 font-medium shadow-sm" : "text-teal-50 hover:bg-teal-700/80"
+        }`}
+        aria-expanded={open}
+        aria-haspopup="true"
+      >
+        {label}
+        <span className="text-xs opacity-80">{open ? "▴" : "▾"}</span>
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full z-50 mt-1 min-w-[12rem] rounded-lg border border-teal-700/30 bg-white py-1 shadow-lg">
+          {links.map((link) => (
+            <Link
+              key={link.to}
+              to={link.to}
+              onClick={() => setOpen(false)}
+              className={`block px-3 py-2 text-sm transition-colors ${
+                isNavActive(pathname, link.to, link.exact)
+                  ? "bg-teal-50 text-teal-900 font-medium"
+                  : "text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              {link.label}
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AppLayout() {
   const { user, logout } = useAuth();
   const location = useLocation();
+  const isAdmin = user?.role === "admin";
+  const items = isAdmin
+    ? navItems
+        .filter((item) => !(item.kind === "link" && item.to === "/notifications"))
+        .concat(adminNavGroup)
+    : navItems;
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
@@ -59,10 +156,9 @@ export default function AppLayout() {
             </button>
           </div>
         </div>
-        <nav className="max-w-6xl mx-auto px-4 flex gap-1 pb-2 flex-wrap">
-          {nav
-            .filter((item) => !(user?.role === "admin" && item.to === "/notifications"))
-            .map((item) => (
+        <nav className="max-w-6xl mx-auto px-4 flex gap-1 pb-2 flex-wrap items-center">
+          {items.map((item) =>
+            item.kind === "link" ? (
               <Link
                 key={item.to}
                 to={item.to}
@@ -74,7 +170,15 @@ export default function AppLayout() {
               >
                 {item.label}
               </Link>
-            ))}
+            ) : (
+              <NavDropdown
+                key={item.label}
+                label={item.label}
+                links={item.links}
+                pathname={location.pathname}
+              />
+            ),
+          )}
           <Link
             to="/profile"
             className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
@@ -85,53 +189,13 @@ export default function AppLayout() {
           >
             Profile
           </Link>
-          {user?.role === "admin" && (
-            <>
-              <Link
-                to="/publications/admin"
-                className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
-                  location.pathname === "/publications/admin"
-                    ? "bg-white text-teal-900 font-medium shadow-sm"
-                    : "text-teal-50 hover:bg-teal-700/80"
-                }`}
-              >
-                Publications Admin
-              </Link>
-              <Link
-                to="/admin/users"
-                className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
-                  location.pathname === "/admin/users"
-                    ? "bg-white text-teal-900 font-medium shadow-sm"
-                    : "text-teal-50 hover:bg-teal-700/80"
-                }`}
-              >
-                Users
-              </Link>
-              <Link
-                to="/admin/notifications"
-                className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
-                  location.pathname === "/admin/notifications"
-                    ? "bg-white text-teal-900 font-medium shadow-sm"
-                    : "text-teal-50 hover:bg-teal-700/80"
-                }`}
-              >
-                Send Notifications
-              </Link>
-              <Link
-                to="/admin/data"
-                className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
-                  location.pathname === "/admin/data"
-                    ? "bg-white text-teal-900 font-medium shadow-sm"
-                    : "text-teal-50 hover:bg-teal-700/80"
-                }`}
-              >
-                Data & Archives
-              </Link>
-            </>
-          )}
         </nav>
       </header>
-      <main className={`flex-1 w-full mx-auto px-4 py-6 ${location.pathname.startsWith("/analytics") ? "max-w-7xl" : "max-w-6xl"}`}>
+      <main
+        className={`flex-1 w-full mx-auto px-4 py-6 ${
+          location.pathname.startsWith("/analytics") ? "max-w-7xl" : "max-w-6xl"
+        }`}
+      >
         <Outlet />
       </main>
       <footer className="border-t border-slate-200 py-3 text-center text-xs text-slate-500">

@@ -70,10 +70,11 @@ def find_merge_candidate(
         select(Project).options(joinedload(Project.faculty)).order_by(Project.id.asc())
     ).unique().all()
     for project in rows:
-        faculty_name = strip_name_prefix(project.faculty.name if project.faculty else "").lower()
+        stored_guide = project.guide_name or (project.faculty.name if project.faculty else "")
+        stored_key = strip_name_prefix(stored_guide).lower()
         if (
             project.project_title.strip().lower() == title_key
-            and faculty_name == guide_key
+            and stored_key == guide_key
             and (project.course_code or "").strip().upper() == code_key
         ):
             return project
@@ -124,7 +125,8 @@ def project_to_dict(db: Session, project: Project) -> dict:
         "project_type": project.project_type,
         "semesters": project.semesters,
         "faculty_id": project.faculty_id,
-        "faculty_name": strip_name_prefix(faculty.name) if faculty else "",
+        "faculty_name": strip_name_prefix(project.guide_name or (faculty.name if faculty else "")),
+        "guide_name": strip_name_prefix(project.guide_name) if project.guide_name else None,
         "co_guide": project.co_guide,
         "course_code": project.course_code,
         "course_name": normalize_course_name(project.course_name) if project.course_name else None,
@@ -151,7 +153,8 @@ def _apply_filters(stmt, filters: ProjectSearchFilters):
     if filters.project_type:
         stmt = stmt.where(Project.project_type.ilike(f"%{filters.project_type.strip()}%"))
     if filters.course_name:
-        stmt = stmt.where(Project.course_name.ilike(f"%{filters.course_name.strip()}%"))
+        target = normalize_course_name(filters.course_name.strip())
+        stmt = stmt.where(Project.course_name == target)
     if filters.course_codes:
         codes = [c.strip().upper() for c in filters.course_codes if c.strip()]
         if codes:
@@ -175,6 +178,7 @@ def _apply_filters(stmt, filters: ProjectSearchFilters):
         stmt = stmt.join(Faculty, Project.faculty_id == Faculty.id).where(
             or_(
                 Project.project_title.ilike(q),
+                Project.guide_name.ilike(q),
                 Project.co_guide.ilike(q),
                 Project.student_names.ilike(q),
                 Project.student_roll_nos.ilike(q),
@@ -225,6 +229,7 @@ def create_project(db: Session, body: ProjectCreate, upload_batch_id: int | None
         project_type=_normalize_type(body.project_type),
         semesters=body.semesters.strip(),
         faculty_id=body.faculty_id,
+        guide_name=strip_name_prefix(body.guide_name) if body.guide_name else None,
         co_guide=strip_name_prefix(body.co_guide) if body.co_guide else None,
         course_code=body.course_code.strip() if body.course_code else None,
         course_name=normalize_course_name(body.course_name) if body.course_name else None,
@@ -256,6 +261,8 @@ def update_project(db: Session, project: Project, body: ProjectUpdate) -> Projec
         if not db.get(Faculty, body.faculty_id):
             raise ValueError("faculty_id not found")
         project.faculty_id = body.faculty_id
+    if body.guide_name is not None:
+        project.guide_name = strip_name_prefix(body.guide_name) if body.guide_name else None
     if body.co_guide is not None:
         project.co_guide = strip_name_prefix(body.co_guide) if body.co_guide else None
     if body.course_code is not None:

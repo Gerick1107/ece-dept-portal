@@ -20,6 +20,7 @@ class ProjectBase(BaseModel):
     project_type: str
     semesters: str = Field(min_length=1)
     faculty_id: int
+    guide_name: str | None = None
     co_guide: str | None = None
     course_code: str | None = None
     course_name: str | None = None
@@ -45,6 +46,7 @@ class ProjectUpdate(BaseModel):
     project_type: str | None = None
     semesters: str | None = None
     faculty_id: int | None = None
+    guide_name: str | None = None
     co_guide: str | None = None
     course_code: str | None = None
     course_name: str | None = None
@@ -63,6 +65,7 @@ class ProjectResponse(BaseModel):
     semesters: str
     faculty_id: int
     faculty_name: str
+    guide_name: str | None = None
     co_guide: str | None
     course_code: str | None
     course_name: str | None

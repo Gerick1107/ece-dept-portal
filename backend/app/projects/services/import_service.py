@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.projects.models.entities import Project, ProjectUpload
 from app.projects.schemas.project import ProjectCreate
-from app.projects.services.faculty_resolver import cleaned_guide_display, match_ece_faculty
+from app.projects.services.faculty_resolver import match_ece_faculty
 from app.projects.services.file_manager import save_project_upload
 from app.projects.services.project_service import create_project, find_merge_candidate, merge_project
 from app.projects.services.sdg_queue import enqueue_sdg_tags
@@ -17,6 +17,7 @@ from app.projects.utils.column_mapping import (
     DEPARTMENT_REQUIRED_FIELDS,
     cell_str,
     find_department_header_row_index,
+    find_guide_columns,
     map_department_headers,
 )
 from app.projects.utils.course_name import normalize_course_name
@@ -91,6 +92,19 @@ def _parse_credit(raw: str) -> float | None:
         return None
 
 
+def _pick_guide_name(row, guide_columns: list[str], db: Session) -> str:
+    candidates = [cell_str(row[col]) for col in guide_columns if col in row.index]
+    candidates = [c for c in candidates if c]
+    if not candidates:
+        return ""
+    if len(candidates) == 1:
+        return candidates[0]
+    for candidate in sorted(candidates, key=len, reverse=True):
+        if match_ece_faculty(db, candidate, None):
+            return candidate
+    return max(candidates, key=len)
+
+
 def _is_blank_row(row, mapping: dict[str, str]) -> bool:
     for key in ("title", "guide_name", "student_roll_no", "student_name"):
         col = mapping.get(key)
@@ -122,10 +136,14 @@ def import_projects_file(
     if frame.empty:
         raise ValueError("Spreadsheet has no data rows")
 
-    mapping = map_department_headers([str(c) for c in frame.columns])
+    headers = [str(c) for c in frame.columns]
+    mapping = map_department_headers(headers)
     missing = sorted(DEPARTMENT_REQUIRED_FIELDS - set(mapping))
     if missing:
         raise ValueError(f"Missing required columns: {', '.join(missing)}")
+    guide_columns = find_guide_columns(headers)
+    if not guide_columns and "guide_name" in mapping:
+        guide_columns = [mapping["guide_name"]]
 
     upload = ProjectUpload(
         filename=filename,
@@ -149,7 +167,7 @@ def import_projects_file(
             continue
         try:
             title = cell_str(row[mapping["title"]])
-            guide_raw = cell_str(row[mapping["guide_name"]])
+            guide_raw = _pick_guide_name(row, guide_columns, db)
             co_guide_raw = cell_str(row[mapping["co_guide"]]) if "co_guide" in mapping else ""
             roll_no = cell_str(row[mapping["student_roll_no"]])
             student_name = cell_str(row[mapping["student_name"]])
@@ -161,12 +179,12 @@ def import_projects_file(
             if not title or not guide_raw:
                 raise ValueError("Title and Guide Name are required")
 
-            faculty = match_ece_faculty(db, guide_raw, co_guide_raw or None)
-            if not faculty:
+            faculty_match = match_ece_faculty(db, guide_raw, co_guide_raw or None)
+            if not faculty_match:
                 skipped_ece += 1
                 continue
 
-            guide_clean = cleaned_guide_display(faculty)
+            guide_clean = strip_name_prefix(guide_raw)
             co_guide_clean = strip_name_prefix(co_guide_raw) if co_guide_raw else None
             course_name = normalize_course_name(course_name_raw) if course_name_raw else None
 
@@ -199,7 +217,8 @@ def import_projects_file(
                 project_title=title,
                 project_type=project_type or "IP/IS/UR",
                 semesters=semester_tag,
-                faculty_id=faculty.id,
+                faculty_id=faculty_match.faculty.id,
+                guide_name=guide_clean,
                 co_guide=co_guide_clean,
                 course_code=course_code or None,
                 course_name=course_name,
