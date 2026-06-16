@@ -20,6 +20,7 @@ from app.database.base import Base
 from app.database.session import SessionLocal, engine
 from app.publications.routes.router import router as publications_router
 from app.projects.routes.router import router as projects_router
+from app.ece_eve_projects.routes.router import router as ece_eve_projects_router
 from app.llm.routes.router import router as llm_insights_router
 from app.projects.services.file_manager import ensure_projects_upload_dir
 from app.publications.scheduler import ensure_scheduler_started
@@ -88,6 +89,7 @@ api.include_router(analytics_router)
 api.include_router(notifications_router)
 api.include_router(publications_router)
 api.include_router(projects_router)
+api.include_router(ece_eve_projects_router)
 api.include_router(llm_insights_router)
 
 app.mount(settings.api_v1_prefix, api)

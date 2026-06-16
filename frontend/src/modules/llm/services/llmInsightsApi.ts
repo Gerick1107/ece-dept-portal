@@ -14,6 +14,22 @@ export type AssessmentSummaryItem = {
   total_questions: number;
 };
 
+export type AssessmentCoEntry = {
+  co_label: string;
+  question_count?: number | null;
+  attainment?: number | null;
+};
+
+export type AssessmentDetail = {
+  assessment_id?: number | null;
+  name: string;
+  type?: string | null;
+  semester?: string | null;
+  section_label?: string | null;
+  course_title?: string | null;
+  cos: AssessmentCoEntry[];
+};
+
 export type CourseComparison = {
   course_title: string;
   course_key?: string;
@@ -30,6 +46,9 @@ export type CourseComparison = {
   insufficient_history: boolean;
   co_descriptions_available: boolean;
   assessment_summary: AssessmentSummaryItem[];
+  previous_assessment_summary: AssessmentSummaryItem[];
+  current_assessments: AssessmentDetail[];
+  previous_assessments: AssessmentDetail[];
   available_semesters: string[];
   available_sections: string[];
 };

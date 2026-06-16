@@ -51,7 +51,7 @@ def send_faculty_welcome_email(
     subject = "ECE Department Portal — Your login credentials"
     text = f"""Dear {full_name},
 
-An account has been created for you on the ECE Department Automation Portal.
+An account has been created for you on the Automation Portal.
 
 Login URL: {portal_url}
 Email: {to_email}

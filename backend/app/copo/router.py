@@ -82,6 +82,7 @@ async def final_submit(
     course_title: str = Form(...),
     course_file: UploadFile = File(...),
     use_default_mapping: bool = Form(True),
+    mapping_type: str = Form("UG"),
     mapping_file: UploadFile | None = File(None),
     programmes: list[str] = Form(default=[]),
     branches: list[str] = Form(default=[]),
@@ -112,6 +113,9 @@ async def final_submit(
         tmp_mapping = await save_upload(mapping_file, "custom_mapping")
         mapping_path = tmp_mapping
         mapping_filename = mapping_file.filename or mapping_filename
+    elif str(mapping_type).upper() == "PG":
+        mapping_path = settings.resolved_pg_mapping_path
+        mapping_filename = os.path.basename(mapping_path)
 
     term = semester_term.strip().capitalize()
     if term not in ("Monsoon", "Winter", "Summer"):
@@ -141,6 +145,7 @@ async def final_submit(
             remove_marks_after=remove_marks_after,
             skip_database_save=skip_database_save,
             preview_upload_id=preview_upload_id or None,
+            mapping_type=mapping_type,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -258,6 +263,7 @@ async def parse_students(
 async def course_cos(
     course_title: str = Form(...),
     mapping_option: str = Form("default"),
+    mapping_type: str = Form("UG"),
     mapping_file: UploadFile | None = File(None),
 ):
     if not course_title.strip():
@@ -266,6 +272,8 @@ async def course_cos(
     if mapping_option == "upload" and mapping_file and allowed_file(mapping_file.filename):
         tmp_mapping_path = await save_upload(mapping_file, "tmp_cos_mapping")
         mapping_path = tmp_mapping_path
+    elif str(mapping_type).upper() == "PG":
+        mapping_path = settings.resolved_pg_mapping_path
     else:
         mapping_path = settings.resolved_mapping_path
     try:
@@ -289,6 +297,7 @@ async def evaluate_standard(
     course_title: str = Form(...),
     upload_id: int = Form(...),
     use_default_mapping: bool = Form(True),
+    mapping_type: str = Form("UG"),
     mapping_file: UploadFile | None = File(None),
     programmes: list[str] = Form(default=[]),
     branches: list[str] = Form(default=[]),
@@ -312,6 +321,9 @@ async def evaluate_standard(
         tmp_mapping = await save_upload(mapping_file, "custom_mapping")
         mapping_path = tmp_mapping
         mapping_filename = mapping_file.filename or mapping_filename
+    elif str(mapping_type).upper() == "PG":
+        mapping_path = settings.resolved_pg_mapping_path
+        mapping_filename = os.path.basename(mapping_path)
 
     included_rolls = build_included_rolls(course_path, programmes, branches)
     scope = summarize_scope_selection(programmes, branches)
@@ -336,6 +348,7 @@ async def evaluate_standard(
             course_filename=upload.original_filename,
             mapping_filename=mapping_filename,
             target_value=target_value,
+            mapping_type=mapping_type,
         )
         download_token = None
         excel_path = payload.get("excel_path")
@@ -357,6 +370,17 @@ async def evaluate_standard(
             },
             excel_path=excel_path,
         )
+        from app.copo.services.assessment_mapping_service import persist_assessment_co_mappings
+
+        persist_assessment_co_mappings(
+            db,
+            run,
+            course_title=course_title,
+            semester_label=run.semester_label,
+            section_label=run.section_label,
+            intermediate=payload["intermediate"],
+        )
+        db.commit()
     except ValueError as exc:
         copo_repo.fail_evaluation_run(db, run, str(exc))
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -468,6 +492,7 @@ async def evaluate_bulk(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
     use_default_mapping: bool = Form(True),
+    mapping_type: str = Form("UG"),
     mapping_file: UploadFile | None = File(None),
     rows_json: str = Form(...),
     compare_files: list[UploadFile] = File(default=[]),
@@ -489,6 +514,9 @@ async def evaluate_bulk(
         tmp_mapping = await save_upload(mapping_file, "bulk_eval_mapping")
         mapping_path = tmp_mapping
         mapping_filename = mapping_file.filename or mapping_filename
+    elif str(mapping_type).upper() == "PG":
+        mapping_path = settings.resolved_pg_mapping_path
+        mapping_filename = os.path.basename(mapping_path)
 
     results_data = []
     compare_index = 0
@@ -552,6 +580,7 @@ async def evaluate_bulk(
                 row_number=row_number,
                 course_filename=upload.original_filename,
                 compare_filename=compare_file.filename or "compare.xlsx",
+                mapping_type=mapping_type,
             )
             results_data.append(result)
             remove_file_if_exists(compare_path)

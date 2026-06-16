@@ -74,6 +74,7 @@ function formatBulkStatus(preview: MarksParsePreview): string {
 export default function CopoBulkPage() {
   const [courses, setCourses] = useState<string[]>([]);
   const [mappingMode, setMappingMode] = useState<"default" | "custom">("default");
+  const [mappingProfile, setMappingProfile] = useState<"UG" | "PG">("UG");
   const [customMapping, setCustomMapping] = useState<File | null>(null);
   const [rows, setRows] = useState<BulkRow[]>([newRow("1"), newRow("2")]);
   const [results, setResults] = useState<BulkResult[] | null>(null);
@@ -146,6 +147,7 @@ export default function CopoBulkPage() {
 
     const fd = new FormData();
     fd.append("use_default_mapping", mappingMode === "default" ? "true" : "false");
+    fd.append("mapping_type", mappingProfile);
     if (mappingMode === "custom" && customMapping) {
       fd.append("mapping_file", customMapping);
     }
@@ -221,6 +223,24 @@ export default function CopoBulkPage() {
             Upload one custom mapping for all rows
           </label>
         </div>
+        {mappingMode === "default" && (
+          <div className="ml-1 space-y-2 border-l border-slate-200 pl-4">
+            <p className="text-xs font-medium text-slate-700">Mapping profile</p>
+            <div className="flex flex-wrap gap-4">
+              <label className="flex items-center gap-1">
+                <input type="radio" checked={mappingProfile === "UG"} onChange={() => setMappingProfile("UG")} />
+                UG Mapping
+              </label>
+              <label className="flex items-center gap-1">
+                <input type="radio" checked={mappingProfile === "PG"} onChange={() => setMappingProfile("PG")} />
+                PG Mapping
+              </label>
+            </div>
+            <p className="text-xs text-slate-500">
+              {mappingProfile === "UG" ? "12 POs + 3 PSOs (default_mapping)" : "4 POs (PG mapping)"}
+            </p>
+          </div>
+        )}
         {mappingMode === "custom" && (
           <FileUploadField
             label="Custom mapping Excel"

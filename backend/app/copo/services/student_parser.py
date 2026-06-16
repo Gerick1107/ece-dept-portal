@@ -20,20 +20,27 @@ def _parse_student_rolls_from_workbook(file_path: str) -> dict:
     raw = pd.read_excel(file_path, header=None)
 
     branch_col_idx = None
+    roll_col_idx = None
     data_start_row = None
     for r in range(min(10, len(raw))):
-        for c in range(min(5, raw.shape[1])):
+        for c in range(min(8, raw.shape[1])):
             val = str(raw.iloc[r, c]).strip()
             if val.lower() == "branch":
                 branch_col_idx = c
                 data_start_row = r + 1
+                for c2 in range(raw.shape[1]):
+                    header = str(raw.iloc[r, c2]).strip().lower()
+                    if header in ("roll no.", "roll no", "roll number", "roll"):
+                        roll_col_idx = c2
+                        break
+                if roll_col_idx is None:
+                    roll_col_idx = c + 1 if c + 1 < raw.shape[1] else 0
                 break
         if branch_col_idx is not None:
             break
 
     roll_branch_map: dict[str, str] = {}
-    if branch_col_idx is not None and data_start_row is not None:
-        roll_col_idx = 0
+    if branch_col_idx is not None and data_start_row is not None and roll_col_idx is not None:
         for r in range(data_start_row, len(raw)):
             roll = str(raw.iloc[r, roll_col_idx]).strip()
             branch_str = str(raw.iloc[r, branch_col_idx]).strip()
@@ -82,12 +89,24 @@ def _parse_student_rolls_from_workbook(file_path: str) -> dict:
     programmes: dict = {}
     branches: dict = {}
 
+    _BRANCH_TOKEN_RE = re.compile(
+        r"\b(ECE|EVE|CSE|CSAM|CSB|CSAI|EECS|IT|ICT|BT|CB|CS|CSB\.|CSAM\.)\b",
+        re.IGNORECASE,
+    )
+
     def _extract_branch_from_string(branch_str: str):
         if not branch_str or branch_str.lower() == "nan":
             return None, None
-        parts = [p.strip() for p in branch_str.split("/")]
+        parts = [p.strip() for p in re.split(r"[/|,]", branch_str) if p.strip()]
         prog = None
         branch = None
+        blob = branch_str.lower()
+        if "btech" in blob or "b.tech" in blob or "b tech" in blob:
+            prog = "UG"
+        elif "mtech" in blob or "m.tech" in blob or "m tech" in blob:
+            prog = "PG"
+        elif "phd" in blob:
+            prog = "PhD"
         for p in parts:
             pl = p.lower()
             if "btech" in pl or "b.tech" in pl:
@@ -97,12 +116,20 @@ def _parse_student_rolls_from_workbook(file_path: str) -> dict:
             elif "phd" in pl:
                 prog = "PhD"
         for p in parts:
-            if "-IIITD" in p:
-                branch = p.replace("-IIITD", "").replace("/IIITD", "").strip()
+            if "-IIITD" in p or "/IIITD" in p.upper():
+                branch = p.replace("-IIITD", "").replace("/IIITD", "").replace("IIITD", "").strip(" -/")
                 break
-            elif p.upper().startswith("ECE") or p.upper().startswith("CSE") or p.upper().startswith("CS"):
+            token_match = _BRANCH_TOKEN_RE.search(p)
+            if token_match:
+                branch = token_match.group(1).upper().rstrip(".")
+                break
+            elif p.upper().startswith(("ECE", "EVE", "CSE", "CS")):
                 branch = p.strip()
                 break
+        if branch is None and len(parts) == 1:
+            token = parts[0].strip()
+            if token and "tech" not in token.lower() and "phd" not in token.lower():
+                branch = token
         return prog, branch
 
     for roll in all_rolls:

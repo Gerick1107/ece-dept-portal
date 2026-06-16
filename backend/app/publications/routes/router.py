@@ -41,7 +41,7 @@ from app.publications.schemas import (
 from app.publications.scheduler.jobs import scheduler_status
 from app.publications.services.gap_fill_service import run_gap_fill_background
 from app.publications.scraper.scholar_scraper import sync_faculty_publications
-from app.publications.services.affiliations_import_service import list_faculty_affiliations
+from app.publications.services.affiliations_import_service import import_faculty_affiliations, list_faculty_affiliations
 from app.publications.services.faculty_import_service import import_faculty_csv
 from app.publications.services.publication_service import (
     create_faculty,
@@ -146,6 +146,12 @@ def get_faculty_affiliations(
     db: Annotated[Session, Depends(get_db)],
     _: Annotated[User, Depends(get_current_user)],
 ):
+    # Keep affiliations in sync with Links.txt on normal page refreshes.
+    try:
+        import_faculty_affiliations(db)
+    except Exception:
+        # Non-blocking: still return currently persisted affiliations.
+        pass
     faculty = db.scalar(select(Faculty).where(Faculty.id == faculty_id))
     if faculty is None:
         raise HTTPException(status_code=404, detail="Faculty not found")

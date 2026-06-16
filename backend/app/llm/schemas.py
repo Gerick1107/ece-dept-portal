@@ -19,6 +19,22 @@ class AssessmentSummaryItem(BaseModel):
     total_questions: int
 
 
+class AssessmentCoEntry(BaseModel):
+    co_label: str
+    question_count: int | None = None
+    attainment: float | None = None
+
+
+class AssessmentDetail(BaseModel):
+    assessment_id: int | None = None
+    name: str
+    type: str | None = None
+    semester: str | None = None
+    section_label: str | None = None
+    course_title: str | None = None
+    cos: list[AssessmentCoEntry] = Field(default_factory=list)
+
+
 class ComparisonRow(BaseModel):
     metric: str
     previous: float | None = None
@@ -43,6 +59,9 @@ class CourseComparison(BaseModel):
     insufficient_history: bool
     co_descriptions_available: bool = False
     assessment_summary: list[AssessmentSummaryItem] = Field(default_factory=list)
+    previous_assessment_summary: list[AssessmentSummaryItem] = Field(default_factory=list)
+    current_assessments: list[AssessmentDetail] = Field(default_factory=list)
+    previous_assessments: list[AssessmentDetail] = Field(default_factory=list)
     available_semesters: list[str] = Field(default_factory=list)
     available_sections: list[str] = Field(default_factory=list)
 

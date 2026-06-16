@@ -249,6 +249,46 @@ def _assessment_ids_for_co_attainment(
     return list(dict.fromkeys(co_attainment_columns))
 
 
+def _assessment_type_from_column(column_name: str) -> str:
+    token = re.split(r"[_.\s]+", str(column_name).strip())[0]
+    return token or str(column_name).strip()
+
+
+def _assessment_display_name(column_name: str) -> str:
+    raw = str(column_name).strip()
+    # Collapse common per-question suffixes while preserving faculty-facing labels.
+    raw = re.sub(r"_Q\d+$", "", raw, flags=re.IGNORECASE)
+    raw = re.sub(r"\.\d+$", "", raw)
+    return raw.strip() or str(column_name).strip()
+
+
+def _build_assessment_co_structure(
+    df: pd.DataFrame,
+    co_row_key,
+    co_attainment_columns: list[str],
+    col_to_group_key: dict[str, str],
+) -> list[dict]:
+    """Per-column CO mappings used for assessment_co_mapping persistence."""
+    structure: list[dict] = []
+    for col in co_attainment_columns:
+        group_key = col_to_group_key.get(str(col), normalize_group_key(str(col)))
+        display_name = _assessment_display_name(str(col))
+        co_labels = split_co_labels(df.loc[co_row_key, col])
+        if not co_labels:
+            continue
+        for co_label in co_labels:
+            structure.append(
+                {
+                    "name": display_name,
+                    "column": str(col),
+                    "assessment_type": _assessment_type_from_column(display_name),
+                    "co_label": co_label,
+                    "question_count": 1,
+                }
+            )
+    return structure
+
+
 def extract_course_co_po_mapping(mapping_xlsx_path: str, course_pattern: str):
     """
     Returns:
@@ -335,6 +375,72 @@ def extract_course_co_po_mapping(mapping_xlsx_path: str, course_pattern: str):
     raise ValueError(f"Could not find course '{course_pattern}' with CO rows in the mapping workbook.")
 
 
+def extract_course_co_po_mapping_pg(mapping_xlsx_path: str, course_pattern: str):
+    """
+    PG mapping: index = CO1..COn, columns = PO1..PO4 (numeric weights).
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+    xl = pd.ExcelFile(mapping_xlsx_path)
+    sheet = "CO mapping - PG"
+    if sheet not in xl.sheet_names:
+        raise ValueError(f"PG mapping sheet '{sheet}' not found in {mapping_xlsx_path}")
+
+    df = pd.read_excel(mapping_xlsx_path, sheet_name=sheet)
+    if df.shape[1] < 5:
+        raise ValueError("PG mapping sheet must have at least 5 columns (CO + 4 POs)")
+
+    first_col = df.columns[0]
+    col0 = df[first_col]
+    hits = [
+        i
+        for i, v in enumerate(col0.values)
+        if isinstance(v, str) and course_title_matches(course_pattern, v)
+    ]
+    if not hits:
+        raise ValueError(f"Could not find course '{course_pattern}' with CO rows in the PG mapping workbook.")
+
+    start = hits[0]
+    co_rows: list[int] = []
+    i = start + 1
+    while i < len(df):
+        raw = df.loc[i, first_col]
+        if pd.isna(raw):
+            break
+        v = str(raw).strip()
+        if v.upper().startswith("CO") and re.match(r"^CO\d+", v, re.IGNORECASE):
+            co_rows.append(i)
+            i += 1
+            continue
+        if v == "" or re.match(r"^\s*ECE-\d+", v):
+            break
+        break
+
+    if not co_rows:
+        raise ValueError(f"Could not find CO rows for course '{course_pattern}' in the PG mapping workbook.")
+
+    po_cols = list(df.columns[1:5])
+    po_labels = df.loc[0, po_cols].tolist()
+
+    mapping = df.loc[co_rows, [first_col] + po_cols].copy()
+    mapping = mapping.rename(columns={first_col: "CO"})
+    mapping["CO"] = mapping["CO"].astype(str).str.strip()
+
+    rename = {c: l for c, l in zip(po_cols, po_labels)}
+    mapping = mapping.rename(columns=rename).set_index("CO")
+
+    hml_map = {"H": 3, "h": 3, "High": 3, "M": 2, "m": 2, "Medium": 2, "L": 1, "l": 1, "Low": 1, "": 0}
+    mapping = mapping[po_labels]
+    mapping = mapping.apply(lambda col: col.astype(str).str.strip().replace(hml_map).infer_objects(copy=False))
+
+    for co in mapping.index:
+        if str(co).strip() and str(co).upper().startswith("CO") and co not in mapping.index:
+            logger.warning("CO %s not found in PG mapping file — skipped", co)
+
+    return mapping
+
+
 def compute_po_pso_weighted_avg(co_prime_percent: pd.Series, mapping_df: pd.DataFrame):
     """
     co_prime_percent: Series like {CO1: 72.3, CO2: 81.0, ...} in 0..100 scale
@@ -357,7 +463,14 @@ def compute_po_pso_weighted_avg(co_prime_percent: pd.Series, mapping_df: pd.Data
 
     return numerator / denom
 
-def main_process(course_file_path, mapping_file_path, course_title, included_rolls=None, target_value=50):
+def main_process(
+    course_file_path,
+    mapping_file_path,
+    course_title,
+    included_rolls=None,
+    target_value=50,
+    mapping_type: str = "UG",
+):
     """
     Main processing function for CO-PO analysis
     
@@ -717,6 +830,14 @@ def main_process(course_file_path, mapping_file_path, course_title, included_rol
     assessment_ids_display = _assessment_ids_for_co_attainment(
         df, co_attainment_columns, col_to_group_key
     )
+    assessment_co_structure = []
+    if co_row_key_for_checks is not None and co_attainment_columns:
+        assessment_co_structure = _build_assessment_co_structure(
+            df,
+            co_row_key_for_checks,
+            co_attainment_columns,
+            col_to_group_key,
+        )
     print("CO attainment columns:", co_attainment_columns)
     print("Canonical Assessment IDs:", assessment_ids_display)
 
@@ -975,8 +1096,21 @@ def main_process(course_file_path, mapping_file_path, course_title, included_rol
     print("Saved with CO stats + percentage above threshold (MT/PhD excluded) to:", destination)
 
     # Extract CO-PO mapping and compute PO/PSO attainment
-    mapping_df = extract_course_co_po_mapping(mapping_file_path, course_title)
-    po_pso_attainment = compute_po_pso_weighted_avg(pct_above, mapping_df)
+    import logging
+
+    logger = logging.getLogger(__name__)
+    if str(mapping_type).upper() == "PG":
+        mapping_df = extract_course_co_po_mapping_pg(mapping_file_path, course_title)
+    else:
+        mapping_df = extract_course_co_po_mapping(mapping_file_path, course_title)
+
+    overlap_cos = [co for co in unique_COs if co in mapping_df.index]
+    for co in unique_COs:
+        if co not in mapping_df.index:
+            logger.warning("CO %s not found in mapping file — skipped", co)
+    if not overlap_cos:
+        raise ValueError("No CO labels from the marks file were found in the selected mapping file.")
+    po_pso_attainment = compute_po_pso_weighted_avg(pct_above.loc[overlap_cos], mapping_df)
 
     print(po_pso_attainment)
 
@@ -1072,6 +1206,7 @@ def main_process(course_file_path, mapping_file_path, course_title, included_rol
         'excel_path': destination,
         'unique_COs': un,  # List of unique COs
         'assessment_ids': assessment_ids_display,  # Canonical evaluation labels for dashboard display
+        'assessment_co_structure': assessment_co_structure,
         'CO_stats': {  # Capital letters to match template
             'mean': mean_vals.to_dict(),
             'std': std_vals.to_dict(),

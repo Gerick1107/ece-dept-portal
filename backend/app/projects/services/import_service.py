@@ -238,6 +238,9 @@ def import_projects_file(
 
     upload.record_count = imported
     db.commit()
+    from app.ece_eve_projects.services.ece_eve_service import refresh_ece_eve_projects
+
+    refresh_ece_eve_projects(db)
     sdg_queued = 0
     if auto_sdg and sdg_queued_ids:
         sdg_queued = enqueue_sdg_tags(sdg_queued_ids)

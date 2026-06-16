@@ -57,3 +57,21 @@ python scripts/scrape_gap_fill.py
 ```
 
 Processes faculty IDs 1–27 in ascending order with a 2-second delay between each.
+
+---
+
+## Faculty affiliations (`Links.txt`)
+
+Research labs, centres, and groups are maintained in `data/assets/Links.txt`.
+
+- **Add or edit** an entry in the file, then refresh any faculty affiliations page (or restart the API). The sync runs automatically.
+- **Remove** an entry from the file — the corresponding affiliation and faculty links are **deleted from the database** on the next sync (startup or affiliations page load).
+- Unmatched faculty names in the file are logged as warnings; fix spelling to match `faculty_master.csv`.
+
+Format:
+
+```
+Research Centres
+Centre Name (https://example.edu/centre): Faculty One, Faculty Two
+```
+

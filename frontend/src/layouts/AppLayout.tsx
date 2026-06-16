@@ -140,7 +140,7 @@ export default function AppLayout() {
             />
             <div className="min-w-0">
               <p className="text-xs uppercase tracking-wide text-teal-100">ECE Department</p>
-              <h1 className="text-lg font-semibold truncate">CO-PO Automation Portal</h1>
+              <h1 className="text-lg font-semibold truncate">Automation Portal</h1>
             </div>
           </div>
           <div className="flex items-center gap-3 text-sm shrink-0">

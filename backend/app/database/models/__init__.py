@@ -1,3 +1,4 @@
+from app.database.models.assessment import Assessment, AssessmentCoMapping
 from app.database.models.copo import CopoEvaluationRun, CopoMarksUpload, CopoResultArchive
 from app.database.models.copo_analytics import CopoRunAnalyticsSnapshot
 from app.database.models.course import Course
@@ -15,12 +16,15 @@ from app.publications.models.entities import (
     ScrapeLog,
 )
 from app.projects.models.entities import Project, ProjectSdg, ProjectStudent, ProjectUpload, Sdg
+from app.ece_eve_projects.models.entities import EceEveProject
 from app.llm.models.entities import LlmInsightsCache
 
 __all__ = [
     "User",
     "CopoMarksUpload",
     "CopoEvaluationRun",
+    "Assessment",
+    "AssessmentCoMapping",
     "CopoResultArchive",
     "CopoRunAnalyticsSnapshot",
     "Course",
@@ -41,5 +45,6 @@ __all__ = [
     "ProjectSdg",
     "ProjectUpload",
     "Sdg",
+    "EceEveProject",
     "LlmInsightsCache",
 ]

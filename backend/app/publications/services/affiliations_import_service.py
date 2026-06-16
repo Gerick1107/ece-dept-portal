@@ -97,10 +97,13 @@ def import_faculty_affiliations(db: Session, links_path: Path | None = None) -> 
     faculty_rows = list(db.scalars(select(Faculty)).all())
 
     linked = 0
+    removed_links = 0
+    removed_affiliations = 0
     unmatched: list[str] = []
-    seen_links: set[tuple[int, int]] = set()
+    file_affiliation_keys: set[tuple[str, str]] = set()
 
     for entry in entries:
+        file_affiliation_keys.add((entry["name"], entry["url"]))
         affiliation = db.scalar(
             select(Affiliation).where(
                 Affiliation.name == entry["name"],
@@ -118,15 +121,13 @@ def import_faculty_affiliations(db: Session, links_path: Path | None = None) -> 
         else:
             affiliation.category = entry["category"]
 
+        desired_faculty_ids: set[int] = set()
         for member_name in entry["faculty_names"]:
             faculty_id = _resolve_faculty_id(faculty_rows, member_name)
             if faculty_id is None:
                 unmatched.append(member_name)
                 continue
-            key = (faculty_id, affiliation.id)
-            if key in seen_links:
-                continue
-            seen_links.add(key)
+            desired_faculty_ids.add(faculty_id)
             existing = db.scalar(
                 select(FacultyAffiliation).where(
                     FacultyAffiliation.faculty_id == faculty_id,
@@ -137,12 +138,27 @@ def import_faculty_affiliations(db: Session, links_path: Path | None = None) -> 
                 db.add(FacultyAffiliation(faculty_id=faculty_id, affiliation_id=affiliation.id))
                 linked += 1
 
+        stale_links = db.scalars(
+            select(FacultyAffiliation).where(FacultyAffiliation.affiliation_id == affiliation.id)
+        ).all()
+        for link in stale_links:
+            if link.faculty_id not in desired_faculty_ids:
+                db.delete(link)
+                removed_links += 1
+
+    for affiliation in db.scalars(select(Affiliation)).all():
+        if (affiliation.name, affiliation.url) not in file_affiliation_keys:
+            db.delete(affiliation)
+            removed_affiliations += 1
+
     db.commit()
     if unmatched:
         logger.warning("Unmatched affiliation faculty names: %s", sorted(set(unmatched)))
     return {
         "affiliations_parsed": len(entries),
         "links_created": linked,
+        "links_removed": removed_links,
+        "affiliations_removed": removed_affiliations,
         "unmatched_names": sorted(set(unmatched)),
     }
 

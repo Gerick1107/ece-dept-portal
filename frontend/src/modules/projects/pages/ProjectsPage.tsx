@@ -98,7 +98,17 @@ function CommaCell({ value }: { value: string | null | undefined }) {
 
 const SEMESTER_TERMS = ["Monsoon", "Winter", "Summer"] as const;
 
+import EceEveProjectsTab from "./EceEveProjectsTab";
+
+const PROJECT_TABS = [
+  { id: "btp", label: "BTP / IP Projects" },
+  { id: "ece_eve", label: "ECE/EVE Projects" },
+] as const;
+
+type ProjectTabId = (typeof PROJECT_TABS)[number]["id"];
+
 export default function ProjectsPage() {
+  const [projectTab, setProjectTab] = useState<ProjectTabId>("btp");
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
   const isFaculty = user?.role === "faculty" || user?.role === "hod";
@@ -317,6 +327,27 @@ export default function ProjectsPage() {
 
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap gap-1 border-b border-slate-200 pb-1">
+        {PROJECT_TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setProjectTab(t.id)}
+            className={`px-4 py-2 text-sm rounded-t-lg transition-colors ${
+              projectTab === t.id
+                ? "bg-white border border-b-white border-slate-200 font-medium text-teal-800 -mb-px"
+                : "text-slate-600 hover:bg-slate-100"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {projectTab === "ece_eve" ? (
+        <EceEveProjectsTab />
+      ) : (
+        <>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold">BTP / IP Project Repository</h2>
@@ -866,6 +897,8 @@ export default function ProjectsPage() {
             </div>
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );

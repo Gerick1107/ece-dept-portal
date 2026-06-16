@@ -168,7 +168,15 @@ def lookup_indirect_values(
     return values
 
 
-def resolve_mapping_path(use_default: bool, custom_path: str | None) -> str:
+def resolve_mapping_path(
+    use_default: bool,
+    custom_path: str | None,
+    *,
+    mapping_type: str = "UG",
+) -> str:
     if use_default or not custom_path:
+        profile = str(mapping_type or "UG").upper()
+        if profile == "PG":
+            return settings.resolved_pg_mapping_path
         return settings.resolved_mapping_path
     return custom_path

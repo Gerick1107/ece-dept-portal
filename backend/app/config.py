@@ -65,7 +65,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    app_name: str = "ECE Department Automation Portal"
+    app_name: str = "Automation Portal"
     app_env: str = "development"
     debug: bool = True
     api_v1_prefix: str = "/api/v1"
@@ -154,6 +154,15 @@ class Settings(BaseSettings):
             self.default_indirect_path or None,
             "indirect.xlsx",
             ["indirect.xlsx"],
+        )
+
+
+    @property
+    def resolved_pg_mapping_path(self) -> str:
+        return resolve_data_file(
+            None,
+            "CO mapping - PG.xlsx",
+            ["CO mapping - PG.xlsx"],
         )
 
 

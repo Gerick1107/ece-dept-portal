@@ -99,6 +99,86 @@ function ComparisonTable({
   );
 }
 
+function formatAssessmentSummary(items: CourseComparison["assessment_summary"]) {
+  if (!items.length) return "No assessment structure recorded.";
+  return items
+    .map(
+      (item) =>
+        `${item.component_type}: ${item.component_count} component(s), ${item.total_questions} question column(s)`
+    )
+    .join("; ");
+}
+
+function AssessmentStructurePanel({
+  comparison,
+  previousLabel,
+  currentLabel,
+}: {
+  comparison: CourseComparison;
+  previousLabel: string;
+  currentLabel: string;
+}) {
+  const hasCurrent =
+    comparison.current_assessments.length > 0 || comparison.assessment_summary.length > 0;
+  const hasPrevious =
+    comparison.previous_assessments.length > 0 || comparison.previous_assessment_summary.length > 0;
+
+  if (!hasCurrent && !hasPrevious) return null;
+
+  function renderAssessments(assessments: CourseComparison["current_assessments"]) {
+    if (!assessments.length) return <p className="text-sm text-slate-500">No per-assessment CO mapping available.</p>;
+    return (
+      <ul className="space-y-2 text-sm">
+        {assessments.map((item) => (
+          <li key={item.name} className="border border-slate-100 rounded-lg px-3 py-2 bg-slate-50/60">
+            <p className="font-medium text-slate-800">
+              {item.name}
+              {item.type ? <span className="text-slate-500 font-normal"> ({item.type})</span> : null}
+            </p>
+            {item.cos.length ? (
+              <p className="text-xs text-slate-600 mt-1">
+                {item.cos
+                  .map((co) => {
+                    const attainment =
+                      co.attainment != null ? `${co.attainment.toFixed(1)}%` : "N/A";
+                    const q = co.question_count != null ? `${co.question_count} q` : "";
+                    return `${co.co_label}${q ? ` (${q})` : ""}: ${attainment}`;
+                  })
+                  .join(" · ")}
+              </p>
+            ) : (
+              <p className="text-xs text-slate-500 mt-1">Structure only — no CO mapping recorded.</p>
+            )}
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  return (
+    <section className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-4">
+      <h3 className="font-semibold text-slate-800">Assessment structure used for insights</h3>
+      <p className="text-xs text-slate-500">
+        This data is sent to the LLM when generating insights. Regenerate after new evaluations to refresh.
+      </p>
+      <div className="grid lg:grid-cols-2 gap-4">
+        {comparison.has_previous && (
+          <div>
+            <h4 className="text-sm font-medium text-slate-700 mb-2">{previousLabel}</h4>
+            <p className="text-xs text-slate-500 mb-2">{formatAssessmentSummary(comparison.previous_assessment_summary)}</p>
+            {renderAssessments(comparison.previous_assessments)}
+          </div>
+        )}
+        <div>
+          <h4 className="text-sm font-medium text-slate-700 mb-2">{currentLabel}</h4>
+          <p className="text-xs text-slate-500 mb-2">{formatAssessmentSummary(comparison.assessment_summary)}</p>
+          {renderAssessments(comparison.current_assessments)}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function LlmInsightsPage() {
   const [courses, setCourses] = useState<InsightCourseOption[]>([]);
   const [selectedKey, setSelectedKey] = useState("");
@@ -349,6 +429,12 @@ export default function LlmInsightsPage() {
               currentLabel={currentLabel}
             />
           </section>
+
+          <AssessmentStructurePanel
+            comparison={comparison}
+            previousLabel={previousLabel}
+            currentLabel={currentLabel}
+          />
 
           <section className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
             <div className="flex flex-wrap items-start justify-between gap-3 mb-4">

@@ -45,6 +45,7 @@ export default function CopoEvaluatePage() {
   const [courses, setCourses] = useState<string[]>([]);
   const [courseTitle, setCourseTitle] = useState("");
   const [mappingMode, setMappingMode] = useState<"default" | "custom">("default");
+  const [mappingProfile, setMappingProfile] = useState<"UG" | "PG">("UG");
   const [customMappingFile, setCustomMappingFile] = useState<File | null>(null);
   const [marksFile, setMarksFile] = useState<File | null>(null);
   const [programmes, setProgrammes] = useState<string[]>([]);
@@ -101,6 +102,7 @@ export default function CopoEvaluatePage() {
     const fd = new FormData();
     fd.append("course_title", courseTitle);
     fd.append("mapping_option", mappingMode === "default" ? "default" : "upload");
+    fd.append("mapping_type", mappingProfile);
     if (mappingMode === "custom" && customMappingFile) {
       fd.append("mapping_file", customMappingFile);
     }
@@ -113,7 +115,19 @@ export default function CopoEvaluatePage() {
         setIndirect(init);
       })
       .catch(() => setIndirect({}));
-  }, [courseTitle, mappingMode, customMappingFile]);
+  }, [courseTitle, mappingMode, mappingProfile, customMappingFile]);
+
+  useEffect(() => {
+    if (!parsePreview?.cos?.length) return;
+    setIndirect((prev) => {
+      // Keep existing values, but ensure every parsed CO has an editable field.
+      const next = { ...prev };
+      for (const co of parsePreview.cos) {
+        if (!(co in next)) next[co] = "";
+      }
+      return next;
+    });
+  }, [parsePreview]);
 
   // Auto-parse marks file on upload (legacy portal behaviour).
   useEffect(() => {
@@ -149,6 +163,7 @@ export default function CopoEvaluatePage() {
     fd.append("course_title", courseTitle);
     fd.append("course_file", marksFile);
     fd.append("use_default_mapping", mappingMode === "default" ? "true" : "false");
+    fd.append("mapping_type", mappingProfile);
     if (mappingMode === "custom" && customMappingFile) {
       fd.append("mapping_file", customMappingFile);
     }
@@ -248,6 +263,32 @@ export default function CopoEvaluatePage() {
             />
             Default department mapping
           </label>
+          {mappingMode === "default" && (
+            <div className="ml-6 space-y-2 border-l border-slate-200 pl-4">
+              <p className="text-xs font-medium text-slate-700">Mapping profile</p>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  checked={mappingProfile === "UG"}
+                  onChange={() => setMappingProfile("UG")}
+                />
+                UG Mapping
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  checked={mappingProfile === "PG"}
+                  onChange={() => setMappingProfile("PG")}
+                />
+                PG Mapping
+              </label>
+              <p className="text-xs text-slate-500">
+                {mappingProfile === "UG"
+                  ? "12 POs + 3 PSOs (default_mapping)"
+                  : "4 POs (PG mapping)"}
+              </p>
+            </div>
+          )}
           <label className="flex items-center gap-2 text-sm">
             <input type="radio" checked={mappingMode === "custom"} onChange={() => setMappingMode("custom")} />
             Custom mapping file
@@ -332,7 +373,7 @@ export default function CopoEvaluatePage() {
           />
         )}
 
-        {Object.keys(indirect).length > 0 && (
+        {(Object.keys(indirect).length > 0 || (parsePreview?.cos?.length ?? 0) > 0) && (
           <section className="bg-white border rounded-xl p-6">
             <h3 className="font-medium mb-2 flex items-center gap-2">
               <span className="bg-teal-700 text-white w-6 h-6 rounded-full text-xs flex items-center justify-center">
@@ -341,7 +382,7 @@ export default function CopoEvaluatePage() {
               Indirect CO attainment (optional, 0–100)
             </h3>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {Object.keys(indirect).map((co) => (
+              {(Object.keys(indirect).length ? Object.keys(indirect) : parsePreview?.cos ?? []).map((co) => (
                 <label key={co} className="text-xs">
                   {co}
                   <input

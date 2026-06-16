@@ -34,6 +34,7 @@ async def submit_final_consolidated(
     remove_marks_after: bool = False,
     skip_database_save: bool = False,
     preview_upload_id: int | None = None,
+    mapping_type: str = "UG",
 ) -> dict[str, Any]:
     if not allowed_file(course_file.filename):
         raise ValueError("Invalid file. Only .xlsx consolidated marks files are accepted.")
@@ -81,6 +82,7 @@ async def submit_final_consolidated(
             course_filename=course_file.filename or "course.xlsx",
             mapping_filename=mapping_filename,
             target_value=target_value,
+            mapping_type=mapping_type,
         )
         download_token = None
         excel_path = payload.get("excel_path")
@@ -105,6 +107,17 @@ async def submit_final_consolidated(
                 },
                 excel_path=excel_path,
             )
+            from app.copo.services.assessment_mapping_service import persist_assessment_co_mappings
+
+            persist_assessment_co_mappings(
+                db,
+                run,
+                course_title=course_title,
+                semester_label=semester_label,
+                section_label=section_label,
+                intermediate=payload["intermediate"],
+            )
+            db.commit()
 
         public_id = run.public_id if run else ""
         data_deleted = False

@@ -62,7 +62,7 @@ export default function LoginPage() {
             <p className="text-xs text-teal-700 font-semibold uppercase tracking-wide">
               ECE Department
             </p>
-            <h1 className="text-2xl font-bold text-slate-900">CO-PO Automation Portal</h1>
+            <h1 className="text-2xl font-bold text-slate-900">Automation Portal</h1>
             <p className="text-sm text-slate-500 mt-1">Sign in with your institutional account</p>
           </div>
         </div>

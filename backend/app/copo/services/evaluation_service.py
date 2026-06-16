@@ -28,6 +28,7 @@ def prepare_results_payload(
     course_filename: str | None = None,
     mapping_filename: str | None = None,
     target_value: int = 50,
+    mapping_type: str = "UG",
 ) -> dict:
     indirect_attainment = _normalize_indirect_attainment(indirect_attainment or {})
     original_course_path = course_path
@@ -39,6 +40,7 @@ def prepare_results_payload(
             course_title,
             included_rolls=included_rolls,
             target_value=target_value,
+            mapping_type=mapping_type,
         )
     finally:
         cleanup_normalized_workbook(course_path, original_course_path)
@@ -173,6 +175,7 @@ def build_evaluation_payload(
     co_cell_ref: str | None = None,
     po_cell_ref: str | None = None,
     target_value: int = 50,
+    mapping_type: str = "UG",
 ) -> dict:
     original_course_path = course_path
     course_path = resolve_marks_workbook(course_path)
@@ -183,6 +186,7 @@ def build_evaluation_payload(
             course_title,
             included_rolls=included_rolls,
             target_value=target_value,
+            mapping_type=mapping_type,
         )
     finally:
         cleanup_normalized_workbook(course_path, original_course_path)
@@ -236,6 +240,7 @@ def process_bulk_row(
     row_number: int = 1,
     course_filename: str = "",
     compare_filename: str = "",
+    mapping_type: str = "UG",
 ) -> dict:
     scope_summary = summarize_scope_selection(selected_programmes, selected_branches)
     stage = "calculation"
@@ -251,6 +256,7 @@ def process_bulk_row(
             included_rolls=included_rolls,
             co_cell_ref=co_cell_ref or None,
             po_cell_ref=po_cell_ref or None,
+            mapping_type=mapping_type,
         )
         excel_path = evaluation.get("intermediate", {}).get("excel_path")
         return {

@@ -25,7 +25,7 @@ export default function BulkScopeMultiSelect({
   }
 
   const branchOptions = Object.entries(preview.branches).filter(([, info]) =>
-    programmes.includes(info.programme)
+    programmes.length === 0 ? true : programmes.includes(info.programme)
   );
 
   if (column === "programme") {

@@ -2,11 +2,13 @@ import { useState } from "react";
 import AwardsAnalyticsTab from "../components/AwardsAnalyticsTab";
 import CopoAnalyticsTab from "../components/CopoAnalyticsTab";
 import ProjectsAnalyticsTab from "../components/ProjectsAnalyticsTab";
+import { EceEveProjectsAnalyticsPanel } from "../../projects/pages/EceEveProjectsTab";
 import PublicationsAnalyticsTab from "../components/PublicationsAnalyticsTab";
 
 const TABS = [
   { id: "copo", label: "CO/PO Attainment" },
   { id: "projects", label: "BTP / IP Projects" },
+  { id: "ece_eve_projects", label: "ECE/EVE Projects" },
   { id: "awards", label: "Faculty Awards" },
   { id: "publications", label: "Publications" },
 ] as const;
@@ -45,6 +47,7 @@ export default function AnalyticsPage() {
 
       {tab === "copo" && <CopoAnalyticsTab />}
       {tab === "projects" && <ProjectsAnalyticsTab />}
+      {tab === "ece_eve_projects" && <EceEveProjectsAnalyticsPanel />}
       {tab === "awards" && <AwardsAnalyticsTab />}
       {tab === "publications" && <PublicationsAnalyticsTab />}
     </div>
