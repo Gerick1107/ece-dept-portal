@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import CoWarningsBanner from "../../components/CoWarningsBanner";
 import ConstraintMarksTemplatePanel from "../../components/ConstraintMarksTemplatePanel";
@@ -28,6 +28,32 @@ type EvalResult = {
   ephemeral?: boolean;
 };
 
+function sortCoLabels(cos: string[]) {
+  return [...cos].sort((a, b) => {
+    const na = parseInt(a.replace(/\D/g, ""), 10) || 0;
+    const nb = parseInt(b.replace(/\D/g, ""), 10) || 0;
+    return na - nb;
+  });
+}
+
+function buildIndirectFromFileCos(
+  fileCos: string[],
+  prev: Record<string, string>,
+  mappingDefaults: Record<string, number>
+): Record<string, string> {
+  const next: Record<string, string> = {};
+  for (const co of fileCos) {
+    if (prev[co]?.trim()) {
+      next[co] = prev[co];
+    } else if (mappingDefaults[co] != null) {
+      next[co] = String(mappingDefaults[co]);
+    } else {
+      next[co] = "";
+    }
+  }
+  return next;
+}
+
 function defaultScopeFromPreview(preview: MarksParsePreview) {
   return {
     programmes: preview.default_programmes.length
@@ -52,6 +78,7 @@ export default function CopoEvaluatePage() {
   const [branches, setBranches] = useState<string[]>([]);
   const [parsePreview, setParsePreview] = useState<MarksParsePreview | null>(null);
   const [indirect, setIndirect] = useState<Record<string, string>>({});
+  const [mappingIndirectDefaults, setMappingIndirectDefaults] = useState<Record<string, number>>({});
   const [removeMarksAfter, setRemoveMarksAfter] = useState(false);
   const [skipDatabaseSave, setSkipDatabaseSave] = useState(false);
   const [previewUploadId, setPreviewUploadId] = useState(0);
@@ -66,6 +93,11 @@ export default function CopoEvaluatePage() {
   const [semesterYear, setSemesterYear] = useState(String(new Date().getFullYear()));
   const [sectionLabel, setSectionLabel] = useState("");
   const { parseMarksFile, parsing, error: parseError, setError: setParseError } = useMarksFileParse();
+
+  const indirectCos = useMemo(
+    () => sortCoLabels(parsePreview?.cos ?? []),
+    [parsePreview?.cos]
+  );
 
   const loadCourses = useCallback(async (mappingFile?: File) => {
     try {
@@ -108,26 +140,20 @@ export default function CopoEvaluatePage() {
     }
     apiPostForm<{ cos: string[]; indirect_values: Record<string, number> }>("/copo/course-cos", fd)
       .then((r) => {
-        const init: Record<string, string> = {};
-        r.cos.forEach((co) => {
-          init[co] = r.indirect_values[co] != null ? String(r.indirect_values[co]) : "";
-        });
-        setIndirect(init);
+        setMappingIndirectDefaults(r.indirect_values ?? {});
       })
-      .catch(() => setIndirect({}));
+      .catch(() => {
+        setMappingIndirectDefaults({});
+      });
   }, [courseTitle, mappingMode, mappingProfile, customMappingFile]);
 
   useEffect(() => {
-    if (!parsePreview?.cos?.length) return;
-    setIndirect((prev) => {
-      // Keep existing values, but ensure every parsed CO has an editable field.
-      const next = { ...prev };
-      for (const co of parsePreview.cos) {
-        if (!(co in next)) next[co] = "";
-      }
-      return next;
-    });
-  }, [parsePreview]);
+    if (!parsePreview?.cos?.length) {
+      setIndirect({});
+      return;
+    }
+    setIndirect((prev) => buildIndirectFromFileCos(parsePreview.cos, prev, mappingIndirectDefaults));
+  }, [parsePreview, mappingIndirectDefaults]);
 
   // Auto-parse marks file on upload (legacy portal behaviour).
   useEffect(() => {
@@ -135,6 +161,7 @@ export default function CopoEvaluatePage() {
       setParsePreview(null);
       setProgrammes([]);
       setBranches([]);
+      setIndirect({});
       return;
     }
     let cancelled = false;
@@ -169,10 +196,12 @@ export default function CopoEvaluatePage() {
     }
     programmes.forEach((p) => fd.append("programmes", p));
     branches.forEach((b) => fd.append("branches", b));
+    const fileCos = parsePreview?.cos ?? [];
     const indirectNums: Record<string, number> = {};
-    Object.entries(indirect).forEach(([co, v]) => {
-      if (v.trim()) indirectNums[co] = parseFloat(v);
-    });
+    for (const co of fileCos) {
+      const v = indirect[co];
+      if (v?.trim()) indirectNums[co] = parseFloat(v);
+    }
     fd.append("indirect_attainment_json", JSON.stringify(indirectNums));
     fd.append("remove_marks_after", removeMarksAfter ? "true" : "false");
     fd.append("skip_database_save", skipDatabaseSave ? "true" : "false");
@@ -373,7 +402,7 @@ export default function CopoEvaluatePage() {
           />
         )}
 
-        {(Object.keys(indirect).length > 0 || (parsePreview?.cos?.length ?? 0) > 0) && (
+        {indirectCos.length > 0 && (
           <section className="bg-white border rounded-xl p-6">
             <h3 className="font-medium mb-2 flex items-center gap-2">
               <span className="bg-teal-700 text-white w-6 h-6 rounded-full text-xs flex items-center justify-center">
@@ -382,7 +411,7 @@ export default function CopoEvaluatePage() {
               Indirect CO attainment (optional, 0–100)
             </h3>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {(Object.keys(indirect).length ? Object.keys(indirect) : parsePreview?.cos ?? []).map((co) => (
+              {indirectCos.map((co) => (
                 <label key={co} className="text-xs">
                   {co}
                   <input
@@ -390,8 +419,8 @@ export default function CopoEvaluatePage() {
                     step="0.01"
                     min={0}
                     max={100}
-                    value={indirect[co]}
-                    onChange={(e) => setIndirect({ ...indirect, [co]: e.target.value })}
+                    value={indirect[co] ?? ""}
+                    onChange={(e) => setIndirect((prev) => ({ ...prev, [co]: e.target.value }))}
                     className="mt-0.5 w-full border rounded px-2 py-1"
                   />
                 </label>

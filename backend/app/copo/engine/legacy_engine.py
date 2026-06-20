@@ -565,13 +565,40 @@ def main_process(
     original_data = df.copy()
 
     # Normalize Result / Grade_Point column aliases (e.g. Result.1, Grade, Final grade)
-    def _grade_column_alias(col_name: str) -> str | None:
+    def _is_grade_col_name(col_name: str) -> bool:
         norm = normalize_evaluation_name(col_name)
-        if norm in ("GRADEPOINT", "GRADE_POINT", "GRADE", "FINALGRADE", "FINAL_GRADE"):
-            return "Grade_Point"
-        if norm.startswith("GRADEPOINT."):
+        if norm in (
+            "GRADEPOINT",
+            "GRADE_POINT",
+            "GRADE",
+            "FINALGRADE",
+            "FINAL_GRADE",
+            "GRADELETTER",
+            "GRADE_LETTER",
+            "LETTERGRADE",
+        ):
+            return True
+        return norm.startswith("GRADEPOINT") or norm.startswith("GRADELETTER")
+
+    def _grade_column_alias(col_name: str) -> str | None:
+        if _is_grade_col_name(col_name):
             return "Grade_Point"
         return None
+
+    def _student_row_labels(df_frame: pd.DataFrame) -> list:
+        skip = {"CO", "MAX_MARKS", "MAX_MARKS_SCALED", "ROLL NO.", "ROLL NO", "BRANCH"}
+        return [idx for idx in df_frame.index if str(idx).strip().upper() not in skip]
+
+    def _grade_fill_count(column_name: str) -> int:
+        count = 0
+        for idx in _student_row_labels(df):
+            val = df.loc[idx, column_name]
+            if pd.isna(val):
+                continue
+            s = str(val).strip()
+            if s and s.lower() not in ("nan", ""):
+                count += 1
+        return count
 
     for col in list(df.columns):
         norm = normalize_evaluation_name(col)
@@ -582,18 +609,38 @@ def main_process(
         if grade_alias and grade_alias not in df.columns:
             df.rename(columns={col: grade_alias}, inplace=True)
 
-    if "Grade_Point" not in df.columns:
-        grade_candidates = [
-            c for c in df.columns
-            if normalize_evaluation_name(c).startswith("GRADEPOINT")
-            or normalize_evaluation_name(c) in ("GRADE", "FINALGRADE")
-        ]
-        if grade_candidates:
-            def _has_letter_grades(column_name: str) -> bool:
-                sample = df[column_name].dropna().astype(str).head(30)
-                return any(re.match(r"^[A-F][+-]?$", v.strip().upper()) for v in sample)
+    grade_candidates = [str(c) for c in df.columns if _is_grade_col_name(str(c))]
+    if grade_candidates:
+        def _has_letter_grades(column_name: str) -> bool:
+            sample = [
+                str(df.loc[idx, column_name]).strip()
+                for idx in _student_row_labels(df)
+                if not pd.isna(df.loc[idx, column_name])
+            ][:30]
+            return any(re.match(r"^[A-F][+-]?$", v.upper()) for v in sample)
 
-            preferred = next((c for c in grade_candidates if _has_letter_grades(c)), grade_candidates[-1])
+        def _has_numeric_grades(column_name: str) -> bool:
+            sample = [
+                str(df.loc[idx, column_name]).strip()
+                for idx in _student_row_labels(df)
+                if not pd.isna(df.loc[idx, column_name])
+            ][:30]
+            return any(re.match(r"^\d+$", v) for v in sample)
+
+        with_data = [c for c in grade_candidates if _grade_fill_count(c) > 0]
+        pool = with_data or grade_candidates
+        letter_cols = [c for c in pool if _has_letter_grades(c)]
+        numeric_cols = [c for c in pool if _has_numeric_grades(c)]
+        if letter_cols:
+            preferred = max(letter_cols, key=_grade_fill_count)
+        elif numeric_cols:
+            preferred = max(numeric_cols, key=_grade_fill_count)
+        else:
+            preferred = max(pool, key=_grade_fill_count)
+        for col in grade_candidates:
+            if col != preferred and col in df.columns:
+                df.drop(columns=[col], inplace=True)
+        if preferred != "Grade_Point":
             df.rename(columns={preferred: "Grade_Point"}, inplace=True)
 
     # --- Validate required structure ---

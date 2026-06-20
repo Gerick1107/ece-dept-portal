@@ -80,14 +80,39 @@ def _is_result_label(value) -> bool:
 
 def _is_grade_label(value) -> bool:
     norm = _normalize_label(value).replace(" ", "_")
-    return norm in _GRADE_LABELS or norm.startswith("grade_point")
+    if norm in _GRADE_LABELS or norm.startswith("grade_point"):
+        return True
+    if norm.startswith("grade_letter") or norm in ("letter_grade", "gradeletter"):
+        return True
+    return "grade" in norm and "letter" in norm
+
+
+def _is_grade_column_name(col_name: str) -> bool:
+    norm = _normalize_label(col_name).replace(" ", "_")
+    if _is_grade_label(col_name):
+        return True
+    if norm.startswith("grade_letter") or norm.startswith("grade_point"):
+        return True
+    return "grade" in norm and "letter" in norm
+
+
+def _is_trailer_column(name: str) -> bool:
+    if name == "Result":
+        return True
+    return _is_grade_column_name(name)
 
 
 def _looks_like_roll_number(value) -> bool:
     roll = _cell_str(value)
     if not roll or roll.lower() in ("roll no.", "roll no", "branch", "nan", "s.no", "s.no."):
         return False
-    return bool(re.match(r"^(MT|PhD|\d)", roll, re.IGNORECASE))
+    upper = roll.upper()
+    if upper in ("CO", "MAX_MARKS", "MAX MARKS", "RESULT", "GRADE_POINT", "GRADE_LETTER", "BONUS"):
+        return False
+    if re.match(r"^(MT|PhD|\d)", roll, re.IGNORECASE):
+        return True
+    # Alphanumeric student IDs (exchange / special programmes, e.g. SP26003)
+    return bool(re.match(r"^[A-Za-z0-9][A-Za-z0-9\-]{2,15}$", roll))
 
 
 def _find_co_metadata_cell(raw: pd.DataFrame, max_rows: int = 15) -> tuple[int, int] | None:
@@ -218,10 +243,14 @@ def _build_column_names(raw: pd.DataFrame, start_col: int) -> list[str]:
                 names.append(f"_skip_{j}")
             continue
         if _is_grade_label(base):
-            if "Grade_Point" not in names:
-                names.append("Grade_Point")
+            label = _normalize_label(base).replace(" ", "_")
+            if "letter" in label:
+                name = "Grade_letter" if "Grade_letter" not in names else f"Grade_letter.{j}"
+            elif "Grade_Point" not in names:
+                name = "Grade_Point"
             else:
-                names.append(f"_skip_{j}")
+                name = f"Grade_Point.{j}"
+            names.append(name)
             continue
         if g and s and s.lower() != "total" and not s.lower().startswith("bonus_q"):
             key = g
@@ -272,15 +301,55 @@ def _write_workbook(df: pd.DataFrame, source_path: str) -> str:
     return str(dest)
 
 
+def _grade_value_count(df: pd.DataFrame, col: str) -> int:
+    metadata = {"CO", "Max_Marks", "Max_Marks_scaled", "Roll No.", "Roll No", "Branch"}
+    count = 0
+    for idx in df.index:
+        if str(idx).strip() in metadata:
+            continue
+        val = df.loc[idx, col]
+        if pd.isna(val):
+            continue
+        s = str(val).strip()
+        if s and s.lower() not in ("nan", ""):
+            count += 1
+    return count
+
+
 def _pick_grade_column(df: pd.DataFrame, candidates: list[str]) -> str:
-    for col in candidates:
-        sample = df[col].dropna().astype(str).head(30)
-        if any(re.match(r"^[A-F][+-]?$", s.strip().upper()) for s in sample):
-            return col
-    for col in reversed(candidates):
-        if col in df.columns:
-            return col
-    return candidates[0]
+    with_data = [c for c in candidates if _grade_value_count(df, c) > 0]
+    pool = with_data or candidates
+    metadata = {"CO", "Max_Marks", "Max_Marks_scaled", "Roll No.", "Roll No", "Branch"}
+
+    def _student_samples(col: str) -> list[str]:
+        sample: list[str] = []
+        for idx in df.index:
+            if str(idx).strip() in metadata:
+                continue
+            val = df.loc[idx, col]
+            if pd.isna(val):
+                continue
+            s = str(val).strip()
+            if s and s.lower() not in ("nan", ""):
+                sample.append(s)
+            if len(sample) >= 30:
+                break
+        return sample
+
+    letter_cols: list[str] = []
+    numeric_cols: list[str] = []
+    for col in pool:
+        samples = _student_samples(col)
+        if any(re.match(r"^[A-F][+-]?$", s.upper()) for s in samples):
+            letter_cols.append(col)
+        elif any(re.match(r"^\d+$", s) for s in samples):
+            numeric_cols.append(col)
+
+    if letter_cols:
+        return max(letter_cols, key=lambda c: _grade_value_count(df, c))
+    if numeric_cols:
+        return max(numeric_cols, key=lambda c: _grade_value_count(df, c))
+    return max(pool, key=lambda c: _grade_value_count(df, c))
 
 
 def _finalize_standard_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -295,18 +364,14 @@ def _finalize_standard_columns(df: pd.DataFrame) -> pd.DataFrame:
                     df.rename(columns={col: "Result"}, inplace=True)
                     break
 
-    if "Grade_Point" not in df.columns:
-        candidates: list[str] = []
-        for col in df.columns:
-            norm = _normalize_label(col).replace(" ", "_")
-            if _is_grade_label(col) or norm.startswith("grade_point"):
-                candidates.append(str(col))
-        if candidates:
-            best = _pick_grade_column(df, candidates)
+    grade_candidates = [str(col) for col in df.columns if _is_grade_column_name(str(col))]
+    if grade_candidates:
+        best = _pick_grade_column(df, grade_candidates)
+        for col in grade_candidates:
+            if col != best and col in df.columns:
+                df.drop(columns=[col], inplace=True)
+        if best != "Grade_Point":
             df.rename(columns={best: "Grade_Point"}, inplace=True)
-            for col in candidates:
-                if col != best and col in df.columns:
-                    df.drop(columns=[col], inplace=True)
     return df
 
 
@@ -341,7 +406,7 @@ def _build_assessment_table(
     for j, name in enumerate(col_names, start=start_col):
         if name.startswith("_skip_"):
             continue
-        if name in ("Result", "Grade_Point"):
+        if _is_trailer_column(name):
             assessment_cols.append(name)
             col_indices.append(j)
             continue
@@ -349,13 +414,15 @@ def _build_assessment_table(
         col_indices.append(j)
 
     regular_cols = [
-        c for c in assessment_cols if not is_bonus_column(c) and not is_bonus_assessment_column(c)
+        c
+        for c in assessment_cols
+        if not is_bonus_column(c) and not is_bonus_assessment_column(c) and not _is_trailer_column(c)
     ]
 
     co_values: dict[str, str] = {}
     max_values: dict[str, float | str] = {}
     for name, j in zip(assessment_cols, col_indices):
-        if name in ("Result", "Grade_Point"):
+        if _is_trailer_column(name):
             co_values[name] = ""
             max_values[name] = ""
             continue
@@ -399,8 +466,8 @@ def _build_assessment_table(
     out_cols.extend(regular_cols)
     if any(is_bonus_column(c) or is_bonus_assessment_column(c) for c in assessment_cols):
         out_cols.append("Bonus")
-    for req in ("Result", "Grade_Point"):
-        if req in assessment_cols and req not in out_cols:
+    for req in [c for c in assessment_cols if _is_trailer_column(c)]:
+        if req not in out_cols:
             out_cols.append(req)
 
     seen: set[str] = set()
@@ -655,8 +722,8 @@ def _from_adc_layout(raw: pd.DataFrame, source_path: str) -> str:
     out_cols = ["Branch"] + [c for c in assessment_cols if not is_bonus_column(c)]
     if any(is_bonus_column(c) for c in assessment_cols):
         out_cols.append("Bonus")
-    for req in ("Result", "Grade_Point"):
-        if req not in out_cols and any(c.lower() == req.lower() for c in assessment_cols):
+    for req in [c for c in assessment_cols if _is_trailer_column(c)]:
+        if req not in out_cols and any(str(c).lower() == req.lower() for c in assessment_cols):
             out_cols.append(req)
 
     df = pd.DataFrame(index=["CO", "Max_Marks"] + [r for r, _ in rows], columns=out_cols)
