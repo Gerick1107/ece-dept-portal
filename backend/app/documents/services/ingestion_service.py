@@ -128,13 +128,22 @@ async def ingest_document_file(
     return doc
 
 
-async def seed_documents_from_disk(db: Session, documents_root: Path) -> dict[str, int]:
-    """Ingest PDFs already on disk. Does not create or commit any PDF files."""
-    ingested = 0
-    for document_type, subdir in (
+async def sync_new_documents_from_disk(
+    db: Session,
+    documents_root: Path,
+    *,
+    document_type: str | None = None,
+) -> dict[str, int]:
+    """Register PDFs on disk that are not yet in the database."""
+    type_dirs = (
         (DOCUMENT_TYPE_SENATE, "senate-minutes"),
         (DOCUMENT_TYPE_ECE_FACULTY_MEET, "ece-faculty-meets"),
-    ):
+    )
+    if document_type:
+        type_dirs = tuple(pair for pair in type_dirs if pair[0] == document_type)
+
+    ingested = 0
+    for resolved_type, subdir in type_dirs:
         base = documents_root / subdir
         if not base.exists():
             continue
@@ -143,12 +152,21 @@ async def seed_documents_from_disk(db: Session, documents_root: Path) -> dict[st
                 continue
             year = int(year_dir.name)
             for pdf_path in sorted(year_dir.glob("*.pdf")):
+                resolved_path = str(pdf_path.resolve())
+                existing = db.scalar(select(PortalDocument).where(PortalDocument.file_path == resolved_path))
+                if existing:
+                    continue
                 await ingest_document_file(
                     db,
-                    document_type=document_type,
+                    document_type=resolved_type,
                     year=year,
                     file_path=pdf_path,
                     generate_description=True,
                 )
                 ingested += 1
     return {"ingested": ingested}
+
+
+async def seed_documents_from_disk(db: Session, documents_root: Path) -> dict[str, int]:
+    """Backward-compatible alias: only ingests PDFs missing from the database."""
+    return await sync_new_documents_from_disk(db, documents_root)

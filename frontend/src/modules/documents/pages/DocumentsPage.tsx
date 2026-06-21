@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../../auth/AuthContext";
 import FileUploadField from "../../../components/FileUploadField";
-import { apiDelete, apiGet, apiPostJson } from "../../../services/api";
+import { apiDelete, apiGet, apiPostForm, apiPostJson } from "../../../services/api";
 
 type DocumentItem = {
   id: number;
@@ -37,11 +37,44 @@ type QueryResponse = {
   not_found: boolean;
 };
 
+type PreviewMeta = {
+  title: string;
+  meeting_date: string;
+  description: string;
+};
+
 const API_BASE = import.meta.env.VITE_API_BASE ?? "/api/v1";
+
+const documentsListCache = new Map<string, YearGroup[]>();
+
+function invalidateDocumentsListCache(documentType?: string) {
+  if (documentType) documentsListCache.delete(documentType);
+  else documentsListCache.clear();
+}
 
 function authHeaders(extra: Record<string, string> = {}) {
   const token = localStorage.getItem("access_token");
   return token ? { Authorization: `Bearer ${token}`, ...extra } : extra;
+}
+
+function formatMeetingDate(value: string | null): string {
+  if (!value) return "Date not recorded";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const date = new Date(`${value}T00:00:00`);
+    return date.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+  }
+  return value;
+}
+
+async function fetchDocumentBlob(documentType: string, docId: number): Promise<Blob> {
+  const res = await fetch(`${API_BASE}/documents/${documentType}/${docId}/download`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail ?? "Could not load PDF");
+  }
+  return res.blob();
 }
 
 export default function DocumentsPage({
@@ -56,7 +89,8 @@ export default function DocumentsPage({
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
 
-  const [years, setYears] = useState<YearGroup[]>([]);
+  const [years, setYears] = useState<YearGroup[]>(() => documentsListCache.get(documentType) ?? []);
+  const [loading, setLoading] = useState(() => !documentsListCache.has(documentType));
   const [activeYear, setActiveYear] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -66,31 +100,64 @@ export default function DocumentsPage({
   const [queryResult, setQueryResult] = useState<QueryResponse | null>(null);
   const [showContext, setShowContext] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
+  const [uploadStep, setUploadStep] = useState<"pick" | "review">("pick");
   const [uploadYear, setUploadYear] = useState(String(new Date().getFullYear()));
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [previewMeta, setPreviewMeta] = useState<PreviewMeta | null>(null);
+  const [previewBusy, setPreviewBusy] = useState(false);
   const [uploadBusy, setUploadBusy] = useState(false);
   const [viewerUrl, setViewerUrl] = useState<string | null>(null);
+  const [pdfBusyId, setPdfBusyId] = useState<number | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (options?: { force?: boolean }) => {
+    const cached = documentsListCache.get(documentType);
+    if (cached && !options?.force) {
+      setYears(cached);
+      setLoading(false);
+      setActiveYear((prev) => {
+        if (prev && cached.some((y) => y.year === prev)) return prev;
+        return cached[0]?.year ?? null;
+      });
+      return;
+    }
+
+    if (!cached) setLoading(true);
     setError("");
     try {
       const data = await apiGet<{ years: YearGroup[] }>(`/documents/${documentType}`);
+      documentsListCache.set(documentType, data.years);
       setYears(data.years);
-      if (!activeYear && data.years.length) {
-        setActiveYear(data.years[0].year);
-      } else if (activeYear && !data.years.some((y) => y.year === activeYear)) {
-        setActiveYear(data.years[0]?.year ?? null);
-      }
+      setActiveYear((prev) => {
+        if (prev && data.years.some((y) => y.year === prev)) return prev;
+        return data.years[0]?.year ?? null;
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load documents");
+    } finally {
+      setLoading(false);
     }
-  }, [documentType, activeYear]);
+  }, [documentType]);
 
   useEffect(() => {
     load();
   }, [load]);
 
+  useEffect(() => {
+    return () => {
+      if (viewerUrl) URL.revokeObjectURL(viewerUrl);
+    };
+  }, [viewerUrl]);
+
   const activeDocs = years.find((y) => y.year === activeYear)?.documents ?? [];
+
+  function resetUploadModal() {
+    setShowUpload(false);
+    setUploadStep("pick");
+    setUploadFile(null);
+    setPreviewMeta(null);
+    setPreviewBusy(false);
+    setUploadBusy(false);
+  }
 
   async function runQuery() {
     if (!question.trim()) return;
@@ -107,31 +174,83 @@ export default function DocumentsPage({
     }
   }
 
-  function openViewer(docId: number) {
-    setViewerUrl(`${API_BASE}/documents/${documentType}/${docId}/download`);
+  async function openViewer(docId: number) {
+    setPdfBusyId(docId);
+    setError("");
+    try {
+      const blob = await fetchDocumentBlob(documentType, docId);
+      if (viewerUrl) URL.revokeObjectURL(viewerUrl);
+      setViewerUrl(URL.createObjectURL(blob));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not open PDF");
+    } finally {
+      setPdfBusyId(null);
+    }
+  }
+
+  async function downloadDocument(doc: DocumentItem) {
+    setPdfBusyId(doc.id);
+    setError("");
+    try {
+      const blob = await fetchDocumentBlob(documentType, doc.id);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = doc.file_name;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Download failed");
+    } finally {
+      setPdfBusyId(null);
+    }
+  }
+
+  function closeViewer() {
+    if (viewerUrl) URL.revokeObjectURL(viewerUrl);
+    setViewerUrl(null);
+  }
+
+  async function runPreview() {
+    if (!uploadFile) return;
+    setPreviewBusy(true);
+    setError("");
+    try {
+      const form = new FormData();
+      form.append("file", uploadFile);
+      const data = await apiPostForm<{ title: string; meeting_date: string | null; description: string }>(
+        `/documents/${documentType}/upload/preview`,
+        form
+      );
+      setPreviewMeta({
+        title: data.title,
+        meeting_date: data.meeting_date ?? "",
+        description: data.description,
+      });
+      setUploadStep("review");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not extract metadata");
+    } finally {
+      setPreviewBusy(false);
+    }
   }
 
   async function saveUpload() {
-    if (!uploadFile) return;
+    if (!uploadFile || !previewMeta) return;
     setUploadBusy(true);
     setError("");
     try {
       const form = new FormData();
       form.append("file", uploadFile);
       form.append("year", uploadYear);
-      const res = await fetch(`${API_BASE}/documents/${documentType}/upload`, {
-        method: "POST",
-        headers: authHeaders(),
-        body: form,
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error((err as { detail?: string }).detail ?? "Upload failed");
-      }
-      setShowUpload(false);
-      setUploadFile(null);
+      form.append("title", previewMeta.title.trim());
+      form.append("meeting_date", previewMeta.meeting_date.trim());
+      form.append("description", previewMeta.description.trim());
+      await apiPostForm(`/documents/${documentType}/upload`, form);
+      invalidateDocumentsListCache(documentType);
+      resetUploadModal();
       setMessage("Document uploaded and indexed.");
-      await load();
+      await load({ force: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed");
     } finally {
@@ -171,26 +290,45 @@ export default function DocumentsPage({
                 {group.year}
               </button>
             ))}
-            {!years.length && <p className="text-sm text-slate-500">No documents uploaded yet.</p>}
+            {!years.length && loading && (
+              <p className="text-sm text-slate-500">Loading documents…</p>
+            )}
+            {!years.length && !loading && (
+              <p className="text-sm text-slate-500">No documents uploaded yet.</p>
+            )}
           </div>
 
           <div className="bg-white border border-slate-200 rounded-xl shadow-sm divide-y">
+            {loading && years.length > 0 && (
+              <p className="p-4 text-sm text-slate-500">Refreshing…</p>
+            )}
+            {!loading && activeYear && !activeDocs.length && years.length > 0 && (
+              <p className="p-6 text-center text-slate-500 text-sm">No documents for {activeYear} yet.</p>
+            )}
             {activeDocs.map((doc) => (
               <div key={doc.id} className="p-4 space-y-2">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
                     <h3 className="font-medium text-slate-800">{doc.title}</h3>
-                    <p className="text-xs text-slate-500">{doc.meeting_date || "Date not recorded"}</p>
+                    <p className="text-xs text-slate-500">{formatMeetingDate(doc.meeting_date)}</p>
                   </div>
                   <div className="flex gap-2">
-                    <button type="button" className="text-xs px-2 py-1 rounded border" onClick={() => openViewer(doc.id)}>View</button>
-                    <a
-                      className="text-xs px-2 py-1 rounded border"
-                      href={`${API_BASE}/documents/${documentType}/${doc.id}/download`}
-                      download={doc.file_name}
+                    <button
+                      type="button"
+                      className="text-xs px-2 py-1 rounded border disabled:opacity-50"
+                      disabled={pdfBusyId === doc.id}
+                      onClick={() => openViewer(doc.id)}
+                    >
+                      {pdfBusyId === doc.id ? "Loading…" : "View"}
+                    </button>
+                    <button
+                      type="button"
+                      className="text-xs px-2 py-1 rounded border disabled:opacity-50"
+                      disabled={pdfBusyId === doc.id}
+                      onClick={() => downloadDocument(doc)}
                     >
                       Download
-                    </a>
+                    </button>
                     {isAdmin && (
                       <button
                         type="button"
@@ -198,8 +336,9 @@ export default function DocumentsPage({
                         onClick={async () => {
                           if (!window.confirm("Delete this document?")) return;
                           await apiDelete(`/documents/${documentType}/${doc.id}`);
+                          invalidateDocumentsListCache(documentType);
                           setMessage("Document deleted.");
-                          await load();
+                          await load({ force: true });
                         }}
                       >
                         Delete
@@ -207,12 +346,14 @@ export default function DocumentsPage({
                     )}
                   </div>
                 </div>
-                <p className="text-sm text-slate-600">{doc.description || "No description."}</p>
+                {doc.description && (
+                  <details className="text-sm text-slate-600">
+                    <summary className="cursor-pointer text-teal-700 font-medium">Description</summary>
+                    <p className="mt-2 whitespace-pre-wrap">{doc.description}</p>
+                  </details>
+                )}
               </div>
             ))}
-            {activeYear && !activeDocs.length && (
-              <p className="p-6 text-center text-slate-500 text-sm">No documents for {activeYear} yet.</p>
-            )}
           </div>
         </div>
 
@@ -277,7 +418,7 @@ export default function DocumentsPage({
           <div className="bg-white rounded-xl w-full max-w-5xl h-[85vh] flex flex-col">
             <div className="flex justify-between items-center p-3 border-b">
               <span className="font-medium text-sm">PDF viewer</span>
-              <button type="button" className="text-sm px-2 py-1 border rounded" onClick={() => setViewerUrl(null)}>Close</button>
+              <button type="button" className="text-sm px-2 py-1 border rounded" onClick={closeViewer}>Close</button>
             </div>
             <iframe title="PDF viewer" src={viewerUrl} className="flex-1 w-full" />
           </div>
@@ -286,32 +427,100 @@ export default function DocumentsPage({
 
       {showUpload && isAdmin && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-lg max-w-md w-full p-6 space-y-4">
+          <div className="bg-white rounded-xl shadow-lg max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <h3 className="font-semibold">Upload document</h3>
-            <p className="text-sm text-slate-600">Title, date, and description are extracted from the PDF automatically.</p>
-            <label className="text-sm block">
-              <span className="text-slate-600 font-medium">Meeting year</span>
-              <input
-                type="number"
-                className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
-                value={uploadYear}
-                onChange={(e) => setUploadYear(e.target.value)}
-                placeholder="e.g. 2024"
-              />
-            </label>
-            <FileUploadField
-              label="PDF file"
-              accept=".pdf,application/pdf"
-              file={uploadFile}
-              onFileChange={setUploadFile}
-              hint="Senate or faculty meeting minutes (PDF only, max 25 MB)."
-            />
-            <div className="flex justify-end gap-2 pt-1">
-              <button type="button" className="px-3 py-2 text-sm border rounded-lg" onClick={() => setShowUpload(false)}>Cancel</button>
-              <button type="button" disabled={uploadBusy || !uploadFile} className="px-3 py-2 text-sm bg-teal-700 text-white rounded-lg disabled:opacity-50" onClick={saveUpload}>
-                {uploadBusy ? "Uploading…" : "Upload & index"}
-              </button>
-            </div>
+
+            {uploadStep === "pick" && (
+              <>
+                <p className="text-sm text-slate-600">
+                  Choose the meeting year and PDF. Metadata is extracted for your review before indexing.
+                </p>
+                <label className="text-sm block">
+                  <span className="text-slate-600 font-medium">Meeting year</span>
+                  <input
+                    type="number"
+                    className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
+                    value={uploadYear}
+                    onChange={(e) => setUploadYear(e.target.value)}
+                    placeholder="e.g. 2024"
+                  />
+                </label>
+                <FileUploadField
+                  label="PDF file"
+                  accept=".pdf,application/pdf"
+                  file={uploadFile}
+                  onFileChange={(file) => {
+                    setUploadFile(file);
+                    setPreviewMeta(null);
+                    setUploadStep("pick");
+                  }}
+                  hint="Senate or faculty meeting minutes (PDF only, max 25 MB)."
+                />
+                <div className="flex justify-end gap-2 pt-1">
+                  <button type="button" className="px-3 py-2 text-sm border rounded-lg" onClick={resetUploadModal}>Cancel</button>
+                  <button
+                    type="button"
+                    disabled={previewBusy || !uploadFile}
+                    className="px-3 py-2 text-sm bg-teal-700 text-white rounded-lg disabled:opacity-50"
+                    onClick={runPreview}
+                  >
+                    {previewBusy ? "Extracting…" : "Extract & review"}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {uploadStep === "review" && previewMeta && (
+              <>
+                <p className="text-sm text-slate-600">Review and edit the extracted metadata before uploading.</p>
+                <label className="text-sm block">
+                  <span className="text-slate-600 font-medium">Title</span>
+                  <input
+                    type="text"
+                    className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
+                    value={previewMeta.title}
+                    onChange={(e) => setPreviewMeta({ ...previewMeta, title: e.target.value })}
+                  />
+                </label>
+                <label className="text-sm block">
+                  <span className="text-slate-600 font-medium">Meeting date</span>
+                  <input
+                    type="date"
+                    className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
+                    value={previewMeta.meeting_date}
+                    onChange={(e) => setPreviewMeta({ ...previewMeta, meeting_date: e.target.value })}
+                  />
+                </label>
+                <label className="text-sm block">
+                  <span className="text-slate-600 font-medium">Description</span>
+                  <textarea
+                    className="mt-1 w-full border rounded-lg px-3 py-2 text-sm min-h-[120px]"
+                    value={previewMeta.description}
+                    onChange={(e) => setPreviewMeta({ ...previewMeta, description: e.target.value })}
+                  />
+                </label>
+                <div className="flex justify-between gap-2 pt-1">
+                  <button
+                    type="button"
+                    className="px-3 py-2 text-sm border rounded-lg"
+                    onClick={() => setUploadStep("pick")}
+                  >
+                    Back
+                  </button>
+                  <div className="flex gap-2">
+                    <button type="button" className="px-3 py-2 text-sm border rounded-lg" onClick={resetUploadModal}>Cancel</button>
+                    <button
+                      type="button"
+                      disabled={uploadBusy || !previewMeta.title.trim()}
+                      className="px-3 py-2 text-sm bg-teal-700 text-white rounded-lg disabled:opacity-50"
+                      onClick={saveUpload}
+                    >
+                      {uploadBusy ? "Uploading…" : "Confirm upload"}
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

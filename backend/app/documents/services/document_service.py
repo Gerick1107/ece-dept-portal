@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.documents.models.entities import PortalDocument
 from app.documents.services.ingestion_service import generate_document_description, ingest_document_file
-from app.documents.services.pdf_service import extract_pdf_metadata
+from app.documents.services.pdf_service import extract_pdf_metadata, parse_date_from_text
 
 
 def list_documents_grouped(db: Session, document_type: str) -> dict:
@@ -70,11 +70,14 @@ async def save_uploaded_document(
 
 
 async def extract_upload_metadata(file_path: Path) -> dict:
-    meta = extract_pdf_metadata(file_path)
+    meta = extract_pdf_metadata(file_path, fallback_title=file_path.stem)
     sample = "\n".join(text for _, text in meta.pages[:2])
     auto_description = await generate_document_description(meta.title, sample)
+    meeting_date = meta.meeting_date
+    if not meeting_date:
+        meeting_date = parse_date_from_text(auto_description) or parse_date_from_text(sample)
     return {
         "title": meta.title,
-        "meeting_date": meta.meeting_date,
+        "meeting_date": meeting_date,
         "description": auto_description,
     }

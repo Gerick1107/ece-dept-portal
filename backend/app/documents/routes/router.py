@@ -51,10 +51,10 @@ async def list_documents(
 ):
     try:
         from app.documents.services.file_manager import ensure_documents_dirs
-        from app.documents.services.ingestion_service import seed_documents_from_disk
+        from app.documents.services.ingestion_service import sync_new_documents_from_disk
 
         docs_root = ensure_documents_dirs()
-        await seed_documents_from_disk(db, docs_root)
+        await sync_new_documents_from_disk(db, docs_root, document_type=_resolve_type(document_type))
     except Exception:
         pass
     return list_documents_grouped(db, _resolve_type(document_type))
@@ -129,6 +129,9 @@ async def upload_document(
     _: Annotated[User, Depends(require_roles(UserRole.admin))],
     year: int = Form(...),
     file: UploadFile = File(...),
+    title: str | None = Form(None),
+    meeting_date: str | None = Form(None),
+    description: str | None = Form(None),
 ):
     resolved = _resolve_type(document_type)
     if not file.filename or not file.filename.lower().endswith(".pdf"):
@@ -140,6 +143,7 @@ async def upload_document(
     settings = get_settings()
     subdir = "senate-minutes" if resolved == DOCUMENT_TYPE_SENATE else "ece-faculty-meets"
     dest_dir = Path(settings.documents_dir) / subdir / str(year)
+    dest_dir.mkdir(parents=True, exist_ok=True)
     dest_path = dest_dir / file.filename
     if dest_path.exists():
         dest_path = dest_dir / f"{uuid.uuid4().hex[:8]}_{file.filename}"
@@ -147,12 +151,19 @@ async def upload_document(
 
     from app.documents.services.ingestion_service import ingest_document_file
 
+    resolved_title = (title or "").strip() or None
+    resolved_date = (meeting_date or "").strip() or None
+    resolved_description = (description or "").strip() or None
+
     doc = await ingest_document_file(
         db,
         document_type=resolved,
         year=year,
         file_path=dest_path,
-        generate_description=True,
+        title=resolved_title,
+        meeting_date=resolved_date,
+        description=resolved_description,
+        generate_description=not resolved_description,
     )
     return {
         "id": doc.id,
