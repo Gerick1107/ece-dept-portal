@@ -113,6 +113,7 @@ class Settings(BaseSettings):
     enable_scheduler: bool = False
 
     projects_upload_dir: str = str(BACKEND_ROOT / "storage" / "uploads" / "projects")
+    documents_dir: str = str(BACKEND_ROOT / "documents")
 
     # SDG tagging (local embedding-based; no API key required)
     enable_sdg_llm: bool = False

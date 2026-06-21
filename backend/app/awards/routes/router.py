@@ -12,7 +12,6 @@ from app.awards.services.award_service import (
     create_award,
     delete_award,
     get_award,
-    list_awards,
     list_awards_filtered,
     list_distinct_exact_years,
     list_distinct_years,
@@ -22,6 +21,7 @@ from app.awards.services.award_service import (
 from app.awards.services.export_service import export_awards_xlsx
 from app.database.models.user import User, UserRole
 from app.database.session import get_db
+from app.utils.faculty_csv_sync import sync_faculty_awards_csv
 
 router = APIRouter(prefix="/awards", tags=["awards"])
 
@@ -34,7 +34,16 @@ class AwardResponse(BaseModel):
     awarded_by: str | None = None
     award: str
 
-    model_config = {"from_attributes": True}
+    @classmethod
+    def from_row(cls, row) -> "AwardResponse":
+        return cls(
+            id=row.id,
+            faculty_name=row.faculty_name,
+            year=row.year,
+            exact_year=row.exact_year,
+            awarded_by=row.awarded_by,
+            award=row.award,
+        )
 
 
 class AwardCreateRequest(BaseModel):
@@ -99,6 +108,10 @@ def list_all_awards(
     year: str | None = None,
     exact_year: int | None = None,
 ):
+    try:
+        sync_faculty_awards_csv(db)
+    except Exception:
+        pass
     items = list_awards_filtered(
         db,
         query=query,
@@ -106,7 +119,7 @@ def list_all_awards(
         exact_year=exact_year,
     )
     return AwardListResponse(
-        items=[AwardResponse.model_validate(a) for a in items],
+        items=[AwardResponse.from_row(a) for a in items],
         years=list_distinct_years(db),
         exact_years=list_distinct_exact_years(db),
         faculty_names=list_faculty_with_awards(db),
@@ -130,7 +143,7 @@ def add_award(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return AwardResponse.model_validate(row)
+    return AwardResponse.from_row(row)
 
 
 @router.put("/{award_id}", response_model=AwardResponse)
@@ -155,7 +168,7 @@ def edit_award(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return AwardResponse.model_validate(row)
+    return AwardResponse.from_row(row)
 
 
 @router.delete("/{award_id}", status_code=status.HTTP_204_NO_CONTENT)

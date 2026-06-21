@@ -125,15 +125,18 @@ export default function ConstraintMarksTemplatePanel({
   const presetButtons = ["Quiz", "MidSem", "EndSem", "Project", "Assignment", "Lab", "Custom"];
 
   return (
-    <section className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
-      <div>
-        <h3 className="font-medium text-slate-900">Build constraint Excel</h3>
-        <p className="text-sm text-slate-600 mt-1">
-          Configure assessments for this course and semester. Download a structured template (Branch,
-          Roll No., merged component headers, CO / Max_Marks rows) to fill in and upload below.
-          Multiple rows with the same name become Quiz1, Quiz2, etc. automatically.
-        </p>
-      </div>
+    <details className="bg-white border border-slate-200 rounded-xl group">
+      <summary className="cursor-pointer list-none px-6 py-4 font-medium text-slate-900 flex items-center justify-between gap-2">
+        <span>Generate marks template (optional)</span>
+        <span className="text-xs text-teal-700 font-medium group-open:hidden">Show</span>
+        <span className="text-xs text-teal-700 font-medium hidden group-open:inline">Hide</span>
+      </summary>
+      <div className="px-6 pb-6 space-y-4 border-t border-slate-100 pt-4">
+      <p className="text-sm text-slate-600">
+        Configure assessments for this course and semester. Download a structured template (Branch,
+        Roll No., merged component headers, CO / Max_Marks rows) to fill in and upload below.
+        Multiple rows with the same name become Quiz1, Quiz2, etc. automatically.
+      </p>
 
       <div className="grid sm:grid-cols-2 gap-3">
         <label className="text-sm block">
@@ -280,6 +283,7 @@ export default function ConstraintMarksTemplatePanel({
       >
         {busy ? "Generating…" : "Download Constraint Excel"}
       </button>
-    </section>
+      </div>
+    </details>
   );
 }

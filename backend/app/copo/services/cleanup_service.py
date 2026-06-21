@@ -159,6 +159,31 @@ def delete_evaluation_sensitive_data(
     return {"removed_files": removed_files, "run_deleted": False}
 
 
+def _sweep_results_directory() -> int:
+    """Remove generated result workbooks under storage/results (orphans included)."""
+    import logging
+    from pathlib import Path
+
+    from app.config import get_settings
+
+    logger = logging.getLogger(__name__)
+    results_dir = Path(get_settings().results_dir)
+    if not results_dir.exists():
+        return 0
+    removed = 0
+    for child in results_dir.iterdir():
+        if not child.is_file():
+            continue
+        if not child.name.endswith("_CO_PO_Percentage_Results.xlsx"):
+            continue
+        try:
+            child.unlink()
+            removed += 1
+        except OSError as exc:
+            logger.warning("Could not delete result file %s: %s", child, exc)
+    return removed
+
+
 def purge_all_copo_data(db: Session) -> dict[str, int]:
     """Admin-only: remove every CO-PO upload, run, archive, and linked files."""
     from app.copo.services.analytics_snapshot_service import preserve_all_run_snapshots
@@ -179,6 +204,7 @@ def purge_all_copo_data(db: Session) -> dict[str, int]:
         removed_files += 1
         db.delete(upload)
     db.commit()
+    removed_files += _sweep_results_directory()
     return {
         "removed_files": removed_files,
         "runs_deleted": True,

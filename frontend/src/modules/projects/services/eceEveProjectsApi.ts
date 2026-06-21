@@ -1,4 +1,4 @@
-import { apiGet } from "../../../services/api";
+import { apiGet, apiPostJson } from "../../../services/api";
 
 export type EceEveProject = {
   id: number;
@@ -93,4 +93,8 @@ export async function downloadEceEveExport(
   a.download = `ece_eve_projects.${format}`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+export function purgeAllEceEveProjects() {
+  return apiPostJson<{ purged: boolean; removed_files: number }>("/ece-eve-projects/admin/purge-all", {});
 }

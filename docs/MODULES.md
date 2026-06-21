@@ -93,12 +93,22 @@ Requires prior CO-PO evaluation runs. Cached per course/semester pair; use **Reg
 
 Analytics group by **semester** tags (not admission year).
 
-## Awards
+## Awards & FDPs
 
 | Item | Detail |
 |------|--------|
-| UI | `/awards` |
-| API | `/api/v1/awards` |
+| UI | `/awards`, `/fdps` |
+| API | `/api/v1/awards`, `/api/v1/fdps` |
+| CSV | `data/assets/faculty_awards.csv`, `faculty_fdps.csv` — see [MAINTENANCE.md](MAINTENANCE.md) |
+
+## Senate minutes & ECE faculty meets
+
+| Item | Detail |
+|------|--------|
+| UI | `/senate-minutes` (Senate Agenda), `/ece-faculty-meets` |
+| Nav | **Minutes** dropdown |
+| API | `/api/v1/documents/{senate\|ece-faculty-meets}` |
+| Storage | `backend/documents/` — see [MAINTENANCE.md](MAINTENANCE.md) |
 
 ## Notifications
 

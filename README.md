@@ -17,9 +17,10 @@ Unified departmental automation platform for the ECE Department at IIIT-D. Modul
 ```
 backend/              FastAPI application
 frontend/             React SPA (Vite)
-data/assets/          CO-PO mapping, faculty CSV, Links.txt
+data/assets/          CO-PO mapping, faculty CSVs, Links.txt
 data/sql/             MySQL bootstrap script
 data/templates/       BTP/IP import template
+backend/documents/    Meeting PDFs (folders in git; PDFs local only)
 docs/                 Architecture & deployment guides
 deploy/               Gunicorn + PM2 configs
 legacy/               Archived Flask portal (reference only)
@@ -92,7 +93,7 @@ pm2 start deploy/ecosystem.config.cjs
 | [docs/MODULES.md](docs/MODULES.md) | Feature reference |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design |
 | [docs/LOCAL_DATABASE.md](docs/LOCAL_DATABASE.md) | MySQL setup |
-| [docs/MAINTENANCE.md](docs/MAINTENANCE.md) | Ongoing operations |
+| [docs/MAINTENANCE.md](docs/MAINTENANCE.md) | Ongoing operations (publications, CSV, meeting PDFs) |
 
 ## License
 

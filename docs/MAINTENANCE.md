@@ -75,3 +75,33 @@ Research Centres
 Centre Name (https://example.edu/centre): Faculty One, Faculty Two
 ```
 
+---
+
+## Faculty awards & FDPs (CSV)
+
+Source files: `data/assets/faculty_awards.csv`, `data/assets/faculty_fdps.csv`.
+
+Sync runs automatically when the Awards or FDPs page loads (same pattern as `Links.txt` affiliations). Refresh the page after editing a CSV — no server restart or manual sync button.
+
+- **Upsert keys:** awards `(faculty_name, year, award)`; FDPs `(faculty_name, year, program, description)`.
+- **Removals:** delete a row from the CSV (by `id` within the file’s id range) and refresh; the matching DB row is removed.
+- **`created_at` / `updated_at` in CSV:** optional — leave blank for new rows. The database sets timestamps server-side. `###` in Excel is a display artefact (column too narrow), not stored data.
+
+Admin **Add Award / Add FDP** in the UI still works; those rows persist in the DB until deleted from the UI or CSV (if their `id` is in the CSV id range).
+
+---
+
+## Senate & ECE faculty meeting PDFs
+
+Confidential PDFs under `backend/documents/` (folders tracked in git; `*.pdf` gitignored):
+
+```
+backend/documents/senate-minutes/<year>/<meeting>.pdf
+backend/documents/ece-faculty-meets/<year>/<meeting>.pdf
+```
+
+**Add documents:** Admin → **Upload Document** (year + PDF only; title, date, and description extracted automatically), or copy PDFs to disk and refresh the Minutes page. Optional path: `DOCUMENTS_DIR` in `backend/.env`.
+
+`_upload_temp/` is gitignored scratch space used briefly during upload parsing — not for permanent storage.
+
+---

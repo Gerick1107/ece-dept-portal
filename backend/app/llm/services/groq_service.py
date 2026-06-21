@@ -23,23 +23,30 @@ class LlmError(Exception):
         self.status_code = status_code
 
 
-def _call_groq_sync(prompt: str) -> str:
+def _call_groq_sync(
+    prompt: str,
+    *,
+    system_prompt: str | None = None,
+    temperature: float = 0.7,
+    max_tokens: int = 8192,
+) -> str:
     settings = get_settings()
     api_key = (settings.groq_api_key or "").strip()
     if not api_key:
         raise LlmError("GROQ_API_KEY not configured", status_code=503)
 
+    system = system_prompt or _SYSTEM_PROMPT
     for attempt in range(_MAX_RETRIES):
         try:
             client = Groq(api_key=api_key)
             chat_completion = client.chat.completions.create(
                 messages=[
-                    {"role": "system", "content": _SYSTEM_PROMPT},
+                    {"role": "system", "content": system},
                     {"role": "user", "content": prompt},
                 ],
                 model=_MODEL,
-                temperature=0.7,
-                max_tokens=8192,
+                temperature=temperature,
+                max_tokens=max_tokens,
             )
             content = chat_completion.choices[0].message.content
             if not content:
@@ -68,5 +75,25 @@ def _call_groq_sync(prompt: str) -> str:
     raise LlmError("Could not generate insights at this time. Please try again.", status_code=502)
 
 
+def _call_groq_sync_legacy(prompt: str) -> str:
+    return _call_groq_sync(prompt)
+
+
 async def generate_llm_text(prompt: str) -> str:
-    return await asyncio.to_thread(_call_groq_sync, prompt)
+    return await asyncio.to_thread(_call_groq_sync_legacy, prompt)
+
+
+async def generate_llm_text_with_system(
+    prompt: str,
+    *,
+    system_prompt: str,
+    temperature: float = 0.7,
+    max_tokens: int = 8192,
+) -> str:
+    return await asyncio.to_thread(
+        _call_groq_sync,
+        prompt,
+        system_prompt=system_prompt,
+        temperature=temperature,
+        max_tokens=max_tokens,
+    )

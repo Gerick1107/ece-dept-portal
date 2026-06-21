@@ -13,9 +13,12 @@ from app.copo.download_tokens import cleanup_stale_tokens
 from app.analytics.router import router as analytics_router
 from app.notifications.routes.router import router as notifications_router
 from app.awards.routes.router import router as awards_router
+from app.documents.routes.router import router as documents_router
+from app.fdps.routes.router import router as fdps_router
 from app.copo.router import router as copo_router
 from app.courses.routes.router import router as courses_router
 from app.copo.services.file_manager import cleanup_upload_directory, ensure_storage_dirs
+from app.documents.services.file_manager import ensure_documents_dirs
 from app.database.base import Base
 from app.database.session import SessionLocal, engine
 from app.publications.routes.router import router as publications_router
@@ -43,6 +46,7 @@ def _periodic_cleanup_loop():
 async def lifespan(_app: FastAPI):
     ensure_storage_dirs()
     ensure_projects_upload_dir()
+    ensure_documents_dirs()
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
@@ -53,6 +57,13 @@ async def lifespan(_app: FastAPI):
             import_faculty_affiliations(db)
         except Exception as exc:
             logger.warning("Faculty affiliations import skipped: %s", exc)
+        try:
+            from app.documents.services.ingestion_service import seed_documents_from_disk
+
+            docs_root = ensure_documents_dirs()
+            await seed_documents_from_disk(db, docs_root)
+        except Exception as exc:
+            logger.warning("Document seeding skipped: %s", exc)
     finally:
         db.close()
     if settings.enable_scheduler:
@@ -85,6 +96,8 @@ api.include_router(auth_router)
 api.include_router(copo_router)
 api.include_router(courses_router)
 api.include_router(awards_router)
+api.include_router(fdps_router)
+api.include_router(documents_router)
 api.include_router(analytics_router)
 api.include_router(notifications_router)
 api.include_router(publications_router)

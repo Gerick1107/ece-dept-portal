@@ -31,9 +31,18 @@ const navItems: NavItem[] = [
   { kind: "link", to: "/projects", label: "BTP / IP Projects", exact: true },
   {
     kind: "group",
+    label: "Minutes",
+    links: [
+      { to: "/senate-minutes", label: "Senate Agenda", exact: true },
+      { to: "/ece-faculty-meets", label: "ECE Faculty Meets", exact: true },
+    ],
+  },
+  {
+    kind: "group",
     label: "Analytics",
     links: [
       { to: "/awards", label: "Faculty Awards", exact: true },
+      { to: "/fdps", label: "Faculty FDPs", exact: true },
       { to: "/analytics", label: "Analytics Dashboard", exact: true },
     ],
   },

@@ -26,6 +26,10 @@ backend/.env
 backend/storage/
 storage/
 
+# Confidential meeting PDFs (folder structure is tracked; files are not)
+backend/documents/**/*.pdf
+backend/documents/_upload_temp/
+
 # Node / frontend
 node_modules/
 frontend/node_modules/

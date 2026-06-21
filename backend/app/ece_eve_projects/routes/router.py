@@ -6,8 +6,8 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user
-from app.database.models.user import User
+from app.auth.dependencies import get_current_user, require_roles
+from app.database.models.user import User, UserRole
 from app.database.session import get_db
 from app.ece_eve_projects.services.ece_eve_service import (
     EceEveProjectFilters,
@@ -17,10 +17,19 @@ from app.ece_eve_projects.services.ece_eve_service import (
     get_ece_eve_analytics,
     list_ece_eve_filter_options,
     project_row_to_dict,
+    purge_ece_eve_projects,
     search_ece_eve_projects,
 )
 
 router = APIRouter(prefix="/ece-eve-projects", tags=["ece-eve-projects"])
+
+
+@router.post("/admin/purge-all")
+def admin_purge_ece_eve_projects(
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[User, Depends(require_roles(UserRole.admin))],
+):
+    return purge_ece_eve_projects(db)
 
 
 @router.get("")

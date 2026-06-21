@@ -14,6 +14,9 @@ import PublicationExportsPage from "./modules/publications/pages/PublicationExpo
 import PublicationsAdminPage from "./modules/publications/pages/PublicationsAdminPage";
 import ProjectsPage from "./modules/projects/pages/ProjectsPage";
 import AwardsPage from "./modules/awards/pages/AwardsPage";
+import FdpsPage from "./modules/fdps/pages/FdpsPage";
+import SenateMinutesPage from "./modules/documents/pages/SenateMinutesPage";
+import EceFacultyMeetsPage from "./modules/documents/pages/EceFacultyMeetsPage";
 import AnalyticsPage from "./modules/analytics/pages/AnalyticsPage";
 import LlmInsightsPage from "./modules/llm/pages/LlmInsightsPage";
 import NotificationsPage from "./modules/notifications/pages/NotificationsPage";
@@ -89,7 +92,21 @@ export default function App() {
               description="Departmental analytics for awards and CO-PO attainment trends."
               links={[
                 { label: "Faculty Awards", path: "/awards", description: "Awards and recognitions" },
+                { label: "Faculty FDPs", path: "/fdps", description: "Faculty development programs" },
                 { label: "Analytics", path: "/analytics", description: "CO-PO, projects, and publication analytics" },
+              ]}
+            />
+          }
+        />
+        <Route
+          path="/modules/minutes"
+          element={
+            <ModuleHubPage
+              title="Minutes"
+              description="Browse meeting minutes and ask questions scoped to each document set."
+              links={[
+                { label: "Senate Agenda", path: "/senate-minutes", description: "Senate agenda minutes by year" },
+                { label: "ECE Faculty Meets", path: "/ece-faculty-meets", description: "ECE faculty meeting minutes by year" },
               ]}
             />
           }
@@ -122,6 +139,9 @@ export default function App() {
         <Route path="/publications/admin" element={<PublicationsAdminPage />} />
         <Route path="/projects" element={<ProjectsPage />} />
         <Route path="/awards" element={<AwardsPage />} />
+        <Route path="/fdps" element={<FdpsPage />} />
+        <Route path="/senate-minutes" element={<SenateMinutesPage />} />
+        <Route path="/ece-faculty-meets" element={<EceFacultyMeetsPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="/llm-insights" element={<LlmInsightsPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />

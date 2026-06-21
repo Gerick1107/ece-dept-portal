@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useAuth } from "../../auth/AuthContext";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ChartCard, getColours, KpiCard } from "../../analytics/components/ChartCard";
 import {
@@ -6,6 +7,7 @@ import {
   fetchEceEveProjectFilters,
   fetchEceEveProjectsAnalytics,
   listEceEveProjects,
+  purgeAllEceEveProjects,
   type EceEveAnalyticsData,
   type EceEveFilterOptions,
   type EceEveProject,
@@ -27,10 +29,14 @@ function CommaCell({ value }: { value: string | null | undefined }) {
 }
 
 export default function EceEveProjectsTab() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const [items, setItems] = useState<EceEveProject[]>([]);
   const [total, setTotal] = useState(0);
   const [filterOptions, setFilterOptions] = useState<EceEveFilterOptions | null>(null);
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
   const [filters, setFilters] = useState({
     query: "",
     faculty_id: "",
@@ -75,6 +81,12 @@ export default function EceEveProjectsTab() {
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load projects"));
   }, [apiFilters]);
 
+  async function reload() {
+    const res = await listEceEveProjects(apiFilters);
+    setItems(res.items);
+    setTotal(res.pagination.total);
+  }
+
   function toggleSemesterFilter(tag: string) {
     setFilters((prev) => ({
       ...prev,
@@ -95,13 +107,39 @@ export default function EceEveProjectsTab() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-xl font-semibold">ECE / EVE Student Projects</h2>
-        <p className="text-sm text-slate-600 mt-1">
-          Same BTP/IP project view filtered to ECE/EVE student branch, with an added Branch column.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold">ECE / EVE Student Projects</h2>
+          <p className="text-sm text-slate-600 mt-1">
+            Same BTP/IP project view filtered to ECE/EVE student branch, with an added Branch column.
+          </p>
+        </div>
+        {isAdmin && (
+          <button
+            type="button"
+            className="rounded-lg border border-red-300 text-red-800 px-3 py-2 text-sm hover:bg-red-50 disabled:opacity-50"
+            disabled={busy}
+            onClick={async () => {
+              if (!window.confirm("Delete ALL ECE/EVE projects? This cannot be undone.")) return;
+              setBusy(true);
+              setError("");
+              try {
+                const r = await purgeAllEceEveProjects();
+                setMessage(`Purged all ECE/EVE project data (${r.removed_files} files removed).`);
+                await reload();
+              } catch (e) {
+                setError(e instanceof Error ? e.message : "Purge failed");
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            Purge all
+          </button>
+        )}
       </div>
 
+      {message && <p className="text-sm text-teal-800 bg-teal-50 border border-teal-200 rounded-lg px-3 py-2">{message}</p>}
       {error && <p className="text-sm text-red-800 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
 
       <section className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-3">

@@ -81,6 +81,28 @@ export type FacultyAward = {
   exact_year?: number | null;
   awarded_by?: string | null;
   award: string;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+export type FacultyFdp = {
+  id: number;
+  faculty_name: string;
+  year: string;
+  exact_year?: number | null;
+  program: string;
+  description: string;
+  no_of_days?: number | null;
+  no_of_attendees?: number | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+export type FdpsListResponse = {
+  items: FacultyFdp[];
+  years: string[];
+  exact_years: number[];
+  faculty_names: string[];
 };
 
 export type AwardsListResponse = {

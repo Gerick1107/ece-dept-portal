@@ -46,6 +46,62 @@ def _project_to_ece_eve_row(project: Project) -> EceEveProject:
     )
 
 
+def purge_ece_eve_projects(db: Session) -> dict:
+    """Delete all ECE/EVE projects, dependent rows, mirror table, and orphan upload files."""
+    from pathlib import Path
+
+    from app.projects.models.entities import Project, ProjectSdg, ProjectStudent, ProjectUpload
+
+    branch_filter = func.upper(func.trim(Project.program_specialization)).in_(tuple(ECE_EVE_BRANCHES))
+    ece_eve_ids = list(db.scalars(select(Project.id).where(branch_filter)).all())
+
+    removed_files = 0
+    if not ece_eve_ids:
+        db.execute(delete(EceEveProject))
+        db.commit()
+        return {"purged": True, "removed_files": 0}
+
+    upload_batch_ids = {
+        bid
+        for bid in db.scalars(
+            select(Project.upload_batch_id).where(
+                Project.id.in_(ece_eve_ids),
+                Project.upload_batch_id.isnot(None),
+            )
+        ).all()
+        if bid
+    }
+    uploads_to_delete: list[int] = []
+    for batch_id in upload_batch_ids:
+        other_count = db.scalar(
+            select(func.count())
+            .select_from(Project)
+            .where(Project.upload_batch_id == batch_id, ~Project.id.in_(ece_eve_ids))
+        )
+        if other_count:
+            continue
+        upload = db.get(ProjectUpload, batch_id)
+        if not upload:
+            continue
+        path = Path(upload.filepath)
+        if path.exists():
+            try:
+                path.unlink()
+                removed_files += 1
+            except OSError:
+                pass
+        uploads_to_delete.append(batch_id)
+
+    db.query(ProjectSdg).filter(ProjectSdg.project_id.in_(ece_eve_ids)).delete(synchronize_session=False)
+    db.query(ProjectStudent).filter(ProjectStudent.project_id.in_(ece_eve_ids)).delete(synchronize_session=False)
+    db.query(Project).filter(Project.id.in_(ece_eve_ids)).delete(synchronize_session=False)
+    if uploads_to_delete:
+        db.query(ProjectUpload).filter(ProjectUpload.id.in_(uploads_to_delete)).delete(synchronize_session=False)
+    db.execute(delete(EceEveProject))
+    db.commit()
+    return {"purged": True, "removed_files": removed_files}
+
+
 def refresh_ece_eve_projects(db: Session) -> int:
     """Rebuild ece_eve_projects from projects where branch is ECE or EVE."""
     db.execute(delete(EceEveProject))

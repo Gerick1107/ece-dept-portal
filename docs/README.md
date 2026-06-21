@@ -9,7 +9,7 @@
 | [STORAGE.md](STORAGE.md) | Upload, result, and archive directories |
 | [WORKFLOW_A.md](WORKFLOW_A.md) | CO-PO Workflow A (end-of-semester) |
 | [USER_MANAGEMENT.md](USER_MANAGEMENT.md) | Admin accounts, deactivate, remove profile, forgot password |
-| [MAINTENANCE.md](MAINTENANCE.md) | Publications sync, faculty CSV, scheduler, Links.txt |
+| [MAINTENANCE.md](MAINTENANCE.md) | Publications sync, faculty CSV (awards/FDPs), meeting PDFs, Links.txt |
 | [CODE_FLOW.md](CODE_FLOW.md) | Legacy Flask CO-PO flow (historical reference) |
 
 Start with the root [README.md](../README.md) for a quick overview, then [DEPLOYMENT.md](DEPLOYMENT.md) for production hosting.
