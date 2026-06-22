@@ -12,108 +12,138 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.ece_eve_projects.models.entities import EceEveProject
 from app.projects.models.entities import Project
+from app.projects.utils.csv_fields import parse_csv_field
 from app.publications.models.entities import Faculty
 
 ECE_EVE_BRANCHES = frozenset({"ECE", "EVE"})
 
 
-def _is_ece_eve_branch(program_specialization: str | None) -> bool:
+def is_ece_eve_branch(program_specialization: str | None) -> bool:
     if not program_specialization:
         return False
     return program_specialization.strip().upper() in ECE_EVE_BRANCHES
 
 
-def _project_to_ece_eve_row(project: Project) -> EceEveProject:
-    return EceEveProject(
-        project_title=project.project_title,
-        project_type=project.project_type,
-        semesters=project.semesters,
-        faculty_id=project.faculty_id,
-        guide_name=project.guide_name,
-        co_guide=project.co_guide,
-        course_code=project.course_code,
-        course_name=project.course_name,
-        admission_year=project.admission_year,
-        program_definition=project.program_definition,
-        program_specialization=project.program_specialization,
-        student_roll_nos=project.student_roll_nos,
-        student_names=project.student_names,
-        credit=project.credit,
-        upload_batch_id=project.upload_batch_id,
-        sdg_review_status=project.sdg_review_status,
-        created_at=project.created_at,
-        updated_at=project.updated_at,
+def _student_pairs(roll_nos: str, names: str) -> list[tuple[str, str]]:
+    rolls = parse_csv_field(roll_nos)
+    names_list = parse_csv_field(names)
+    if not rolls and not names_list:
+        return [("", "")]
+    count = max(len(rolls), len(names_list))
+    return [
+        (
+            rolls[i] if i < len(rolls) else "",
+            names_list[i] if i < len(names_list) else "",
+        )
+        for i in range(count)
+    ]
+
+
+def _project_to_ece_eve_rows(project: Project) -> list[EceEveProject]:
+    rows: list[EceEveProject] = []
+    for roll, name in _student_pairs(project.student_roll_nos, project.student_names):
+        rows.append(
+            EceEveProject(
+                project_title=project.project_title,
+                project_type=project.project_type,
+                semesters=project.semesters,
+                faculty_id=project.faculty_id,
+                guide_name=project.guide_name,
+                co_guide=project.co_guide,
+                course_code=project.course_code,
+                course_name=project.course_name,
+                admission_year=project.admission_year,
+                program_definition=project.program_definition,
+                program_specialization=project.program_specialization,
+                student_roll_nos=roll,
+                student_names=name,
+                credit=project.credit,
+                upload_batch_id=project.upload_batch_id,
+                sdg_review_status=project.sdg_review_status,
+                created_at=project.created_at,
+                updated_at=project.updated_at,
+                source_project_id=project.id,
+            )
+        )
+    return rows
+
+
+def create_ece_eve_from_import(
+    db: Session,
+    *,
+    upload_batch_id: int,
+    semester_tag: str,
+    title: str,
+    guide_clean: str,
+    co_guide_clean: str | None,
+    roll_no: str,
+    student_name: str,
+    course_code: str,
+    course_name: str | None,
+    project_type: str,
+    credit: float | None,
+    admission_year: str | None,
+    program_definition: str | None,
+    program_specialization: str | None,
+    faculty_id: int | None,
+) -> EceEveProject:
+    row = EceEveProject(
+        project_title=title,
+        project_type=project_type or "IP/IS/UR",
+        semesters=semester_tag,
+        faculty_id=faculty_id,
+        guide_name=guide_clean,
+        co_guide=co_guide_clean,
+        course_code=course_code or None,
+        course_name=course_name,
+        admission_year=admission_year,
+        program_definition=program_definition,
+        program_specialization=program_specialization,
+        student_roll_nos=roll_no,
+        student_names=student_name,
+        credit=credit,
+        upload_batch_id=upload_batch_id,
+        source_project_id=None,
     )
+    db.add(row)
+    db.flush()
+    return row
 
 
 def purge_ece_eve_projects(db: Session) -> dict:
-    """Delete all ECE/EVE projects, dependent rows, mirror table, and orphan upload files."""
-    from pathlib import Path
-
-    from app.projects.models.entities import Project, ProjectSdg, ProjectStudent, ProjectUpload
-
-    branch_filter = func.upper(func.trim(Project.program_specialization)).in_(tuple(ECE_EVE_BRANCHES))
-    ece_eve_ids = list(db.scalars(select(Project.id).where(branch_filter)).all())
-
-    removed_files = 0
-    if not ece_eve_ids:
-        db.execute(delete(EceEveProject))
-        db.commit()
-        return {"purged": True, "removed_files": 0}
-
-    upload_batch_ids = {
-        bid
-        for bid in db.scalars(
-            select(Project.upload_batch_id).where(
-                Project.id.in_(ece_eve_ids),
-                Project.upload_batch_id.isnot(None),
-            )
-        ).all()
-        if bid
-    }
-    uploads_to_delete: list[int] = []
-    for batch_id in upload_batch_ids:
-        other_count = db.scalar(
-            select(func.count())
-            .select_from(Project)
-            .where(Project.upload_batch_id == batch_id, ~Project.id.in_(ece_eve_ids))
+    """Clear the ECE/EVE tab data without deleting BTP/IP projects."""
+    standalone_removed = (
+        db.scalar(
+            select(func.count()).select_from(EceEveProject).where(EceEveProject.source_project_id.is_(None))
         )
-        if other_count:
-            continue
-        upload = db.get(ProjectUpload, batch_id)
-        if not upload:
-            continue
-        path = Path(upload.filepath)
-        if path.exists():
-            try:
-                path.unlink()
-                removed_files += 1
-            except OSError:
-                pass
-        uploads_to_delete.append(batch_id)
-
-    db.query(ProjectSdg).filter(ProjectSdg.project_id.in_(ece_eve_ids)).delete(synchronize_session=False)
-    db.query(ProjectStudent).filter(ProjectStudent.project_id.in_(ece_eve_ids)).delete(synchronize_session=False)
-    db.query(Project).filter(Project.id.in_(ece_eve_ids)).delete(synchronize_session=False)
-    if uploads_to_delete:
-        db.query(ProjectUpload).filter(ProjectUpload.id.in_(uploads_to_delete)).delete(synchronize_session=False)
+        or 0
+    )
     db.execute(delete(EceEveProject))
     db.commit()
-    return {"purged": True, "removed_files": removed_files}
+    resynced = refresh_ece_eve_projects(db)
+    return {
+        "purged": True,
+        "standalone_removed": int(standalone_removed),
+        "resynced_from_btp": resynced,
+        "removed_files": 0,
+    }
 
 
 def refresh_ece_eve_projects(db: Session) -> int:
-    """Rebuild ece_eve_projects from projects where branch is ECE or EVE."""
-    db.execute(delete(EceEveProject))
+    """Rebuild mirrored rows from BTP projects; keep standalone ECE/EVE-only imports."""
+    db.execute(delete(EceEveProject).where(EceEveProject.source_project_id.is_not(None)))
     rows = db.scalars(
         select(Project).where(
             func.upper(func.trim(Project.program_specialization)).in_(tuple(ECE_EVE_BRANCHES))
         )
     ).all()
+    count = 0
     for project in rows:
-        db.add(_project_to_ece_eve_row(project))
+        for mirror in _project_to_ece_eve_rows(project):
+            db.add(mirror)
+            count += 1
     db.commit()
-    return len(rows)
+    return count
 
 
 class EceEveProjectFilters:
@@ -125,22 +155,28 @@ class EceEveProjectFilters:
         project_type: str | None = None,
         query: str | None = None,
         faculty_id: int | None = None,
+        guide_name: str | None = None,
         semesters: list[str] | None = None,
         course_codes: list[str] | None = None,
         course_name: str | None = None,
         co_guide: str | None = None,
         credit: str | None = None,
+        student_name: str | None = None,
+        student_roll_no: str | None = None,
     ):
         self.branch = branch.strip().upper() if branch and branch.strip().lower() != "both" else None
         self.year = year.strip() if year else None
         self.project_type = project_type.strip() if project_type else None
         self.query = query.strip() if query else None
         self.faculty_id = faculty_id
+        self.guide_name = guide_name.strip() if guide_name else None
         self.semesters = semesters or []
         self.course_codes = [c.strip().upper() for c in (course_codes or []) if c.strip()]
         self.course_name = course_name.strip() if course_name else None
         self.co_guide = co_guide.strip() if co_guide else None
         self.credit = credit.strip() if credit else None
+        self.student_name = student_name.strip() if student_name else None
+        self.student_roll_no = student_roll_no.strip() if student_roll_no else None
 
 
 def search_ece_eve_projects(
@@ -167,6 +203,12 @@ def search_ece_eve_projects(
         q = q.where(EceEveProject.project_type == filters.project_type)
     if filters.faculty_id:
         q = q.where(EceEveProject.faculty_id == filters.faculty_id)
+    if filters.guide_name:
+        q = q.where(EceEveProject.guide_name == filters.guide_name)
+    if filters.student_name:
+        q = q.where(EceEveProject.student_names.ilike(f"%{filters.student_name}%"))
+    if filters.student_roll_no:
+        q = q.where(EceEveProject.student_roll_nos.ilike(f"%{filters.student_roll_no}%"))
     if filters.semesters:
         q = q.where(or_(*[EceEveProject.semesters.ilike(f"%{tag}%") for tag in filters.semesters]))
     if filters.course_codes:
@@ -290,6 +332,18 @@ def list_ece_eve_filter_options(db: Session) -> dict:
             if str(v).strip()
         }
     )
+    guide_names = sorted(
+        {
+            str(v).strip()
+            for v in db.scalars(
+                select(EceEveProject.guide_name).where(
+                    EceEveProject.guide_name.is_not(None),
+                    EceEveProject.guide_name != "",
+                )
+            ).all()
+            if str(v).strip()
+        }
+    )
     guides = db.scalars(
         select(Faculty).where(Faculty.department.ilike("%ECE%")).order_by(Faculty.name.asc())
     ).all()
@@ -298,6 +352,7 @@ def list_ece_eve_filter_options(db: Session) -> dict:
         "course_codes": course_codes,
         "course_names": course_names,
         "co_guides": co_guides,
+        "guide_names": guide_names,
         "guides": [{"id": g.id, "name": g.name} for g in guides],
         "project_types": ["Thesis", "IP/IS/UR"],
     }

@@ -99,7 +99,7 @@ export default function FacultyProfilePage() {
                 rel="noopener noreferrer"
                 className="text-sm text-teal-700 hover:underline"
               >
-                View Google Scholar Profile
+                Google Scholar
               </a>
               <Link to={`/publications/faculty/${id}/affiliations`} className="text-sm text-teal-700 hover:underline">
                 Affiliations

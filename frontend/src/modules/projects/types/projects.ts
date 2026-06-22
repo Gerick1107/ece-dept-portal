@@ -51,9 +51,11 @@ export type SdgCatalogItem = {
 export type ImportSummary = {
   upload_id: number;
   imported: number;
+  btp_imported?: number;
   merged?: number;
   total_rows?: number;
   skipped_rows?: number;
+  ece_eve_imported?: number;
   sdg_queued?: number;
   errors: string[];
 };

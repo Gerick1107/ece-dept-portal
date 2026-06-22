@@ -39,7 +39,7 @@ export default function EceEveProjectsTab() {
   const [busy, setBusy] = useState(false);
   const [filters, setFilters] = useState({
     query: "",
-    faculty_id: "",
+    guide_name: "",
     project_type: "",
     semesters: [] as string[],
     course_codes: [] as string[],
@@ -59,7 +59,7 @@ export default function EceEveProjectsTab() {
       page: filters.page,
       page_size: 50,
       query: filters.query || undefined,
-      faculty_id: filters.faculty_id ? Number(filters.faculty_id) : undefined,
+      guide_name: filters.guide_name || undefined,
       project_type: filters.project_type || undefined,
       semesters: filters.semesters.length ? filters.semesters.join(",") : undefined,
       course_codes: filters.course_codes.length ? filters.course_codes.join(",") : undefined,
@@ -111,7 +111,7 @@ export default function EceEveProjectsTab() {
         <div>
           <h2 className="text-xl font-semibold">ECE / EVE Student Projects</h2>
           <p className="text-sm text-slate-600 mt-1">
-            Same BTP/IP project view filtered to ECE/EVE student branch, with an added Branch column.
+            All ECE/EVE branch student projects from the same Excel import — one row per student, any guide department.
           </p>
         </div>
         {isAdmin && (
@@ -120,12 +120,14 @@ export default function EceEveProjectsTab() {
             className="rounded-lg border border-red-300 text-red-800 px-3 py-2 text-sm hover:bg-red-50 disabled:opacity-50"
             disabled={busy}
             onClick={async () => {
-              if (!window.confirm("Delete ALL ECE/EVE projects? This cannot be undone.")) return;
+              if (!window.confirm("Delete all ECE/EVE tab data? BTP/IP projects are kept; mirrored rows are rebuilt from BTP after purge.")) return;
               setBusy(true);
               setError("");
               try {
                 const r = await purgeAllEceEveProjects();
-                setMessage(`Purged all ECE/EVE project data (${r.removed_files} files removed).`);
+                setMessage(
+                  `Purged ECE/EVE tab (${r.standalone_removed} standalone removed, ${r.resynced_from_btp} mirrored from BTP).`
+                );
                 await reload();
               } catch (e) {
                 setError(e instanceof Error ? e.message : "Purge failed");
@@ -162,13 +164,13 @@ export default function EceEveProjectsTab() {
           </select>
           <select
             className="border rounded-lg px-3 py-2 text-sm"
-            value={filters.faculty_id}
-            onChange={(e) => setFilters({ ...filters, faculty_id: e.target.value, page: 1 })}
+            value={filters.guide_name}
+            onChange={(e) => setFilters({ ...filters, guide_name: e.target.value, page: 1 })}
           >
-            <option value="">Guide (all ECE)</option>
-            {filterOptions?.guides.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.name}
+            <option value="">Guide (all)</option>
+            {filterOptions?.guide_names.map((name) => (
+              <option key={name} value={name}>
+                {name}
               </option>
             ))}
           </select>

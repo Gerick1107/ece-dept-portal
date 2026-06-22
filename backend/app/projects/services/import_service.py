@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.projects.models.entities import Project, ProjectUpload
 from app.projects.schemas.project import ProjectCreate
-from app.projects.services.faculty_resolver import match_ece_faculty
+from app.projects.services.faculty_resolver import match_ece_faculty, resolve_faculty_by_name
 from app.projects.services.file_manager import save_project_upload
 from app.projects.services.project_service import create_project, find_merge_candidate, merge_project
 from app.projects.services.sdg_queue import enqueue_sdg_tags
@@ -156,7 +156,9 @@ def import_projects_file(
 
     errors: list[str] = []
     imported = 0
+    btp_imported = 0
     merged = 0
+    ece_eve_imported = 0
     skipped_ece = 0
     total_rows = len(frame)
     sdg_queued_ids: list[int] = []
@@ -179,11 +181,6 @@ def import_projects_file(
             if not title or not guide_raw:
                 raise ValueError("Title and Guide Name are required")
 
-            faculty_match = match_ece_faculty(db, guide_raw, co_guide_raw or None)
-            if not faculty_match:
-                skipped_ece += 1
-                continue
-
             guide_clean = strip_name_prefix(guide_raw)
             co_guide_clean = strip_name_prefix(co_guide_raw) if co_guide_raw else None
             course_name = normalize_course_name(course_name_raw) if course_name_raw else None
@@ -197,6 +194,47 @@ def import_projects_file(
                 if "program_specialization" in mapping
                 else None
             )
+            branch = (program_specialization or "").strip().upper()
+            credit = _parse_credit(credit_raw)
+
+            from app.ece_eve_projects.services.ece_eve_service import (
+                ECE_EVE_BRANCHES,
+                create_ece_eve_from_import,
+            )
+
+            faculty_match = match_ece_faculty(db, guide_raw, co_guide_raw or None)
+
+            if branch in ECE_EVE_BRANCHES and not faculty_match:
+                faculty_id: int | None = None
+                try:
+                    faculty_id = resolve_faculty_by_name(db, guide_clean).id
+                except ValueError:
+                    faculty_id = None
+                create_ece_eve_from_import(
+                    db,
+                    upload_batch_id=upload.id,
+                    semester_tag=semester_tag,
+                    title=title,
+                    guide_clean=guide_clean,
+                    co_guide_clean=co_guide_clean,
+                    roll_no=roll_no,
+                    student_name=student_name,
+                    course_code=course_code,
+                    course_name=course_name,
+                    project_type=project_type or "IP/IS/UR",
+                    credit=credit,
+                    admission_year=admission_year or None,
+                    program_definition=program_definition or None,
+                    program_specialization=program_specialization or None,
+                    faculty_id=faculty_id,
+                )
+                imported += 1
+                ece_eve_imported += 1
+                continue
+
+            if not faculty_match:
+                skipped_ece += 1
+                continue
 
             existing = find_merge_candidate(db, title, guide_clean, course_code)
             if existing:
@@ -209,6 +247,9 @@ def import_projects_file(
                 db.flush()
                 merged += 1
                 imported += 1
+                btp_imported += 1
+                if branch in ECE_EVE_BRANCHES:
+                    ece_eve_imported += 1
                 if auto_sdg:
                     sdg_queued_ids.append(existing.id)
                 continue
@@ -227,10 +268,13 @@ def import_projects_file(
                 program_specialization=program_specialization or None,
                 student_roll_nos=roll_no,
                 student_names=student_name,
-                credit=_parse_credit(credit_raw),
+                credit=credit,
             )
             project = create_project(db, body, upload_batch_id=upload.id)
             imported += 1
+            btp_imported += 1
+            if branch in ECE_EVE_BRANCHES:
+                ece_eve_imported += 1
             if auto_sdg:
                 sdg_queued_ids.append(project.id)
         except Exception as exc:
@@ -247,9 +291,11 @@ def import_projects_file(
     return {
         "upload_id": upload.id,
         "imported": imported,
+        "btp_imported": btp_imported,
         "merged": merged,
         "total_rows": total_rows,
         "skipped_rows": skipped_ece,
+        "ece_eve_imported": ece_eve_imported,
         "sdg_queued": sdg_queued,
         "errors": errors,
     }

@@ -5,7 +5,7 @@ export type EceEveProject = {
   project_title: string;
   project_type: string;
   semesters: string;
-  faculty_id: number;
+  faculty_id: number | null;
   faculty_name?: string | null;
   guide_name: string | null;
   co_guide: string | null;
@@ -28,6 +28,7 @@ export type EceEveFilterOptions = {
   semesters: string[];
   course_codes: string[];
   course_names: string[];
+  guide_names: string[];
   guides: { id: number; name: string }[];
   co_guides: string[];
   project_types: string[];
@@ -46,6 +47,9 @@ export function listEceEveProjects(params: {
   page_size?: number;
   branch?: string;
   faculty_id?: number;
+  guide_name?: string;
+  student_name?: string;
+  student_roll_no?: string;
   semesters?: string;
   course_codes?: string;
   course_name?: string;
@@ -96,5 +100,10 @@ export async function downloadEceEveExport(
 }
 
 export function purgeAllEceEveProjects() {
-  return apiPostJson<{ purged: boolean; removed_files: number }>("/ece-eve-projects/admin/purge-all", {});
+  return apiPostJson<{
+    purged: boolean;
+    standalone_removed: number;
+    resynced_from_btp: number;
+    removed_files: number;
+  }>("/ece-eve-projects/admin/purge-all", {});
 }

@@ -727,9 +727,10 @@ export default function ProjectsPage() {
             <h3 className="font-semibold">Import summary</h3>
             <ul className="text-sm space-y-1 text-slate-700">
               <li>Total rows in file: {importSummary.total_rows ?? "—"}</li>
-              <li>Rows imported (ECE faculty match): {importSummary.imported}</li>
+              <li>Rows imported to BTP/IP: {importSummary.btp_imported ?? importSummary.imported}</li>
+              <li>Rows added to ECE/EVE tab: {importSummary.ece_eve_imported ?? 0}</li>
               <li>Rows merged (existing projects): {importSummary.merged ?? 0}</li>
-              <li>Rows skipped (no ECE faculty match): {importSummary.skipped_rows ?? 0}</li>
+              <li>Rows skipped (non-ECE/EVE branch, no ECE faculty match): {importSummary.skipped_rows ?? 0}</li>
             </ul>
             {importSummary.errors.length > 0 && (
               <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2 max-h-32 overflow-y-auto whitespace-pre-wrap">

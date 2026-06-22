@@ -48,13 +48,10 @@ def purge_all_projects(db: Session) -> dict:
             except OSError:
                 pass
 
-    from app.ece_eve_projects.models.entities import EceEveProject
-
     db.query(ProjectSdg).delete()
     db.query(ProjectStudent).delete()
     db.query(Project).delete()
     db.query(ProjectUpload).delete()
-    db.query(EceEveProject).delete()
     db.commit()
 
     if uploads_dir.exists():
