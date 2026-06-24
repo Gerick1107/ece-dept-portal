@@ -17,12 +17,15 @@ htmlcov/
 .coverage
 *.log
 
-# Backend runtime & secrets
+# Secrets & environment (never commit real credentials)
 backend/.env
 .env
 .env.*
 !.env.example
+!.env.docker.example
 !backend/.env.example
+
+# Backend runtime storage (uploads, CO-PO results, notification attachments)
 backend/storage/
 storage/
 
@@ -34,6 +37,9 @@ backend/documents/_upload_temp/
 node_modules/
 frontend/node_modules/
 frontend/dist/
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
 *.tsbuildinfo
 
 # IDE & OS
@@ -52,17 +58,26 @@ desktop.ini
 # Database dumps & local SQL (may contain real data)
 *.sql
 !data/sql/local_mysql_bootstrap.sql
+dump.sql
+*.sql.gz
+
+# Docker local overrides (compose secrets stay in .env.docker, gitignored above)
+docker-compose.override.yml
+
+# Department data assets (CSVs, mapping Excel, Links.txt) — NOT in Git; share via SQL dump / secure copy
+data/assets/*
+!data/assets/.gitkeep
 
 # Legacy runtime uploads (reference tree)
 uploads/*
 !uploads/.gitkeep
 
-# Test / scratch files
+# Test / scratch spreadsheets at repo root only
+projects_seeded.xlsx
 *.xlsx
 !data/templates/*.xlsx
-projects_seeded.xlsx
-dump.sql
 
-# Compiled / cache
+# Compiled / cache (incl. ML model download cache)
 *.pyc
 .cache/
+.huggingface/

@@ -48,7 +48,7 @@ python scripts/scrape_gap_fill.py
 
 ## Faculty affiliations (`Links.txt`)
 
-Research labs, centres, and groups: `data/assets/Links.txt`.
+Research labs, centres, and groups: `data/assets/Links.txt` (local only — see [DATA_ASSETS.md](DATA_ASSETS.md)).
 
 - Edit the file; sync runs on API startup and affiliations page load.
 - Removing an entry removes it from the database on next sync.
@@ -161,4 +161,4 @@ Recent migrations include course allocation (`029`), faculty contributions expan
 
 ## Docker deployments
 
-See [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md). Mount `data/assets/` into the backend container; run `alembic upgrade head` after updates.
+See [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md). Mount host `data/assets/` into the backend container (writable if using admin CSV write-back).

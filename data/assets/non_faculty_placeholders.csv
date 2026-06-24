@@ -1,7 +1,0 @@
-id,placeholder_value,meaning
-1,CSE,Course owned/taught by CSE dept faculty (not an ECE faculty record)
-2,CSE faculty,To be taught by a CSE faculty member; specific name TBD
-3,NOT being offered,Course listed but not offered that semester
-4,Discontinued (itroduced by Debidas),Course discontinued
-5,NA,No assignment
-6,(blank),Empty cell / no assignment

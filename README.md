@@ -19,7 +19,7 @@ Unified departmental automation platform for the ECE Department at IIIT-D.
 ```
 backend/              FastAPI application
 frontend/             React SPA (Vite)
-data/assets/          CO-PO mapping, faculty CSVs, course allocation, Links.txt
+data/assets/          Runtime CSV/Excel (gitignored — see docs/DATA_ASSETS.md)
 data/sql/             MySQL bootstrap script
 data/templates/       BTP/IP import template
 backend/documents/    Meeting PDFs (folders in git; PDFs local only)
@@ -114,7 +114,7 @@ docker compose --env-file .env.docker up -d --build
 | [docs/SECURITY.md](docs/SECURITY.md) | OWASP checklist |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design |
 | [docs/LOCAL_DATABASE.md](docs/LOCAL_DATABASE.md) | MySQL setup |
-| [docs/MAINTENANCE.md](docs/MAINTENANCE.md) | Ongoing operations |
+| [docs/DATA_ASSETS.md](docs/DATA_ASSETS.md) | `data/assets/` setup (not in Git) |
 
 ## License
 

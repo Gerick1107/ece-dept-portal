@@ -12,6 +12,7 @@
 | [WORKFLOW_A.md](WORKFLOW_A.md) | CO-PO Workflow A (end-of-semester) |
 | [USER_MANAGEMENT.md](USER_MANAGEMENT.md) | Admin accounts, deactivate, remove profile, forgot password |
 | [MAINTENANCE.md](MAINTENANCE.md) | Publications sync, CSV assets, meeting PDFs, reminders |
+| [DATA_ASSETS.md](DATA_ASSETS.md) | `data/assets/` file list (not in Git) |
 | [CODE_FLOW.md](CODE_FLOW.md) | Legacy Flask CO-PO flow (historical reference) |
 
 Start with the root [README.md](../README.md), then [DEPLOYMENT.md](DEPLOYMENT.md) or [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md) for production hosting.

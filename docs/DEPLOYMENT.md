@@ -26,7 +26,7 @@ cd /opt/automation-portal
 |------|---------|
 | `backend/` | API application |
 | `frontend/` | React SPA source |
-| `data/assets/` | CO-PO mapping, faculty CSVs, course allocation, `Links.txt` |
+| `data/assets/` | Runtime CSV/Excel — **gitignored**; see [DATA_ASSETS.md](DATA_ASSETS.md) |
 | `backend/storage/` | Runtime uploads & results |
 | `backend/documents/` | Meeting PDFs (optional `DOCUMENTS_DIR`) |
 | `deploy/` | Gunicorn + PM2 configs |
@@ -154,7 +154,7 @@ Health check: `GET /health`
 - [ ] HTTPS enabled; `CORS_ORIGINS` matches production URL
 - [ ] SMTP tested (welcome, forgot-password, notification)
 - [ ] `ENABLE_REQUIREMENT_REMINDERS=true` and reminder log on startup
-- [ ] `data/assets/` populated (faculty, allocations, contributions CSVs)
+- [ ] `data/assets/` populated on server (not from Git — copy from team bundle or DB export)
 - [ ] `backend/storage/` and `backend/documents/` writable
 - [ ] MySQL not exposed to the internet
 - [ ] Review [SECURITY.md](SECURITY.md)
@@ -171,7 +171,7 @@ pm2 restart all
 ## 9. Backups
 
 - **MySQL:** regular `mysqldump` of `ece_dept_portal`
-- **Files:** `backend/storage/archives/`, `data/assets/`, `backend/documents/` (PDFs)
+- **Files:** `backend/storage/archives/`, `data/assets/` (backup separately), `backend/documents/` (PDFs)
 
 ## 10. Troubleshooting
 

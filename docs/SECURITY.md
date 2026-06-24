@@ -33,6 +33,7 @@ This document summarizes how the ECE Automation Portal addresses common OWASP To
 |---------|----------------|
 | Admin-only mutations | Uploads, user management, requirement tracker, catalog edits |
 | Faculty data scope | Users see only permitted modules; notifications scoped per user |
+| Department CSVs | `data/assets/` gitignored — not published on GitHub |
 | File uploads | PDF-only for minutes; reply attachments ≤ 10 MB; sanitized filenames |
 | Notification replies | Faculty can attach files; downloads scoped to recipient or admin |
 

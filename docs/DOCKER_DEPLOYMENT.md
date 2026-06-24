@@ -6,7 +6,7 @@ When the portal is feature-complete, deploy the **entire stack** (MySQL + API + 
 
 - Docker Engine 24+ and Docker Compose v2
 - Git clone of this repository on the server
-- `data/assets/` populated with CSV/Excel seed files
+- `data/assets/` populated locally (see [DATA_ASSETS.md](DATA_ASSETS.md)) — **not in Git**
 
 ## Collaborating before final deployment
 
@@ -25,11 +25,11 @@ If two developers want to use Docker **now** (not only on the institute server) 
 
 3. **Shared `.env.docker`** — Agree on passwords and `SECRET_KEY` out of band (not in Git). Each machine copies `.env.docker.example` and uses the same values if you need identical JWT/login behaviour.
 
-4. **CSV assets** — Keep `data/assets/` in sync via Git. Docker mounts this folder into the backend; edits on either machine should be committed.
+4. **CSV assets** — Share `data/assets/` out of band (secure copy or restore from SQL dump). Do not commit to Git. Mount into Docker on each host.
 
 5. **Local ports** — Default UI is `http://localhost:8080`. If both run Docker on one machine, only one stack can bind the port; use different `PORTAL_HTTP_PORT` in `.env.docker` per developer.
 
-6. **Do not commit** — `.env.docker`, SQL dumps with real credentials, or `storage/` uploads unless your team explicitly wants them in a private repo.
+6. **Do not commit** — `.env.docker`, SQL dumps with real credentials, `data/assets/`, or `storage/` uploads.
 
 ## Quick start
 
