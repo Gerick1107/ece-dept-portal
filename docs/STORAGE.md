@@ -85,3 +85,12 @@ Checkbox **“Do not save this run to the database”**: processing runs in memo
 ## Sample assets
 
 Reference workbooks live in `data/samples/` (moved from project root). Runtime mapping uses `data/assets/default_mapping.xlsx` and `data/assets/indirect.xlsx`.
+
+## Other module storage
+
+| Path | Purpose |
+|------|---------|
+| `backend/storage/uploads/projects/` | BTP/IP project uploads |
+| `backend/storage/notifications/` | Admin notification attachments and faculty reply attachments |
+| `backend/documents/` | Meeting PDFs (Senate, AAC, UGC, PGC, ECE faculty meets) |
+| `data/assets/*.csv` | Faculty awards, contributions, course allocation (synced with DB) |

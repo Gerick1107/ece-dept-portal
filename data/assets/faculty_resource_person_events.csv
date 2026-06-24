@@ -1,0 +1,46 @@
+id,faculty_name,year,exact_year,program_name,event_date,location,organized_by,created_at,updated_at
+1,Anubha Gupta,2024-2025,2025,Summer School at IIIT-H,09/07/2025,Hyderabad,IIIT-H,2026-06-23 00:00:00,2026-06-23 00:00:00
+2,Anubha Gupta,2024-2025,2025,AI in Medical Domain: Challenges and Opportunities,14/08/2025,Online,"BITS, Pilani, Bangalore Section",2026-06-23 00:00:00,2026-06-23 00:00:00
+3,Anubha Gupta,2024-2025,2025,Advanced Digital Signal Processing,26/05/2025,Jaipur,"MNIT, Jaipur",2026-06-23 00:00:00,2026-06-23 00:00:00
+4,Anubha Gupta,2024-2025,2025,AI Driven Wearables and Robotics,01/02/2025,Online,AICTE ATAL,2026-06-23 00:00:00,2026-06-23 00:00:00
+5,Anubha Gupta,2024-2025,2024,International Workshop on Advances in Genomics using AI,30/12/2024,Rajkot,Marwadi University,2026-06-23 00:00:00,2026-06-23 00:00:00
+6,Anubha Gupta,2024-2025,2024,"Harnessing GenAI, ML and IoT for Technological Breakthroughs",27/12/2024,New Delhi,GGSIPU,2026-06-23 00:00:00,2026-06-23 00:00:00
+7,Sneh Saurabh,2023-2024,2024,Artificial Intelligence Driven Technology in VLSI Design for IoT Applications,30/12/2024,Ghaziabad,RKGIT Ghaziabad,2026-06-23 00:00:00,2026-06-23 00:00:00
+8,Sneh Saurabh,2023-2024,2024,Advancement and Challenges in VLSI Design and Nanoscale Devices,28/05/2024,Delhi,"ECE Department, Delhi Technological University (DTU)",2026-06-23 00:00:00,2026-06-23 00:00:00
+9,Anuj Grover,2023-2024,2024,Advancement and Challenges in VLSI Design and Nanoscale Devices,28/05/2024,Delhi,"ECE Department, Delhi Technological University (DTU)",2026-06-23 00:00:00,2026-06-23 00:00:00
+10,Anuj Grover,2023-2024,2024,CMOS/FPGA Implementation of Analog and Digital Systems,09/07/2024,Delhi,"ECE Department, Netaji Subhash University of Technology (NSUT)",2026-06-23 00:00:00,2026-06-23 00:00:00
+11,Vivek Ashok Bohara,2023-2024,2024,IEEE ANTS 2024 - 6GDIOT Workshop (Keynote),10/12/2024,New Delhi,IEEE,2026-06-23 00:00:00,2026-06-23 00:00:00
+12,Vivek Ashok Bohara,2023-2024,2024,IEEE ANTS 2024 - Tutorial Session,11/12/2024,New Delhi,IEEE,2026-06-23 00:00:00,2026-06-23 00:00:00
+13,Vivek Ashok Bohara,2023-2024,2024,Expert Talk on Future Wireless & 6G,15/11/2024,New Delhi,Delhi Technological University,2026-06-23 00:00:00,2026-06-23 00:00:00
+14,Vivek Ashok Bohara,2023-2024,2024,Expert Talk on Next Generation Vehicular Communication,20/11/2024,Gandhinagar,PDEU,2026-06-23 00:00:00,2026-06-23 00:00:00
+15,Vivek Ashok Bohara,2023-2024,2024,Expert Talk on Basics of WiFi and LiFi,15/08/2024,Delhi NCR,Christ University,2026-06-23 00:00:00,2026-06-23 00:00:00
+16,Vivek Ashok Bohara,2023-2024,2024,ICICC 2024 - Keynote Address,15/02/2024,Delhi,"Shaheed Sukhdev College of Business Studies, DU",2026-06-23 00:00:00,2026-06-23 00:00:00
+17,Vivek Ashok Bohara,2023-2024,2024,Technical Talk on Vehicular Communication Technologies,20/02/2024,Gwalior,ABV-IIITM,2026-06-23 00:00:00,2026-06-23 00:00:00
+18,Anubha Gupta,2023-2024,2024,Applications of AI in Healthcare Domain,21/11/2024,"Ghaziabad, Uttar Pradesh",Inderprastha Engineering College,2026-06-23 00:00:00,2026-06-23 00:00:00
+19,Anubha Gupta,2023-2024,2024,A Targeted Panel of 295 Genes for Multiple Myeloma,21/09/2024,"National Institute of Immunology, New Delhi",5th ICGA Conference,2026-06-23 00:00:00,2026-06-23 00:00:00
+20,Anubha Gupta,2023-2024,2024,AI in Parkinson's Disease,16/09/2024,Delhi,"All India Institute of Medical Sciences (AIIMS), New Delhi",2026-06-23 00:00:00,2026-06-23 00:00:00
+21,Anubha Gupta,2023-2024,2024,Explainable AI Models for ECG Data Analysis,06-10/09/2024,Online,NIT Hamirpur,2026-06-23 00:00:00,2026-06-23 00:00:00
+22,Anubha Gupta,2023-2024,2024,6G in Intelligent Healthcare,07/2024,Delhi,TSDSI Tech Deep Dive (TDDD) 2024,2026-06-23 00:00:00,2026-06-23 00:00:00
+23,Anubha Gupta,2023-2024,2024,Digital Pathology - Advancements and Innovations,07/2024,Online/India-Singapore e-Workshop,"DST, India, and A-STAR Singapore",2026-06-23 00:00:00,2026-06-23 00:00:00
+24,Vivek Ashok Bohara,2022-2023,2023,FDP on Next Generation Vehicular Communication Technologies,15/12/2023,New Delhi,Delhi Technological University,2026-06-23 00:00:00,2026-06-23 00:00:00
+25,Vivek Ashok Bohara,2022-2023,2023,Invited Talk on IoT & Visible Light Communication,26/05/2023,Visakhapatnam,GITAM University,2026-06-23 00:00:00,2026-06-23 00:00:00
+26,Vivek Ashok Bohara,2022-2023,2023,IEEE BLP Webinar on Unlocking 5G Opportunities,24/05/2023,Online,IEEE BLP / C-DOT,2026-06-23 00:00:00,2026-06-23 00:00:00
+27,Vivek Ashok Bohara,2022-2023,2023,National Workshop on Optical Wireless Communication,16/05/2023,Chennai,NITTTR Chennai,2026-06-23 00:00:00,2026-06-23 00:00:00
+28,Anubha Gupta,2022-2023,2023,Proper Definitions of Dirichlet Conditions and Convergence of Fourier Representations,01/2023,Bangalore,IISc Bangalore,2026-06-23 00:00:00,2026-06-23 00:00:00
+29,Anubha Gupta,2022-2023,2023,CSR-PERT: Joint Framework for MRI and HARDI Data Reconstruction using Perturbed Radial Trajectory Estimation,14/02/2023,Online,IEEE SPS BISP TC,2026-06-23 00:00:00,2026-06-23 00:00:00
+30,Anubha Gupta,2022-2023,2023,ARCANE-ROG: Algorithm for accurate Reconstruction of CANcer Evolution in single-cell data via RObust Graph Learning,13/06/2023,Online,IEEE SPS BISP TC,2026-06-23 00:00:00,2026-06-23 00:00:00
+31,Anubha Gupta,2022-2023,2023,Organizing and Structuring a Medical Imaging Challenge,14/06/2023,Online,IEEE SPS BISP TC,2026-06-23 00:00:00,2026-06-23 00:00:00
+32,Anubha Gupta,2022-2023,2023,Algorithm for Reconstruction of Cancer Evolution from Single-Cell Data Using Robust Graph Learning,10/07/2023,Pune,Symbiosis Institute of Technology,2026-06-23 00:00:00,2026-06-23 00:00:00
+33,Anubha Gupta,2022-2023,2023,FOREST: White Matter Fiber Orientation Estimation Using Deep Learning In Diffusion MRI,08/2023,"Surat, Gujarat",IEEE SPS Seasonal School,2026-06-23 00:00:00,2026-06-23 00:00:00
+34,Anubha Gupta,2022-2023,2023,FOREST: White Matter Fiber Orientation Estimation Using Deep Learning In Diffusion MRI,08/2023,Hyderabad,IEEE SPS Seasonal School,2026-06-23 00:00:00,2026-06-23 00:00:00
+35,Anubha Gupta,2022-2023,2023,Algorithm for Reconstruction of Cancer Evolution from Single-Cell Data Using Robust Graph Learning,11/2023,Bhubaneswar,Siksha 'O' Anusandhan Deemed to be University,2026-06-23 00:00:00,2026-06-23 00:00:00
+36,Anubha Gupta,2022-2023,2023,DH2023: Digital Health Symposium and Roundtable,11/2023,"IIT Kharagpur, West Bengal, India",IEEE Engineering in Medicine and Biology Society (EMBS) & IEEE Kharagpur Section,2026-06-23 00:00:00,2026-06-23 00:00:00
+37,Sneh Saurabh,2021-2022,2022,Artificial Intelligence (AI) on System-on-Chip (SoC),14/01/2022,Delhi,IIIT Delhi,2026-06-23 00:00:00,2026-06-23 00:00:00
+38,Vivek Ashok Bohara,2021-2022,2022,FDP on Emerging Wireless Communications: 6G and Beyond,09/05/2022,Rourkela,NIT Rourkela,2026-06-23 00:00:00,2026-06-23 00:00:00
+39,Vivek Ashok Bohara,2021-2022,2022,FDP on AI in Wireless Communication & Sensor Networks,07/05/2022,Warangal,NIT Warangal,2026-06-23 00:00:00,2026-06-23 00:00:00
+40,Vivek Ashok Bohara,2021-2022,2022,DAIICT Lecture Series - Light Based Communication,22/04/2022,Gandhinagar,DAIICT,2026-06-23 00:00:00,2026-06-23 00:00:00
+41,Vivek Ashok Bohara,2021-2022,2022,FDP on Optical Wireless Communication,29/01/2022,Warangal,NIT Warangal,2026-06-23 00:00:00,2026-06-23 00:00:00
+42,Anubha Gupta,2021-2022,2022,Explainable AI Models for ECG Data Analysis,14/07/2022,Bangalore,IEEE SPCOM,2026-06-23 00:00:00,2026-06-23 00:00:00
+43,Anubha Gupta,2021-2022,2022,Explainable AI Models for ECG Data Analysis,28/08/2022,Uttar Pradesh,IIT BHU,2026-06-23 00:00:00,2026-06-23 00:00:00
+44,Anubha Gupta,2021-2022,2022,Explainable AI Models for ECG Data Analysis,26/07/2022,Gujarat,Marwadi University,2026-06-23 00:00:00,2026-06-23 00:00:00
+45,Anubha Gupta,2021-2022,2022,AI in Blood Cancer Diagnostics,12/2022,"Noida, Uttar Pradesh",Sharda University,2026-06-23 00:00:00,2026-06-23 00:00:00

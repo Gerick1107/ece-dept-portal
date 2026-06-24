@@ -6,7 +6,8 @@ from pathlib import Path
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.documents.models.entities import DOCUMENT_TYPE_ECE_FACULTY_MEET, DOCUMENT_TYPE_SENATE, DocumentChunk, PortalDocument
+from app.documents.models.entities import DocumentChunk, Meeting, MeetingFile
+from app.documents.services.file_manager import DOCUMENT_TYPE_DIRS
 from app.documents.services.pdf_service import extract_pdf_metadata
 from app.llm.services.groq_service import LlmError, generate_llm_text_with_system
 
@@ -16,11 +17,9 @@ _AGENDA_ITEM_RE = re.compile(r"\b\d+(?:\.\d+)+\b")
 
 
 def _chunk_page_text(page_number: int, text: str) -> list[tuple[int, str | None, str]]:
-    """Split page text by agenda items when possible, else fixed overlapping chunks."""
     text = (text or "").strip()
     if not text:
         return []
-
     matches = list(_AGENDA_ITEM_RE.finditer(text))
     if len(matches) >= 2:
         chunks: list[tuple[int, str | None, str]] = []
@@ -32,7 +31,6 @@ def _chunk_page_text(page_number: int, text: str) -> list[tuple[int, str | None,
             if snippet:
                 chunks.append((page_number, section, snippet))
         return chunks
-
     chunks = []
     start = 0
     while start < len(text):
@@ -58,17 +56,17 @@ async def generate_document_description(title: str, sample_text: str) -> str:
     try:
         return await generate_llm_text_with_system(prompt, system_prompt=system, temperature=0.3, max_tokens=300)
     except LlmError:
-        return f"Meeting minutes: {title}."
+        return f"Meeting document: {title}."
 
 
-def index_document_chunks(db: Session, document: PortalDocument, pages: list[tuple[int, str]]) -> int:
-    db.execute(delete(DocumentChunk).where(DocumentChunk.document_id == document.id))
+def index_meeting_file_chunks(db: Session, meeting_file: MeetingFile, pages: list[tuple[int, str]]) -> int:
+    db.execute(delete(DocumentChunk).where(DocumentChunk.meeting_file_id == meeting_file.id))
     count = 0
     for page_number, page_text in pages:
         for page, section, chunk_text in _chunk_page_text(page_number, page_text):
             db.add(
                 DocumentChunk(
-                    document_id=document.id,
+                    meeting_file_id=meeting_file.id,
                     page_number=page,
                     section_label=section,
                     chunk_text=chunk_text,
@@ -79,17 +77,17 @@ def index_document_chunks(db: Session, document: PortalDocument, pages: list[tup
     return count
 
 
-async def ingest_document_file(
+async def ingest_meeting_file(
     db: Session,
     *,
-    document_type: str,
-    year: int,
+    meeting: Meeting,
+    file_role: str,
     file_path: Path,
     title: str | None = None,
     meeting_date: str | None = None,
     description: str | None = None,
     generate_description: bool = True,
-) -> PortalDocument:
+) -> MeetingFile:
     meta = extract_pdf_metadata(file_path, fallback_title=title)
     resolved_title = title or meta.title
     resolved_date = meeting_date or meta.meeting_date
@@ -99,33 +97,33 @@ async def ingest_document_file(
         resolved_description = await generate_document_description(resolved_title, sample_text)
 
     existing = db.scalar(
-        select(PortalDocument).where(
-            PortalDocument.document_type == document_type,
-            PortalDocument.file_path == str(file_path.resolve()),
+        select(MeetingFile).where(
+            MeetingFile.meeting_id == meeting.id,
+            MeetingFile.file_role == file_role,
         )
     )
     if existing:
-        doc = existing
-        doc.title = resolved_title
-        doc.meeting_date = resolved_date
-        doc.description = resolved_description
-        doc.year = year
-        doc.file_name = file_path.name
+        mf = existing
+        mf.file_name = file_path.name
+        mf.file_path = str(file_path.resolve())
+        mf.description = resolved_description
     else:
-        doc = PortalDocument(
-            document_type=document_type,
-            year=year,
+        mf = MeetingFile(
+            meeting_id=meeting.id,
+            file_role=file_role,
             file_name=file_path.name,
             file_path=str(file_path.resolve()),
-            title=resolved_title,
-            meeting_date=resolved_date,
             description=resolved_description,
         )
-        db.add(doc)
+        db.add(mf)
+    if not meeting.meeting_title or file_role == "minutes":
+        meeting.meeting_title = resolved_title
+    if resolved_date and (not meeting.meeting_date or file_role == "minutes"):
+        meeting.meeting_date = resolved_date
     db.commit()
-    db.refresh(doc)
-    index_document_chunks(db, doc, meta.pages)
-    return doc
+    db.refresh(mf)
+    index_meeting_file_chunks(db, mf, meta.pages)
+    return mf
 
 
 async def sync_new_documents_from_disk(
@@ -134,11 +132,7 @@ async def sync_new_documents_from_disk(
     *,
     document_type: str | None = None,
 ) -> dict[str, int]:
-    """Register PDFs on disk that are not yet in the database."""
-    type_dirs = (
-        (DOCUMENT_TYPE_SENATE, "senate-minutes"),
-        (DOCUMENT_TYPE_ECE_FACULTY_MEET, "ece-faculty-meets"),
-    )
+    type_dirs = tuple(DOCUMENT_TYPE_DIRS.items())
     if document_type:
         type_dirs = tuple(pair for pair in type_dirs if pair[0] == document_type)
 
@@ -153,13 +147,20 @@ async def sync_new_documents_from_disk(
             year = int(year_dir.name)
             for pdf_path in sorted(year_dir.glob("*.pdf")):
                 resolved_path = str(pdf_path.resolve())
-                existing = db.scalar(select(PortalDocument).where(PortalDocument.file_path == resolved_path))
+                existing = db.scalar(select(MeetingFile).where(MeetingFile.file_path == resolved_path))
                 if existing:
                     continue
-                await ingest_document_file(
-                    db,
+                meeting = Meeting(
                     document_type=resolved_type,
                     year=year,
+                    meeting_title=pdf_path.stem,
+                )
+                db.add(meeting)
+                db.flush()
+                await ingest_meeting_file(
+                    db,
+                    meeting=meeting,
+                    file_role="minutes",
                     file_path=pdf_path,
                     generate_description=True,
                 )
@@ -168,5 +169,4 @@ async def sync_new_documents_from_disk(
 
 
 async def seed_documents_from_disk(db: Session, documents_root: Path) -> dict[str, int]:
-    """Backward-compatible alias: only ingests PDFs missing from the database."""
     return await sync_new_documents_from_disk(db, documents_root)

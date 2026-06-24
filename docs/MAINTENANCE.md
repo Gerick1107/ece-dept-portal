@@ -2,106 +2,163 @@
 
 ## Portal user accounts
 
-See [USER_MANAGEMENT.md](USER_MANAGEMENT.md) for:
+See [USER_MANAGEMENT.md](USER_MANAGEMENT.md) for creating accounts, deactivate/activate, remove profile, and forgot password.
 
-- Creating faculty accounts and welcome emails
-- Deactivate / activate (temporary login block)
-- Remove profile (anonymize account, keep CO-PO data, free email for re-registration)
-- Forgot password (SMTP temporary password)
-
-Ensure `SMTP_ENABLED=true` and Gmail/app-password settings in `backend/.env` for email features.
+Ensure `SMTP_ENABLED=true` and SMTP settings in `backend/.env` for email features (welcome, reset, notifications, reminders).
 
 ---
 
 ## Publications module
 
-### Adding a New Faculty Member
+### Adding a new faculty member
 
-1. Add their row to `faculty_master.csv` (include `scholar_id` from their Google Scholar profile URL).
-2. Admin → Faculty → Import CSV → upload updated CSV.
-3. System inserts the new faculty row automatically.
-4. Admin → Publications → Sync All Publications.
-5. Sync detects 0 publications for new faculty and fetches their full history from SerpAPI.
+1. Add their row to `faculty_master.csv` (include `scholar_id`).
+2. Admin → Publications → Import CSV.
+3. Admin → Sync All Publications.
 
-## Faculty Member Leaves
+### Faculty member leaves
 
-1. Set their `leave_year` in `faculty_master.csv`.
-2. Re-upload CSV via Admin → Faculty → Import CSV.
-3. System sets `is_active=FALSE` and `leave_year` — future syncs still process them for gap-fill but tenure filter limits new inserts.
-4. Their existing publications remain in the portal unchanged.
-5. They move automatically to the "Former Faculty" tab in the Faculty Directory.
+1. Set `leave_year` in `faculty_master.csv`, re-import CSV.
+2. They appear under Former Faculty; publications are retained.
 
-## Monthly Sync (on a hosted server)
+### Monthly sync (hosted server)
 
 1. Set `ENABLE_SCHEDULER=true` in `backend/.env`, restart backend.
-2. APScheduler fires on the 1st of each month automatically.
+2. APScheduler runs **publication gap-fill** on the 1st of each month at 02:00 UTC.
 
-## Monthly Sync (running locally)
+This flag does **not** control requirement reminders (see [Notifications & reminders](#notifications--requirement-reminders) below).
 
-1. Keep `ENABLE_SCHEDULER=false`.
-2. Each month: Admin → Publications → Sync All Publications.
-3. Only new publications since last sync are inserted — no duplicates, no re-scraping.
+### Monthly sync (local)
 
-## SerpAPI Usage
+Keep `ENABLE_SCHEDULER=false` and run Admin → Publications → Sync All Publications manually each month.
+
+### SerpAPI
 
 - Free tier: 250 searches/month.
-- 27 faculty × 1 search per sync = 27 searches — well within free tier.
-- Check usage at [serpapi.com/dashboard](https://serpapi.com/dashboard).
-- Update `SERP_API_KEY` in `backend/.env` if the key changes.
+- Update `SERP_API_KEY` in `backend/.env` as needed.
 
-## Gap-Fill Script (CLI)
+### Gap-fill CLI
 
 ```bash
 cd backend
 python scripts/scrape_gap_fill.py
 ```
 
-Processes faculty IDs 1–27 in ascending order with a 2-second delay between each.
-
 ---
 
 ## Faculty affiliations (`Links.txt`)
 
-Research labs, centres, and groups are maintained in `data/assets/Links.txt`.
+Research labs, centres, and groups: `data/assets/Links.txt`.
 
-- **Add or edit** an entry in the file, then refresh any faculty affiliations page (or restart the API). The sync runs automatically.
-- **Remove** an entry from the file — the corresponding affiliation and faculty links are **deleted from the database** on the next sync (startup or affiliations page load).
-- Unmatched faculty names in the file are logged as warnings; fix spelling to match `faculty_master.csv`.
-
-Format:
-
-```
-Research Centres
-Centre Name (https://example.edu/centre): Faculty One, Faculty Two
-```
+- Edit the file; sync runs on API startup and affiliations page load.
+- Removing an entry removes it from the database on next sync.
 
 ---
 
-## Faculty awards & FDPs (CSV)
+## Faculty awards (CSV)
 
-Source files: `data/assets/faculty_awards.csv`, `data/assets/faculty_fdps.csv`.
+Source: `data/assets/faculty_awards.csv`.
 
-Sync runs automatically when the Awards or FDPs page loads (same pattern as `Links.txt` affiliations). Refresh the page after editing a CSV — no server restart or manual sync button.
-
-- **Upsert keys:** awards `(faculty_name, year, award)`; FDPs `(faculty_name, year, program, description)`.
-- **Removals:** delete a row from the CSV (by `id` within the file’s id range) and refresh; the matching DB row is removed.
-- **`created_at` / `updated_at` in CSV:** optional — leave blank for new rows. The database sets timestamps server-side. `###` in Excel is a display artefact (column too narrow), not stored data.
-
-Admin **Add Award / Add FDP** in the UI still works; those rows persist in the DB until deleted from the UI or CSV (if their `id` is in the CSV id range).
+Sync on Awards page load. Admin UI add/delete supported. See existing upsert/removal rules in CSV sync.
 
 ---
 
-## Senate & ECE faculty meeting PDFs
+## Faculty contributions (CSV)
 
-Confidential PDFs under `backend/documents/` (folders tracked in git; `*.pdf` gitignored):
+Multiple tabs under **Analytics → Faculty Contributions**. Each tab syncs from `data/assets/` on page load.
 
-```
-backend/documents/senate-minutes/<year>/<meeting>.pdf
-backend/documents/ece-faculty-meets/<year>/<meeting>.pdf
-```
+| CSV | Tab |
+|-----|-----|
+| `faculty_resource_person_events.csv` | Resource Person |
+| `faculty_mooc_development.csv` | MOOC / SWAYAM |
+| `department_fdp_events.csv` | Dept. FDPs/STPs |
+| `faculty_student_project_support.csv` | Student Project Support |
+| `faculty_collaborations.csv` | Internships / Collaborations |
+| `faculty_memberships.csv` | Memberships |
+| `faculty_services.csv` | Faculty Services |
+| `phd_students.csv` | PhD Students |
 
-**Add documents:** Admin → **Upload Document** (year + PDF only; title, date, and description extracted automatically), or copy PDFs to disk and refresh the Minutes page. Optional path: `DOCUMENTS_DIR` in `backend/.env`.
+**Admin UI** add/edit/delete for Faculty Services and PhD Students (and other tabs) writes back to the CSV on mutation.
 
-`_upload_temp/` is gitignored scratch space used briefly during upload parsing — not for permanent storage.
+**Unmatched faculty names** in CSV rows appear in an admin warning panel; use resolve-faculty or fix spelling / aliases in `faculty_name_aliases.csv`.
 
 ---
+
+## Course allocation (CSV)
+
+| File | Purpose |
+|------|---------|
+| `course_allocations.csv` | Semester-wise faculty–course assignments |
+| `course_catalog.csv` | Master course list (codes, names, UG/PG, core/elective) |
+| `course_code_aliases.csv` | Alternate codes → canonical catalog entry |
+| `faculty_name_aliases.csv` | CSV spelling → faculty.id |
+| `non_faculty_placeholders.csv` | “Not offered”, “TBD”, etc. |
+
+- Sync on allocations page load; admin mutations write back to CSV.
+- Admin can upload allocation XLSX for the current semester.
+- **Course Catalog** edits are admin-only.
+
+---
+
+## Notifications & requirement reminders
+
+### Sending
+
+1. Admin → **Send Notifications** → pick a **template** (sets requirement type for the tracker).
+2. Set **automatic reminders** interval (or Off).
+3. Send to selected faculty or all.
+
+### Reminder scheduler (separate from publication sync)
+
+| Variable | Default | Effect |
+|----------|---------|--------|
+| `ENABLE_REQUIREMENT_REMINDERS` | `true` | Runs reminder background job |
+| `REQUIREMENT_REMINDER_POLL_MINUTES` | `1` | Check frequency (minutes) |
+| `ENABLE_SCHEDULER` | `false` | **Only** monthly publication scraping |
+
+On backend start, look for log line: `Requirement reminder scheduler active (poll every N minute(s))`.
+
+**Production:** keep `SMTP_ENABLED=true` so reminders go by email until the tracker is green.
+
+**Local testing:** use a template + custom interval (e.g. 2 minutes). Without SMTP, reminders appear under faculty **Notifications**.
+
+### Faculty replies
+
+Faculty reply on `/notifications` with optional attachment. Attachment → green on tracker; text-only → yellow.
+
+---
+
+## Meeting PDFs
+
+Confidential PDFs under `backend/documents/` (or `DOCUMENTS_DIR`):
+
+```
+backend/documents/senate-minutes/<year>/
+backend/documents/ece-faculty-meets/<year>/
+backend/documents/aac-meetings/<year>/
+backend/documents/ugc-meetings/<year>/
+backend/documents/pgc-meetings/<year>/
+```
+
+**Add:** Admin upload on the relevant Minutes page, or copy PDFs to disk and refresh.
+
+Folders are in git; `*.pdf` is gitignored.
+
+---
+
+## Migrations
+
+After pulling new code:
+
+```bash
+cd backend
+python -m alembic upgrade head
+```
+
+Recent migrations include course allocation (`029`), faculty contributions expansions (`030`), and notification replies (`031`).
+
+---
+
+## Docker deployments
+
+See [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md). Mount `data/assets/` into the backend container; run `alembic upgrade head` after updates.

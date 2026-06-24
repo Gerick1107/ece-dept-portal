@@ -58,7 +58,7 @@ pip install -r requirements.txt
 alembic upgrade head
 ```
 
-Current head includes migration **005** (`users.profile_removed` for account removal).
+Current head includes migrations through **031** (notifications replies, course allocation, faculty contributions). Run `alembic current` to verify.
 
 ### 6. Verify
 

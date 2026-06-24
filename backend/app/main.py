@@ -9,12 +9,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.auth.router import router as auth_router
 from app.auth.service import bootstrap_admin_if_needed
 from app.config import get_settings
+from app.middleware.security import LoginRateLimitMiddleware, SecurityHeadersMiddleware
 from app.copo.download_tokens import cleanup_stale_tokens
 from app.analytics.router import router as analytics_router
 from app.notifications.routes.router import router as notifications_router
 from app.awards.routes.router import router as awards_router
 from app.documents.routes.router import router as documents_router
-from app.fdps.routes.router import router as fdps_router
+from app.contributions.routes.router import router as contributions_router
+from app.course_allocation.routes.router import router as course_allocation_router
 from app.copo.router import router as copo_router
 from app.courses.routes.router import router as courses_router
 from app.copo.services.file_manager import cleanup_upload_directory, ensure_storage_dirs
@@ -26,10 +28,16 @@ from app.projects.routes.router import router as projects_router
 from app.ece_eve_projects.routes.router import router as ece_eve_projects_router
 from app.llm.routes.router import router as llm_insights_router
 from app.projects.services.file_manager import ensure_projects_upload_dir
-from app.publications.scheduler import ensure_scheduler_started
+from app.publications.scheduler.jobs import ensure_requirement_reminder_scheduler_started, ensure_scheduler_started
 
 settings = get_settings()
 logger = logging.getLogger("uvicorn.error")
+
+if settings.app_env == "production":
+    if settings.debug:
+        logger.warning("DEBUG is enabled in production — set DEBUG=false")
+    if settings.secret_key in ("dev-change-me", "change-me", "secret"):
+        raise RuntimeError("SECRET_KEY must be set to a strong random value in production")
 
 
 def _periodic_cleanup_loop():
@@ -66,6 +74,8 @@ async def lifespan(_app: FastAPI):
             logger.warning("Document seeding skipped: %s", exc)
     finally:
         db.close()
+    if settings.enable_requirement_reminders:
+        ensure_requirement_reminder_scheduler_started()
     if settings.enable_scheduler:
         ensure_scheduler_started()
     if not settings.groq_api_key:
@@ -79,10 +89,13 @@ app = FastAPI(
     title=settings.app_name,
     version="1.0.0",
     lifespan=lifespan,
-    docs_url="/api/docs",
-    openapi_url="/api/openapi.json",
+    docs_url=None if settings.app_env == "production" else "/api/docs",
+    openapi_url=None if settings.app_env == "production" else "/api/openapi.json",
+    redoc_url=None if settings.app_env == "production" else "/api/redoc",
 )
 
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(LoginRateLimitMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
@@ -96,7 +109,8 @@ api.include_router(auth_router)
 api.include_router(copo_router)
 api.include_router(courses_router)
 api.include_router(awards_router)
-api.include_router(fdps_router)
+api.include_router(contributions_router)
+api.include_router(course_allocation_router)
 api.include_router(documents_router)
 api.include_router(analytics_router)
 api.include_router(notifications_router)

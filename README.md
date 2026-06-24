@@ -1,6 +1,8 @@
 # Automation Portal (NPortal)
 
-Unified departmental automation platform for the ECE Department at IIIT-D. Modules include **CO-PO attainment**, **Publications**, **BTP/IP Projects**, **ECE/EVE projects**, **Analytics**, **LLM insights**, and **Awards**.
+Unified departmental automation platform for the ECE Department at IIIT-D.
+
+**Modules:** CO-PO attainment · Publications · BTP/IP & ECE/EVE projects · Course allocation · Faculty contributions · Meeting minutes · Notifications & requirement tracker · Analytics · LLM insights · Faculty awards
 
 ## Stack
 
@@ -10,19 +12,20 @@ Unified departmental automation platform for the ECE Department at IIIT-D. Modul
 | Database | MySQL 8 (source of truth) |
 | Frontend | React 19, Vite, Tailwind CSS |
 | CO-PO engine | Preserved `legacy_engine.py` |
-| Production | Gunicorn + Uvicorn workers, PM2 |
+| Production | Gunicorn + Uvicorn workers, PM2 — or **Docker** (see below) |
 
 ## Project layout
 
 ```
 backend/              FastAPI application
 frontend/             React SPA (Vite)
-data/assets/          CO-PO mapping, faculty CSVs, Links.txt
+data/assets/          CO-PO mapping, faculty CSVs, course allocation, Links.txt
 data/sql/             MySQL bootstrap script
 data/templates/       BTP/IP import template
 backend/documents/    Meeting PDFs (folders in git; PDFs local only)
 docs/                 Architecture & deployment guides
 deploy/               Gunicorn + PM2 configs
+docker-compose.yml    Full-stack Docker (MySQL + API + frontend)
 legacy/               Archived Flask portal (reference only)
 ```
 
@@ -33,7 +36,7 @@ legacy/               Archived Flask portal (reference only)
 1. Install **MySQL Server 8.0** (port **3306**).
 2. Copy `backend/.env.example` → `backend/.env` and set `MYSQL_*`.
 3. Run `data/sql/local_mysql_bootstrap.sql` as root (optional).
-4. `cd backend` → `alembic upgrade head`
+4. `cd backend` → `python -m alembic upgrade head`
 
 Details: [docs/LOCAL_DATABASE.md](docs/LOCAL_DATABASE.md).
 
@@ -50,6 +53,8 @@ python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8001
 
 Bootstrap admin: `BOOTSTRAP_ADMIN_EMAIL` / `BOOTSTRAP_ADMIN_PASSWORD` in `.env`.
 
+On startup you should see `Requirement reminder scheduler active` if reminders are enabled (default).
+
 ### 3. Frontend
 
 ```powershell
@@ -60,40 +65,56 @@ npm run dev
 
 Open http://localhost:5173 — API proxied to **http://127.0.0.1:8001**.
 
-## Modules
+## Modules (summary)
 
 | Module | Route (UI) | API prefix |
 |--------|------------|------------|
 | CO-PO | `/copo/*` | `/api/v1/copo` |
-| Publications | `/publications` | `/api/v1/publications` |
+| Publications | `/publications/*` | `/api/v1/publications` |
 | BTP/IP Projects | `/projects` | `/api/v1/projects` |
 | ECE/EVE Projects | `/projects` (tab) | `/api/v1/ece-eve-projects` |
+| Course allocation | `/course-allocation` | `/api/v1/course-allocation` |
+| Faculty contributions | `/contributions` | `/api/v1/contributions` |
+| Faculty awards | `/awards` | `/api/v1/awards` |
+| Meeting minutes | `/senate-minutes`, `/ece-faculty-meets`, … | `/api/v1/documents` |
+| Notifications | `/notifications` (faculty), `/admin/notifications` | `/api/v1/notifications` |
+| Requirement tracker | `/admin/requirement-tracker` | `/api/v1/notifications/admin/requirements` |
 | Analytics | `/analytics` | `/api/v1/analytics` |
-| LLM Insights | `/llm` | `/api/v1/llm-insights` |
-| Awards | `/awards` | `/api/v1/awards` |
+| LLM Insights | `/llm-insights` | `/api/v1/llm-insights` |
 | Admin users | `/admin/users` | `/api/v1/auth` |
 
-Full module reference: [docs/MODULES.md](docs/MODULES.md).
+Full reference: [docs/MODULES.md](docs/MODULES.md).
 
-## Production deployment (IT)
+## Production deployment
 
-See **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** for server requirements, environment variables, Nginx, PM2, backups, and upgrade steps.
+| Method | Guide |
+|--------|--------|
+| Native (PM2 + Nginx) | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) |
+| Docker (recommended for institute) | [docs/DOCKER_DEPLOYMENT.md](docs/DOCKER_DEPLOYMENT.md) |
+| Security review | [docs/SECURITY.md](docs/SECURITY.md) |
 
 ```bash
+# Native
 cd backend && pip install -r requirements.txt && alembic upgrade head
 cd ../frontend && npm ci && npm run build
 pm2 start deploy/ecosystem.config.cjs
+
+# Docker
+cp .env.docker.example .env.docker   # edit secrets
+docker compose --env-file .env.docker up -d --build
 ```
 
 ## Documentation
 
 | Document | Purpose |
 |----------|---------|
-| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Server hosting for IT |
 | [docs/MODULES.md](docs/MODULES.md) | Feature reference |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Server hosting (native) |
+| [docs/DOCKER_DEPLOYMENT.md](docs/DOCKER_DEPLOYMENT.md) | Docker hosting |
+| [docs/SECURITY.md](docs/SECURITY.md) | OWASP checklist |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design |
 | [docs/LOCAL_DATABASE.md](docs/LOCAL_DATABASE.md) | MySQL setup |
-| [docs/MAINTENANCE.md](docs/MAINTENANCE.md) | Ongoing operations (publications, CSV, meeting PDFs) |
+| [docs/MAINTENANCE.md](docs/MAINTENANCE.md) | Ongoing operations |
 
 ## License
 

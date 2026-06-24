@@ -1,84 +1,113 @@
 export type NotificationTemplate = {
   id: string;
   label: string;
+  requirement_type: string;
   subject: string;
   body: string;
 };
 
 export const NOTIFICATION_TEMPLATES: NotificationTemplate[] = [
   {
-    id: "raw-marks",
-    label: "Request for Raw Mark Sheets",
-    subject: "Request for Raw Mark Sheets — [Semester / Course Name]",
+    id: "course-upcoming-sem",
+    label: "Upcoming Semester Course Details",
+    requirement_type: "course_upcoming_sem",
+    subject: "Upcoming Semester Course Details — [Semester]",
     body: `Dear [Faculty Name],
 
-This is a reminder to please submit the raw mark sheets for [Course Code / Semester] at your earliest convenience. These are required for the CO-PO attainment process.
+Please submit the course(s) you will teach in the upcoming semester, including course code, title, and any co-instructors.
 
-Kindly upload them to the portal or send them to the department office by [Deadline Date].
+Deadline: [Date]
+
+Thank you.`,
+  },
+  {
+    id: "yearly-report",
+    label: "Yearly Report Submission",
+    requirement_type: "yearly_report",
+    subject: "Yearly Report Submission — [Academic Year]",
+    body: `Dear [Faculty Name],
+
+Please submit your yearly report for [Academic Year] at your earliest convenience.
+
+Deadline: [Date]
+
+Thank you.`,
+  },
+  {
+    id: "new-awards",
+    label: "New Awards Update",
+    requirement_type: "new_awards",
+    subject: "New Awards Update Request",
+    body: `Dear [Faculty Name],
+
+Please update the portal with any new awards or recognitions received since we last asked.
+
+Deadline: [Date]
+
+Thank you.`,
+  },
+  {
+    id: "new-fdps",
+    label: "New FDPs Update",
+    requirement_type: "new_fdps",
+    subject: "New FDPs / Training Update Request",
+    body: `Dear [Faculty Name],
+
+Please report any new FDPs, STTPs, or training programs you have attended since we last asked.
+
+Deadline: [Date]
+
+Thank you.`,
+  },
+  {
+    id: "verify-sdgs",
+    label: "Verify Project SDGs (BTP/IP)",
+    requirement_type: "verify_sdgs",
+    subject: "Verify & Accept SDGs for Your Projects (BTP/IP)",
+    body: `Dear [Faculty Name],
+
+Please log in to the BTP/IP tab and verify & accept the SDGs linked to your student projects.
+
+Deadline: [Date]
 
 Thank you.`,
   },
   {
     id: "copo-attainment",
-    label: "Request for CO-PO Attainment Data",
-    subject: "CO-PO Attainment Data Submission — [Academic Year]",
+    label: "CO-PO Attainment Data",
+    requirement_type: "copo_attainment",
+    subject: "CO-PO Attainment Data — Previous Semester",
     body: `Dear [Faculty Name],
 
-We require the CO-PO attainment data for your courses for the academic year [Year]. Please log in to the portal and complete the attainment generation for all your assigned courses.
+Please submit CO-PO attainment data for the course(s) you taught in the previous semester via the CO-PO Generator.
 
 Deadline: [Date]
 
-Please reach out if you need any assistance.`,
-  },
-  {
-    id: "signature",
-    label: "Request for Signature on Document",
-    subject: "Signature Required — [Document Name]",
-    body: `Dear [Faculty Name],
-
-Kindly review and sign the attached document: [Document Name]. This is required for [Purpose / Context].
-
-Please return the signed copy to [Contact / Office] by [Date].
-
-Thank you for your prompt attention.`,
-  },
-  {
-    id: "profile-update",
-    label: "Profile / Publication Update Reminder",
-    subject: "Reminder to Update Your Faculty Profile",
-    body: `Dear [Faculty Name],
-
-This is a gentle reminder to update your faculty profile on the portal, including any recent publications, awards, funded projects, or professional achievements.
-
-Keeping your profile current ensures accurate departmental reports and accreditation data.
-
-Please complete your updates by [Date].`,
-  },
-  {
-    id: "deadline",
-    label: "Upcoming Deadline Reminder",
-    subject: "Upcoming Deadline — [Task / Submission Name]",
-    body: `Dear [Faculty Name],
-
-This is a reminder that the deadline for [Task Description] is approaching on [Date]. Please ensure that all required submissions are completed on time through the portal.
-
-Contact the admin office if you have any questions.`,
-  },
-  {
-    id: "nba-accreditation",
-    label: "NBA / Accreditation Data Request",
-    subject: "Data Submission Required for NBA/Accreditation",
-    body: `Dear [Faculty Name],
-
-As part of our ongoing NBA/Accreditation preparation, we require the following data from you: [List of required items].
-
-Please submit this through the portal or directly to the department office by [Deadline].
-
-Your timely cooperation is highly appreciated.`,
+Thank you.`,
   },
 ];
 
-/** Highlight bracket placeholders in the compose preview. */
-export function highlightPlaceholders(text: string): string {
-  return text.replace(/\[([^\]]+)\]/g, "⟦$1⟧");
+export const REMINDER_QUICK_PICKS = [
+  { label: "Off", minutes: 0 },
+  { label: "1 day", minutes: 24 * 60 },
+  { label: "2 days", minutes: 2 * 24 * 60 },
+  { label: "3 days", minutes: 3 * 24 * 60 },
+  { label: "1 week", minutes: 7 * 24 * 60 },
+  { label: "2 weeks", minutes: 14 * 24 * 60 },
+];
+
+export const REMINDER_UNITS = [
+  { value: "minutes", label: "minutes", multiplier: 1 },
+  { value: "hours", label: "hours", multiplier: 60 },
+  { value: "days", label: "days", multiplier: 24 * 60 },
+  { value: "weeks", label: "weeks", multiplier: 7 * 24 * 60 },
+] as const;
+
+export const MAX_REMINDER_DAYS = 180;
+
+export function minutesFromCustom(value: number, unit: (typeof REMINDER_UNITS)[number]["value"]): number {
+  const mult = REMINDER_UNITS.find((u) => u.value === unit)?.multiplier ?? 1;
+  return Math.round(value * mult);
 }
+
+export const REMINDER_INTERVALS = REMINDER_QUICK_PICKS;

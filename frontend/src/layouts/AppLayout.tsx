@@ -31,10 +31,21 @@ const navItems: NavItem[] = [
   { kind: "link", to: "/projects", label: "BTP / IP Projects", exact: true },
   {
     kind: "group",
+    label: "Course Allocation",
+    links: [
+      { to: "/course-allocation", label: "Allocations", exact: true },
+      { to: "/course-allocation/catalog", label: "Course Catalog", exact: true },
+    ],
+  },
+  {
+    kind: "group",
     label: "Minutes",
     links: [
-      { to: "/senate-minutes", label: "Senate Agenda", exact: true },
-      { to: "/ece-faculty-meets", label: "ECE Faculty Meets", exact: true },
+      { to: "/senate-minutes", label: "Senate Meetings", exact: true },
+      { to: "/ece-faculty-meets", label: "ECE Faculty Meetings", exact: true },
+      { to: "/aac-meetings", label: "AAC Meetings", exact: true },
+      { to: "/ugc-meetings", label: "UGC Meetings", exact: true },
+      { to: "/pgc-meetings", label: "PGC Meetings", exact: true },
     ],
   },
   {
@@ -42,7 +53,7 @@ const navItems: NavItem[] = [
     label: "Analytics",
     links: [
       { to: "/awards", label: "Faculty Awards", exact: true },
-      { to: "/fdps", label: "Faculty FDPs", exact: true },
+      { to: "/contributions", label: "Faculty Contributions", exact: true },
       { to: "/analytics", label: "Analytics Dashboard", exact: true },
     ],
   },
@@ -57,6 +68,7 @@ const adminNavGroup: NavItem = {
     { to: "/publications/admin", label: "Publications Admin", exact: true },
     { to: "/admin/users", label: "Users", exact: true },
     { to: "/admin/notifications", label: "Send Notifications", exact: true },
+    { to: "/admin/requirement-tracker", label: "Requirement Tracker", exact: true },
     { to: "/admin/data", label: "Data & Archives", exact: true },
   ],
 };
@@ -66,7 +78,8 @@ function isNavActive(pathname: string, to: string, exact?: boolean): boolean {
     return (
       pathname === to ||
       pathname.startsWith(`${to}/results/`) ||
-      (to === "/publications/faculty" && pathname.startsWith("/publications/faculty/"))
+      (to === "/publications/faculty" && pathname.startsWith("/publications/faculty/")) ||
+      (to === "/course-allocation" && pathname.startsWith("/course-allocation/"))
     );
   }
   return pathname === to || pathname.startsWith(`${to}/`);
@@ -131,11 +144,23 @@ export default function AppLayout() {
   const { user, logout } = useAuth();
   const location = useLocation();
   const isAdmin = user?.role === "admin";
+  const isFaculty = user?.role === "faculty";
+
+  const visibleNavItems: NavItem[] = navItems.map((item) => {
+    if (item.kind !== "group" || item.label !== "Course Allocation" || !isFaculty) {
+      return item;
+    }
+    return {
+      ...item,
+      links: item.links.filter((link) => link.to !== "/course-allocation/catalog"),
+    };
+  });
+
   const items = isAdmin
-    ? navItems
+    ? visibleNavItems
         .filter((item) => !(item.kind === "link" && item.to === "/notifications"))
         .concat(adminNavGroup)
-    : navItems;
+    : visibleNavItems;
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">

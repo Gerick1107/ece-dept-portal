@@ -14,8 +14,15 @@ import PublicationExportsPage from "./modules/publications/pages/PublicationExpo
 import PublicationsAdminPage from "./modules/publications/pages/PublicationsAdminPage";
 import ProjectsPage from "./modules/projects/pages/ProjectsPage";
 import AwardsPage from "./modules/awards/pages/AwardsPage";
-import FdpsPage from "./modules/fdps/pages/FdpsPage";
+import FacultyContributionsPage from "./modules/contributions/pages/FacultyContributionsPage";
+import CourseAllocationPage from "./modules/course_allocation/pages/CourseAllocationPage";
+import CourseCatalogPage from "./modules/course_allocation/pages/CourseCatalogPage";
+import FacultyAllocationDetailPage from "./modules/course_allocation/pages/FacultyAllocationDetailPage";
 import SenateMinutesPage from "./modules/documents/pages/SenateMinutesPage";
+import RequirementTrackerPage from "./modules/notifications/pages/RequirementTrackerPage";
+import AacMeetingsPage from "./modules/documents/pages/AacMeetingsPage";
+import UgcMeetingsPage from "./modules/documents/pages/UgcMeetingsPage";
+import PgcMeetingsPage from "./modules/documents/pages/PgcMeetingsPage";
 import EceFacultyMeetsPage from "./modules/documents/pages/EceFacultyMeetsPage";
 import AnalyticsPage from "./modules/analytics/pages/AnalyticsPage";
 import LlmInsightsPage from "./modules/llm/pages/LlmInsightsPage";
@@ -92,7 +99,7 @@ export default function App() {
               description="Departmental analytics for awards and CO-PO attainment trends."
               links={[
                 { label: "Faculty Awards", path: "/awards", description: "Awards and recognitions" },
-                { label: "Faculty FDPs", path: "/fdps", description: "Faculty development programs" },
+                { label: "Faculty Contributions", path: "/contributions", description: "Faculty development & contributions" },
                 { label: "Analytics", path: "/analytics", description: "CO-PO, projects, and publication analytics" },
               ]}
             />
@@ -105,8 +112,11 @@ export default function App() {
               title="Minutes"
               description="Browse meeting minutes and ask questions scoped to each document set."
               links={[
-                { label: "Senate Agenda", path: "/senate-minutes", description: "Senate agenda minutes by year" },
-                { label: "ECE Faculty Meets", path: "/ece-faculty-meets", description: "ECE faculty meeting minutes by year" },
+                { label: "Senate Meetings", path: "/senate-minutes", description: "Senate agendas and minutes by year" },
+                { label: "ECE Faculty Meetings", path: "/ece-faculty-meets", description: "ECE faculty agendas and minutes" },
+                { label: "AAC Meetings", path: "/aac-meetings", description: "AAC agendas and minutes" },
+                { label: "UGC Meetings", path: "/ugc-meetings", description: "UGC agendas and minutes" },
+                { label: "PGC Meetings", path: "/pgc-meetings", description: "PGC agendas and minutes" },
               ]}
             />
           }
@@ -121,6 +131,8 @@ export default function App() {
                 links={[
                   { label: "Publications Admin", path: "/publications/admin", description: "Manage faculty and scraping" },
                   { label: "Users", path: "/admin/users", description: "User accounts and roles" },
+                  { label: "Send Notifications", path: "/admin/notifications", description: "Notify faculty" },
+                  { label: "Requirement Tracker", path: "/admin/requirement-tracker", description: "Data request status" },
                   { label: "Data & Archives", path: "/admin/data", description: "Data management and archives" },
                 ]}
               />
@@ -139,13 +151,28 @@ export default function App() {
         <Route path="/publications/admin" element={<PublicationsAdminPage />} />
         <Route path="/projects" element={<ProjectsPage />} />
         <Route path="/awards" element={<AwardsPage />} />
-        <Route path="/fdps" element={<FdpsPage />} />
+        <Route path="/contributions" element={<FacultyContributionsPage />} />
+        <Route path="/course-allocation" element={<CourseAllocationPage />} />
+        <Route
+          path="/course-allocation/catalog"
+          element={
+            <AdminOnly>
+              <CourseCatalogPage />
+            </AdminOnly>
+          }
+        />
+        <Route path="/course-allocation/faculty/:facultyId" element={<FacultyAllocationDetailPage />} />
+        <Route path="/fdps" element={<Navigate to="/contributions" replace />} />
         <Route path="/senate-minutes" element={<SenateMinutesPage />} />
         <Route path="/ece-faculty-meets" element={<EceFacultyMeetsPage />} />
+        <Route path="/aac-meetings" element={<AacMeetingsPage />} />
+        <Route path="/ugc-meetings" element={<UgcMeetingsPage />} />
+        <Route path="/pgc-meetings" element={<PgcMeetingsPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="/llm-insights" element={<LlmInsightsPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/admin/notifications" element={<AdminNotificationsPage />} />
+        <Route path="/admin/requirement-tracker" element={<RequirementTrackerPage />} />
         <Route path="/admin/users" element={<AdminUsersPage />} />
         <Route path="/admin/data" element={<AdminDataPage />} />
         <Route path="/profile" element={<ProfilePage />} />

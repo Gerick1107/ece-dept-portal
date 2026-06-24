@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   downloadNotificationAttachment,
+  downloadReplyAttachment,
   fetchNotifications,
   markAllNotificationsRead,
   markNotificationRead,
+  submitNotificationReply,
   type NotificationItem,
 } from "../services/notificationsApi";
 
@@ -12,6 +14,9 @@ export default function NotificationsPage() {
   const [unread, setUnread] = useState(0);
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState<number | null>(null);
+  const [replyText, setReplyText] = useState<Record<number, string>>({});
+  const [replyFile, setReplyFile] = useState<Record<number, File | null>>({});
+  const [submitting, setSubmitting] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setError("");
@@ -33,6 +38,26 @@ export default function NotificationsPage() {
     if (!item.is_read) {
       await markNotificationRead(item.id);
       await load();
+    }
+  }
+
+  async function sendReply(item: NotificationItem) {
+    const message = (replyText[item.id] ?? "").trim();
+    if (!message) {
+      setError("Please enter a reply message.");
+      return;
+    }
+    setSubmitting(item.id);
+    setError("");
+    try {
+      await submitNotificationReply(item.id, message, replyFile[item.id] ?? undefined);
+      setReplyText((prev) => ({ ...prev, [item.id]: "" }));
+      setReplyFile((prev) => ({ ...prev, [item.id]: null }));
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to send reply");
+    } finally {
+      setSubmitting(null);
     }
   }
 
@@ -95,6 +120,65 @@ export default function NotificationsPage() {
                     ))}
                   </div>
                 )}
+
+                {item.replies.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-slate-600 uppercase tracking-wide">Your replies</p>
+                    {item.replies.map((reply) => (
+                      <div key={reply.id} className="rounded-lg bg-slate-50 border border-slate-100 p-3 text-sm">
+                        <p className="text-slate-700 whitespace-pre-wrap">{reply.message}</p>
+                        <p className="text-xs text-slate-500 mt-1">
+                          {reply.created_at ? new Date(reply.created_at).toLocaleString() : ""}
+                        </p>
+                        {reply.attachments.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {reply.attachments.map((a) => (
+                              <button
+                                key={a.id}
+                                type="button"
+                                className="text-xs px-2 py-1 rounded bg-white border hover:bg-slate-100"
+                                onClick={() => downloadReplyAttachment(a.id).catch(() => setError("Download failed"))}
+                              >
+                                {a.filename}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="rounded-lg border border-slate-200 p-3 space-y-2 bg-white">
+                  <p className="text-sm font-medium text-slate-800">Reply to this notification</p>
+                  <p className="text-xs text-slate-500">
+                    Attach a file to auto-mark the related requirement as fulfilled (green). Text-only replies stay
+                    yellow for admin review.
+                  </p>
+                  <textarea
+                    className="w-full border rounded-lg px-3 py-2 text-sm min-h-[80px]"
+                    placeholder="Your response…"
+                    value={replyText[item.id] ?? ""}
+                    onChange={(e) => setReplyText((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                  />
+                  <div className="flex flex-wrap items-center gap-3">
+                    <input
+                      type="file"
+                      className="text-sm"
+                      onChange={(e) =>
+                        setReplyFile((prev) => ({ ...prev, [item.id]: e.target.files?.[0] ?? null }))
+                      }
+                    />
+                    <button
+                      type="button"
+                      disabled={submitting === item.id}
+                      className="rounded-lg bg-teal-800 text-white px-3 py-2 text-sm hover:bg-teal-700 disabled:opacity-60"
+                      onClick={() => sendReply(item)}
+                    >
+                      {submitting === item.id ? "Sending…" : "Send reply"}
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </article>

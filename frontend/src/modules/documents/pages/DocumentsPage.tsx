@@ -3,13 +3,21 @@ import { useAuth } from "../../auth/AuthContext";
 import FileUploadField from "../../../components/FileUploadField";
 import { apiDelete, apiGet, apiPostForm, apiPostJson } from "../../../services/api";
 
+type MeetingFileRef = {
+  id: number;
+  file_name: string;
+  description: string | null;
+};
+
 type DocumentItem = {
   id: number;
   title: string;
   meeting_date: string | null;
-  description: string | null;
-  file_name: string;
   year: number;
+  has_agenda: boolean;
+  has_minutes: boolean;
+  agenda: MeetingFileRef | null;
+  minutes: MeetingFileRef | null;
 };
 
 type YearGroup = { year: number; documents: DocumentItem[] };
@@ -24,6 +32,7 @@ type QuerySource = {
 type QueryChunk = {
   document_id: number;
   title: string;
+  file_role?: string;
   year: number;
   page_number: number | null;
   section_label: string | null;
@@ -66,8 +75,8 @@ function formatMeetingDate(value: string | null): string {
   return value;
 }
 
-async function fetchDocumentBlob(documentType: string, docId: number): Promise<Blob> {
-  const res = await fetch(`${API_BASE}/documents/${documentType}/${docId}/download`, {
+async function fetchDocumentBlob(documentType: string, fileId: number): Promise<Blob> {
+  const res = await fetch(`${API_BASE}/documents/${documentType}/files/${fileId}/download`, {
     headers: authHeaders(),
   });
   if (!res.ok) {
@@ -82,7 +91,7 @@ export default function DocumentsPage({
   title,
   description,
 }: {
-  documentType: "senate" | "ece-faculty-meets";
+  documentType: "senate" | "ece-faculty-meets" | "aac-meetings" | "ugc-meetings" | "pgc-meetings";
   title: string;
   description: string;
 }) {
@@ -102,8 +111,10 @@ export default function DocumentsPage({
   const [showUpload, setShowUpload] = useState(false);
   const [uploadStep, setUploadStep] = useState<"pick" | "review">("pick");
   const [uploadYear, setUploadYear] = useState(String(new Date().getFullYear()));
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [previewMeta, setPreviewMeta] = useState<PreviewMeta | null>(null);
+  const [uploadAgendaFile, setUploadAgendaFile] = useState<File | null>(null);
+  const [uploadMinutesFile, setUploadMinutesFile] = useState<File | null>(null);
+  const [agendaPreview, setAgendaPreview] = useState<PreviewMeta | null>(null);
+  const [minutesPreview, setMinutesPreview] = useState<PreviewMeta | null>(null);
   const [previewBusy, setPreviewBusy] = useState(false);
   const [uploadBusy, setUploadBusy] = useState(false);
   const [viewerUrl, setViewerUrl] = useState<string | null>(null);
@@ -153,8 +164,10 @@ export default function DocumentsPage({
   function resetUploadModal() {
     setShowUpload(false);
     setUploadStep("pick");
-    setUploadFile(null);
-    setPreviewMeta(null);
+    setUploadAgendaFile(null);
+    setUploadMinutesFile(null);
+    setAgendaPreview(null);
+    setMinutesPreview(null);
     setPreviewBusy(false);
     setUploadBusy(false);
   }
@@ -188,15 +201,15 @@ export default function DocumentsPage({
     }
   }
 
-  async function downloadDocument(doc: DocumentItem) {
-    setPdfBusyId(doc.id);
+  async function downloadFile(file: MeetingFileRef) {
+    setPdfBusyId(file.id);
     setError("");
     try {
-      const blob = await fetchDocumentBlob(documentType, doc.id);
+      const blob = await fetchDocumentBlob(documentType, file.id);
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = doc.file_name;
+      anchor.download = file.file_name;
       anchor.click();
       URL.revokeObjectURL(url);
     } catch (e) {
@@ -211,22 +224,27 @@ export default function DocumentsPage({
     setViewerUrl(null);
   }
 
+  async function previewFile(file: File): Promise<PreviewMeta> {
+    const form = new FormData();
+    form.append("file", file);
+    const data = await apiPostForm<{ title: string; meeting_date: string | null; description: string }>(
+      `/documents/${documentType}/upload/preview`,
+      form
+    );
+    return {
+      title: data.title,
+      meeting_date: data.meeting_date ?? "",
+      description: data.description,
+    };
+  }
+
   async function runPreview() {
-    if (!uploadFile) return;
+    if (!uploadAgendaFile && !uploadMinutesFile) return;
     setPreviewBusy(true);
     setError("");
     try {
-      const form = new FormData();
-      form.append("file", uploadFile);
-      const data = await apiPostForm<{ title: string; meeting_date: string | null; description: string }>(
-        `/documents/${documentType}/upload/preview`,
-        form
-      );
-      setPreviewMeta({
-        title: data.title,
-        meeting_date: data.meeting_date ?? "",
-        description: data.description,
-      });
+      if (uploadAgendaFile) setAgendaPreview(await previewFile(uploadAgendaFile));
+      if (uploadMinutesFile) setMinutesPreview(await previewFile(uploadMinutesFile));
       setUploadStep("review");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not extract metadata");
@@ -236,20 +254,28 @@ export default function DocumentsPage({
   }
 
   async function saveUpload() {
-    if (!uploadFile || !previewMeta) return;
+    if (!uploadAgendaFile && !uploadMinutesFile) return;
     setUploadBusy(true);
     setError("");
     try {
       const form = new FormData();
-      form.append("file", uploadFile);
       form.append("year", uploadYear);
-      form.append("title", previewMeta.title.trim());
-      form.append("meeting_date", previewMeta.meeting_date.trim());
-      form.append("description", previewMeta.description.trim());
+      const title = minutesPreview?.title || agendaPreview?.title || "";
+      const meetingDate = minutesPreview?.meeting_date || agendaPreview?.meeting_date || "";
+      form.append("title", title);
+      form.append("meeting_date", meetingDate);
+      if (uploadAgendaFile) {
+        form.append("agenda_file", uploadAgendaFile);
+        form.append("agenda_description", agendaPreview?.description ?? "");
+      }
+      if (uploadMinutesFile) {
+        form.append("minutes_file", uploadMinutesFile);
+        form.append("minutes_description", minutesPreview?.description ?? "");
+      }
       await apiPostForm(`/documents/${documentType}/upload`, form);
       invalidateDocumentsListCache(documentType);
       resetUploadModal();
-      setMessage("Document uploaded and indexed.");
+      setMessage("Meeting uploaded and indexed.");
       await load({ force: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed");
@@ -311,33 +337,33 @@ export default function DocumentsPage({
                   <div>
                     <h3 className="font-medium text-slate-800">{doc.title}</h3>
                     <p className="text-xs text-slate-500">{formatMeetingDate(doc.meeting_date)}</p>
+                    <div className="flex gap-2 mt-1">
+                      {!doc.has_agenda && <span className="text-xs bg-amber-50 text-amber-800 px-2 py-0.5 rounded">Missing Agenda</span>}
+                      {!doc.has_minutes && <span className="text-xs bg-amber-50 text-amber-800 px-2 py-0.5 rounded">Missing Minutes</span>}
+                    </div>
                   </div>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      className="text-xs px-2 py-1 rounded border disabled:opacity-50"
-                      disabled={pdfBusyId === doc.id}
-                      onClick={() => openViewer(doc.id)}
-                    >
-                      {pdfBusyId === doc.id ? "Loading…" : "View"}
-                    </button>
-                    <button
-                      type="button"
-                      className="text-xs px-2 py-1 rounded border disabled:opacity-50"
-                      disabled={pdfBusyId === doc.id}
-                      onClick={() => downloadDocument(doc)}
-                    >
-                      Download
-                    </button>
+                  <div className="flex flex-wrap gap-2">
+                    {doc.agenda && (
+                      <>
+                        <button type="button" className="text-xs px-2 py-1 rounded border" disabled={pdfBusyId === doc.agenda.id} onClick={() => openViewer(doc.agenda!.id)}>View Agenda</button>
+                        <button type="button" className="text-xs px-2 py-1 rounded border" disabled={pdfBusyId === doc.agenda.id} onClick={() => downloadFile(doc.agenda!)}>Download Agenda</button>
+                      </>
+                    )}
+                    {doc.minutes && (
+                      <>
+                        <button type="button" className="text-xs px-2 py-1 rounded border" disabled={pdfBusyId === doc.minutes.id} onClick={() => openViewer(doc.minutes!.id)}>View Minutes</button>
+                        <button type="button" className="text-xs px-2 py-1 rounded border" disabled={pdfBusyId === doc.minutes.id} onClick={() => downloadFile(doc.minutes!)}>Download Minutes</button>
+                      </>
+                    )}
                     {isAdmin && (
                       <button
                         type="button"
                         className="text-xs px-2 py-1 rounded bg-red-50 text-red-700"
                         onClick={async () => {
-                          if (!window.confirm("Delete this document?")) return;
+                          if (!window.confirm("Delete this meeting?")) return;
                           await apiDelete(`/documents/${documentType}/${doc.id}`);
                           invalidateDocumentsListCache(documentType);
-                          setMessage("Document deleted.");
+                          setMessage("Meeting deleted.");
                           await load({ force: true });
                         }}
                       >
@@ -346,10 +372,11 @@ export default function DocumentsPage({
                     )}
                   </div>
                 </div>
-                {doc.description && (
+                {(doc.agenda?.description || doc.minutes?.description) && (
                   <details className="text-sm text-slate-600">
-                    <summary className="cursor-pointer text-teal-700 font-medium">Description</summary>
-                    <p className="mt-2 whitespace-pre-wrap">{doc.description}</p>
+                    <summary className="cursor-pointer text-teal-700 font-medium">Descriptions</summary>
+                    {doc.agenda?.description && <p className="mt-2"><strong>Agenda:</strong> {doc.agenda.description}</p>}
+                    {doc.minutes?.description && <p className="mt-2"><strong>Minutes:</strong> {doc.minutes.description}</p>}
                   </details>
                 )}
               </div>
@@ -402,7 +429,7 @@ export default function DocumentsPage({
                 <div className="max-h-48 overflow-y-auto bg-slate-50 border rounded-lg p-2 text-xs text-slate-600 space-y-2">
                   {queryResult.context_chunks.map((chunk, index) => (
                     <div key={`${chunk.document_id}-${index}`}>
-                      <p className="font-medium">{chunk.title} ({chunk.year}){chunk.page_number ? ` p.${chunk.page_number}` : ""}</p>
+                      <p className="font-medium">{chunk.title} ({chunk.year}){chunk.file_role ? ` — ${chunk.file_role}` : ""}{chunk.page_number ? ` p.${chunk.page_number}` : ""}</p>
                       <p>{chunk.text}</p>
                     </div>
                   ))}
@@ -433,7 +460,7 @@ export default function DocumentsPage({
             {uploadStep === "pick" && (
               <>
                 <p className="text-sm text-slate-600">
-                  Choose the meeting year and PDF. Metadata is extracted for your review before indexing.
+                  Choose the meeting year and at least one PDF (Agenda and/or Minutes).
                 </p>
                 <label className="text-sm block">
                   <span className="text-slate-600 font-medium">Meeting year</span>
@@ -446,21 +473,24 @@ export default function DocumentsPage({
                   />
                 </label>
                 <FileUploadField
-                  label="PDF file"
+                  label="Agenda (PDF)"
                   accept=".pdf,application/pdf"
-                  file={uploadFile}
-                  onFileChange={(file) => {
-                    setUploadFile(file);
-                    setPreviewMeta(null);
-                    setUploadStep("pick");
-                  }}
-                  hint="Senate or faculty meeting minutes (PDF only, max 25 MB)."
+                  file={uploadAgendaFile}
+                  onFileChange={setUploadAgendaFile}
+                  hint="Optional if Minutes is provided."
+                />
+                <FileUploadField
+                  label="Minutes (PDF)"
+                  accept=".pdf,application/pdf"
+                  file={uploadMinutesFile}
+                  onFileChange={setUploadMinutesFile}
+                  hint="Optional if Agenda is provided."
                 />
                 <div className="flex justify-end gap-2 pt-1">
                   <button type="button" className="px-3 py-2 text-sm border rounded-lg" onClick={resetUploadModal}>Cancel</button>
                   <button
                     type="button"
-                    disabled={previewBusy || !uploadFile}
+                    disabled={previewBusy || (!uploadAgendaFile && !uploadMinutesFile)}
                     className="px-3 py-2 text-sm bg-teal-700 text-white rounded-lg disabled:opacity-50"
                     onClick={runPreview}
                   >
@@ -470,51 +500,28 @@ export default function DocumentsPage({
               </>
             )}
 
-            {uploadStep === "review" && previewMeta && (
+            {uploadStep === "review" && (agendaPreview || minutesPreview) && (
               <>
-                <p className="text-sm text-slate-600">Review and edit the extracted metadata before uploading.</p>
-                <label className="text-sm block">
-                  <span className="text-slate-600 font-medium">Title</span>
-                  <input
-                    type="text"
-                    className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
-                    value={previewMeta.title}
-                    onChange={(e) => setPreviewMeta({ ...previewMeta, title: e.target.value })}
-                  />
-                </label>
-                <label className="text-sm block">
-                  <span className="text-slate-600 font-medium">Meeting date</span>
-                  <input
-                    type="date"
-                    className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
-                    value={previewMeta.meeting_date}
-                    onChange={(e) => setPreviewMeta({ ...previewMeta, meeting_date: e.target.value })}
-                  />
-                </label>
-                <label className="text-sm block">
-                  <span className="text-slate-600 font-medium">Description</span>
-                  <textarea
-                    className="mt-1 w-full border rounded-lg px-3 py-2 text-sm min-h-[120px]"
-                    value={previewMeta.description}
-                    onChange={(e) => setPreviewMeta({ ...previewMeta, description: e.target.value })}
-                  />
-                </label>
+                <p className="text-sm text-slate-600">Review extracted metadata before uploading.</p>
+                {agendaPreview && (
+                  <div className="space-y-2 border rounded-lg p-3">
+                    <p className="text-sm font-medium">Agenda</p>
+                    <input className="w-full border rounded-lg px-3 py-2 text-sm" value={agendaPreview.title} onChange={(e) => setAgendaPreview({ ...agendaPreview, title: e.target.value })} />
+                    <textarea className="w-full border rounded-lg px-3 py-2 text-sm min-h-[80px]" value={agendaPreview.description} onChange={(e) => setAgendaPreview({ ...agendaPreview, description: e.target.value })} />
+                  </div>
+                )}
+                {minutesPreview && (
+                  <div className="space-y-2 border rounded-lg p-3">
+                    <p className="text-sm font-medium">Minutes</p>
+                    <input className="w-full border rounded-lg px-3 py-2 text-sm" value={minutesPreview.title} onChange={(e) => setMinutesPreview({ ...minutesPreview, title: e.target.value })} />
+                    <textarea className="w-full border rounded-lg px-3 py-2 text-sm min-h-[80px]" value={minutesPreview.description} onChange={(e) => setMinutesPreview({ ...minutesPreview, description: e.target.value })} />
+                  </div>
+                )}
                 <div className="flex justify-between gap-2 pt-1">
-                  <button
-                    type="button"
-                    className="px-3 py-2 text-sm border rounded-lg"
-                    onClick={() => setUploadStep("pick")}
-                  >
-                    Back
-                  </button>
+                  <button type="button" className="px-3 py-2 text-sm border rounded-lg" onClick={() => setUploadStep("pick")}>Back</button>
                   <div className="flex gap-2">
                     <button type="button" className="px-3 py-2 text-sm border rounded-lg" onClick={resetUploadModal}>Cancel</button>
-                    <button
-                      type="button"
-                      disabled={uploadBusy || !previewMeta.title.trim()}
-                      className="px-3 py-2 text-sm bg-teal-700 text-white rounded-lg disabled:opacity-50"
-                      onClick={saveUpload}
-                    >
+                    <button type="button" disabled={uploadBusy} className="px-3 py-2 text-sm bg-teal-700 text-white rounded-lg disabled:opacity-50" onClick={saveUpload}>
                       {uploadBusy ? "Uploading…" : "Confirm upload"}
                     </button>
                   </div>

@@ -1,3 +1,3 @@
-from app.documents.models.entities import DocumentChunk, DocumentQueryLog, PortalDocument
+from app.documents.models.entities import DocumentChunk, DocumentQueryLog, Meeting, MeetingFile
 
-__all__ = ["PortalDocument", "DocumentChunk", "DocumentQueryLog"]
+__all__ = ["Meeting", "MeetingFile", "DocumentChunk", "DocumentQueryLog"]

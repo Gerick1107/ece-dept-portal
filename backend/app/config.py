@@ -8,7 +8,18 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 PROJECT_ROOT = BACKEND_ROOT.parent
-DATA_ASSETS = PROJECT_ROOT / "data" / "assets"
+
+
+def _default_data_assets() -> Path:
+    import os
+
+    override = os.getenv("DATA_ASSETS", "").strip()
+    if override:
+        return Path(override)
+    return PROJECT_ROOT / "data" / "assets"
+
+
+DATA_ASSETS = _default_data_assets()
 
 
 def _first_existing(*paths: Path) -> Path:
@@ -111,6 +122,9 @@ class Settings(BaseSettings):
     serp_api_key: str = ""
     scraper_backend: str = "scholarly"
     enable_scheduler: bool = False
+    # Requirement auto-reminders (email until tracker turns green). On by default.
+    enable_requirement_reminders: bool = True
+    requirement_reminder_poll_minutes: int = 1
 
     projects_upload_dir: str = str(BACKEND_ROOT / "storage" / "uploads" / "projects")
     documents_dir: str = str(BACKEND_ROOT / "documents")

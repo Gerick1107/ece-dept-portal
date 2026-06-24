@@ -25,24 +25,49 @@ function authHeaders(): HeadersInit {
 }
 
 export function formatApiDetail(detail: unknown, fallback = "Request failed"): string {
-  if (typeof detail === "string") return detail;
+  if (typeof detail === "string") {
+    if (detail.startsWith("Internal Server Error") || detail.startsWith("<")) {
+      return "Something went wrong. Please try again.";
+    }
+    return detail;
+  }
   if (Array.isArray(detail)) {
     const message = detail
       .map((item) => {
         if (typeof item === "string") return item;
         if (item && typeof item === "object" && "msg" in item) {
-          return String((item as { msg?: string }).msg ?? "");
+          const loc = "loc" in item && Array.isArray((item as { loc?: unknown }).loc)
+            ? (item as { loc: unknown[] }).loc.filter((p) => typeof p === "string" && p !== "body").join(".")
+            : "";
+          const msg = String((item as { msg?: string }).msg ?? "");
+          return loc ? `${loc}: ${msg}` : msg;
         }
         return "";
       })
       .filter(Boolean)
       .join("; ");
-    return message || fallback;
+    return message || "Please fill in the required field(s).";
   }
   if (detail && typeof detail === "object" && "msg" in detail) {
     return String((detail as { msg?: string }).msg ?? fallback);
   }
   return fallback;
+}
+
+async function parseErrorResponse(res: Response, fallback: string): Promise<string> {
+  const text = await res.text();
+  if (!text) return fallback;
+  const contentType = res.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) {
+    if (text.startsWith("Internal Server Error")) return "Something went wrong. Please try again.";
+    return text.length > 200 ? fallback : text;
+  }
+  try {
+    const j = JSON.parse(text) as { detail?: unknown };
+    return formatApiDetail(j.detail, fallback);
+  } catch {
+    return fallback;
+  }
 }
 
 export async function login(
@@ -74,16 +99,7 @@ export async function fetchMe(): Promise<User> {
 
 export async function apiGet<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, { headers: authHeaders() });
-  if (!res.ok) {
-    const text = await res.text();
-    try {
-      const j = JSON.parse(text) as { detail?: unknown };
-      throw new Error(formatApiDetail(j.detail, text || "Request failed"));
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      throw new Error(text || "Request failed");
-    }
-  }
+  if (!res.ok) throw new Error(await parseErrorResponse(res, "Request failed"));
   return res.json();
 }
 
@@ -93,10 +109,7 @@ export async function apiPostJson<T>(path: string, body: unknown): Promise<T> {
     headers: { ...authHeaders(), "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(formatApiDetail(err.detail, "Request failed"));
-  }
+  if (!res.ok) throw new Error(await parseErrorResponse(res, "Request failed"));
   return res.json();
 }
 
@@ -105,10 +118,7 @@ export async function apiPostNoContent(path: string): Promise<void> {
     method: "POST",
     headers: authHeaders(),
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(formatApiDetail(err.detail, "Request failed"));
-  }
+  if (!res.ok) throw new Error(await parseErrorResponse(res, "Request failed"));
 }
 
 export async function apiDelete(path: string): Promise<void> {
@@ -116,10 +126,17 @@ export async function apiDelete(path: string): Promise<void> {
     method: "DELETE",
     headers: authHeaders(),
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(formatApiDetail(err.detail, "Delete failed"));
-  }
+  if (!res.ok) throw new Error(await parseErrorResponse(res, "Delete failed"));
+}
+
+export async function apiPutJson<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "PUT",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(await parseErrorResponse(res, "Request failed"));
+  return res.json();
 }
 
 export async function apiPostForm<T>(path: string, form: FormData): Promise<T> {
@@ -128,16 +145,7 @@ export async function apiPostForm<T>(path: string, form: FormData): Promise<T> {
     headers: authHeaders(),
     body: form,
   });
-  if (!res.ok) {
-    let detail = await res.text();
-    try {
-      const j = JSON.parse(detail);
-      detail = typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail);
-    } catch {
-      /* keep */
-    }
-    throw new Error(detail);
-  }
+  if (!res.ok) throw new Error(await parseErrorResponse(res, "Request failed"));
   return res.json();
 }
 

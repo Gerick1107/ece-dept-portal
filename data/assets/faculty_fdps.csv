@@ -1,3 +1,0 @@
-id,faculty_name,year,exact_year,program,description,no_of_days,no_of_attendees,created_at,updated_at
-1,A V Subramanyam,2023-2024,2024,NPTEL,Completed NPTEL FDP on Deep Learning for Computer Vision,5,40,2026-06-21 00:00:00,2026-06-21 00:00:00
-2,Anubha Gupta,2024-2025,2025,MOOC,Attended MOOC-based FDP on Generative AI and LLMs organized by AICTE,3,60,2026-06-21 00:00:00,2026-06-21 00:00:00

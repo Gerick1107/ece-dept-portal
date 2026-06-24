@@ -19,11 +19,14 @@ alembic upgrade head
 
 ## Environment variables
 
-The module uses existing `DATABASE_URL`/`database_url` and scheduler lifecycle.
-Optional scraping settings can be added later if needed:
+The module uses `MYSQL_*` / `DATABASE_URL` from `backend/.env`.
 
-- `PUBLICATIONS_SCRAPE_DELAY_MIN_SECONDS` (default behavior uses 3)
-- `PUBLICATIONS_SCRAPE_DELAY_MAX_SECONDS` (default behavior uses 8)
+| Variable | Purpose |
+|----------|---------|
+| `ENABLE_SCHEDULER` | `true` to run **monthly publication gap-fill** (1st of month). Does not control notification reminders. |
+| `SERP_API_KEY`, `SCRAPER_BACKEND` | Publication scraping |
+
+See [docs/MAINTENANCE.md](../../../docs/MAINTENANCE.md) for sync operations.
 
 ## CSV import
 

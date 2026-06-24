@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
-from app.documents.models.entities import DocumentChunk, DocumentQueryLog, PortalDocument
+from app.documents.models.entities import DocumentChunk, DocumentQueryLog, Meeting, MeetingFile
 from app.llm.services.groq_service import LlmError, generate_llm_text_with_system
 
 _MIN_RELEVANCE_SCORE = 2
@@ -16,8 +16,9 @@ _TOP_K = 6
 
 @dataclass
 class RetrievedChunk:
-    document_id: int
+    meeting_file_id: int
     document_title: str
+    file_role: str
     year: int
     page_number: int | None
     section_label: str | None
@@ -41,9 +42,10 @@ def retrieve_chunks(db: Session, *, document_type: str, question: str, top_k: in
     question_tokens = _tokenize(question)
     rows = db.scalars(
         select(DocumentChunk)
-        .join(PortalDocument)
-        .where(PortalDocument.document_type == document_type)
-        .options(joinedload(DocumentChunk.document))
+        .join(MeetingFile)
+        .join(Meeting)
+        .where(Meeting.document_type == document_type)
+        .options(joinedload(DocumentChunk.meeting_file).joinedload(MeetingFile.meeting))
     ).unique().all()
 
     scored: list[RetrievedChunk] = []
@@ -51,19 +53,21 @@ def retrieve_chunks(db: Session, *, document_type: str, question: str, top_k: in
         score = _score_chunk(question_tokens, row.chunk_text)
         if score <= 0:
             continue
-        doc = row.document
+        mf = row.meeting_file
+        meeting = mf.meeting
         scored.append(
             RetrievedChunk(
-                document_id=doc.id,
-                document_title=doc.title,
-                year=doc.year,
+                meeting_file_id=mf.id,
+                document_title=meeting.meeting_title,
+                file_role=mf.file_role,
+                year=meeting.year,
                 page_number=row.page_number,
                 section_label=row.section_label,
                 chunk_text=row.chunk_text,
                 score=score,
             )
         )
-    scored.sort(key=lambda item: (-item.score, -item.year, item.document_id))
+    scored.sort(key=lambda item: (-item.score, -item.year, item.meeting_file_id))
     return scored[:top_k]
 
 
@@ -73,8 +77,9 @@ def _format_context(chunks: list[RetrievedChunk]) -> str:
         location = f"page {chunk.page_number}" if chunk.page_number else "unknown page"
         if chunk.section_label:
             location += f", section {chunk.section_label}"
+        role_label = "Agenda" if chunk.file_role == "agenda" else "Minutes"
         parts.append(
-            f"[Source {index}] Document: {chunk.document_title} ({chunk.year}), {location}\n{chunk.chunk_text}"
+            f"[Source {index}] Meeting: {chunk.document_title} ({chunk.year}), {role_label}, {location}\n{chunk.chunk_text}"
         )
     return "\n\n".join(parts)
 
@@ -128,15 +133,16 @@ async def answer_document_question(
 
     source_map: dict[int, dict] = {}
     for chunk in chunks:
-        if chunk.document_id not in source_map:
-            source_map[chunk.document_id] = {
-                "document_id": chunk.document_id,
+        if chunk.meeting_file_id not in source_map:
+            source_map[chunk.meeting_file_id] = {
+                "document_id": chunk.meeting_file_id,
                 "title": chunk.document_title,
+                "file_role": chunk.file_role,
                 "year": chunk.year,
                 "pages": set(),
             }
         if chunk.page_number:
-            source_map[chunk.document_id]["pages"].add(chunk.page_number)
+            source_map[chunk.meeting_file_id]["pages"].add(chunk.page_number)
 
     sources = [
         {
@@ -162,8 +168,9 @@ async def answer_document_question(
         "sources": sources,
         "context_chunks": [
             {
-                "document_id": c.document_id,
+                "document_id": c.meeting_file_id,
                 "title": c.document_title,
+                "file_role": c.file_role,
                 "year": c.year,
                 "page_number": c.page_number,
                 "section_label": c.section_label,

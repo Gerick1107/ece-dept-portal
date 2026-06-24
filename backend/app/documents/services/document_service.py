@@ -3,70 +3,66 @@ from __future__ import annotations
 from pathlib import Path
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
-from app.documents.models.entities import PortalDocument
-from app.documents.services.ingestion_service import generate_document_description, ingest_document_file
-from app.documents.services.pdf_service import extract_pdf_metadata, parse_date_from_text
+from app.documents.models.entities import Meeting, MeetingFile
 
 
 def list_documents_grouped(db: Session, document_type: str) -> dict:
     rows = db.scalars(
-        select(PortalDocument)
-        .where(PortalDocument.document_type == document_type)
-        .order_by(PortalDocument.year.desc(), PortalDocument.title.asc())
-    ).all()
+        select(Meeting)
+        .where(Meeting.document_type == document_type)
+        .options(joinedload(Meeting.files))
+        .order_by(Meeting.year.desc(), Meeting.meeting_title.asc())
+    ).unique().all()
     years: dict[int, list[dict]] = {}
-    for row in rows:
-        years.setdefault(row.year, []).append(
+    for meeting in rows:
+        files = {f.file_role: f for f in meeting.files}
+        agenda = files.get("agenda")
+        minutes = files.get("minutes")
+        years.setdefault(meeting.year, []).append(
             {
-                "id": row.id,
-                "title": row.title,
-                "meeting_date": row.meeting_date,
-                "description": row.description,
-                "file_name": row.file_name,
-                "year": row.year,
+                "id": meeting.id,
+                "title": meeting.meeting_title,
+                "meeting_date": meeting.meeting_date,
+                "year": meeting.year,
+                "has_agenda": agenda is not None,
+                "has_minutes": minutes is not None,
+                "agenda": (
+                    {
+                        "id": agenda.id,
+                        "file_name": agenda.file_name,
+                        "description": agenda.description,
+                    }
+                    if agenda
+                    else None
+                ),
+                "minutes": (
+                    {
+                        "id": minutes.id,
+                        "file_name": minutes.file_name,
+                        "description": minutes.description,
+                    }
+                    if minutes
+                    else None
+                ),
             }
         )
     return {"years": [{"year": year, "documents": docs} for year, docs in sorted(years.items(), reverse=True)]}
 
 
-def get_document(db: Session, document_id: int) -> PortalDocument | None:
-    return db.get(PortalDocument, document_id)
-
-
-def delete_document(db: Session, document: PortalDocument) -> None:
-    path = Path(document.file_path)
-    db.delete(document)
-    db.commit()
-    if path.exists():
-        try:
-            path.unlink()
-        except OSError:
-            pass
-
-
-async def save_uploaded_document(
-    db: Session,
-    *,
-    document_type: str,
-    year: int,
-    dest_path: Path,
-    title: str,
-    meeting_date: str | None,
-    description: str,
-) -> PortalDocument:
-    dest_path.parent.mkdir(parents=True, exist_ok=True)
-    return await ingest_document_file(
-        db,
-        document_type=document_type,
-        year=year,
-        file_path=dest_path,
-        title=title,
-        meeting_date=meeting_date,
-        description=description,
-        generate_description=False,
+def get_meeting(db: Session, meeting_id: int) -> Meeting | None:
+    return db.scalar(
+        select(Meeting).where(Meeting.id == meeting_id).options(joinedload(Meeting.files))
     )
+
+
+def get_meeting_file(db: Session, file_id: int) -> MeetingFile | None:
+    return db.get(MeetingFile, file_id)
+
+
+from app.documents.services.ingestion_service import generate_document_description
+from app.documents.services.pdf_service import extract_pdf_metadata, parse_date_from_text
 
 
 async def extract_upload_metadata(file_path: Path) -> dict:
@@ -81,3 +77,15 @@ async def extract_upload_metadata(file_path: Path) -> dict:
         "meeting_date": meeting_date,
         "description": auto_description,
     }
+
+
+def delete_meeting(db: Session, meeting: Meeting) -> None:
+    paths = [Path(f.file_path) for f in meeting.files]
+    db.delete(meeting)
+    db.commit()
+    for path in paths:
+        if path.exists():
+            try:
+                path.unlink()
+            except OSError:
+                pass
