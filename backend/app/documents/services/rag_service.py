@@ -4,14 +4,22 @@ import json
 import re
 from dataclasses import dataclass
 
+import numpy as np
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
-from app.documents.models.entities import DocumentChunk, DocumentQueryLog, Meeting, MeetingFile
+from app.documents.models.entities import DOCUMENT_TYPE_ALL, DocumentChunk, DocumentQueryLog, Meeting, MeetingFile
+from app.documents.services.embedding_service import (
+    cosine_similarity,
+    embed_text,
+    embedding_from_json,
+    embedding_to_json,
+)
 from app.llm.services.groq_service import LlmError, generate_llm_text_with_system
 
-_MIN_RELEVANCE_SCORE = 2
-_TOP_K = 6
+_MIN_RELEVANCE_SCORE = 0.32
+_TOP_K = 12
+_USE_EMBEDDINGS = True
 
 
 @dataclass
@@ -40,17 +48,32 @@ def _score_chunk(question_tokens: set[str], chunk_text: str) -> float:
 
 def retrieve_chunks(db: Session, *, document_type: str, question: str, top_k: int = _TOP_K) -> list[RetrievedChunk]:
     question_tokens = _tokenize(question)
-    rows = db.scalars(
+    stmt = (
         select(DocumentChunk)
         .join(MeetingFile)
         .join(Meeting)
-        .where(Meeting.document_type == document_type)
         .options(joinedload(DocumentChunk.meeting_file).joinedload(MeetingFile.meeting))
-    ).unique().all()
+    )
+    if document_type != DOCUMENT_TYPE_ALL:
+        stmt = stmt.where(Meeting.document_type == document_type)
+    rows = db.scalars(stmt).unique().all()
+
+    query_vec: np.ndarray | None = None
+    if _USE_EMBEDDINGS:
+        try:
+            query_vec = np.asarray(embed_text(question), dtype=np.float32)
+        except Exception:
+            query_vec = None
 
     scored: list[RetrievedChunk] = []
     for row in rows:
-        score = _score_chunk(question_tokens, row.chunk_text)
+        score = 0.0
+        if query_vec is not None:
+            chunk_vec = embedding_from_json(row.embedding_json)
+            if chunk_vec is not None:
+                score = cosine_similarity(query_vec, chunk_vec)
+        if score <= 0:
+            score = _score_chunk(question_tokens, row.chunk_text) / max(len(question_tokens), 1)
         if score <= 0:
             continue
         mf = row.meeting_file

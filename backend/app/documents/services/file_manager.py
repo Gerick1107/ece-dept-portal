@@ -5,6 +5,7 @@ from pathlib import Path
 from app.config import get_settings
 from app.documents.models.entities import (
     DOCUMENT_TYPE_AAC,
+    DOCUMENT_TYPE_ALL,
     DOCUMENT_TYPE_ECE_FACULTY_MEET,
     DOCUMENT_TYPE_PGC,
     DOCUMENT_TYPE_SENATE,
@@ -27,6 +28,7 @@ SLUG_TO_TYPE: dict[str, str] = {
     "aac-meetings": DOCUMENT_TYPE_AAC,
     "ugc-meetings": DOCUMENT_TYPE_UGC,
     "pgc-meetings": DOCUMENT_TYPE_PGC,
+    "all-meetings": DOCUMENT_TYPE_ALL,
 }
 
 

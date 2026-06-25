@@ -16,11 +16,21 @@ _FILENAME_TITLE_RE = re.compile(
     re.IGNORECASE,
 )
 _DATE_DAY_FIRST_RE = re.compile(
-    r"(?P<day>\d{1,2})[\s,]+(?P<month>[A-Za-z]+)[\s,]+(?P<year>\d{4})",
+    r"(?P<day>\d{1,2})\s*(?:st|nd|rd|th)?[\s,]+(?P<month>[A-Za-z]+)\.?[\s,]+(?P<year>\d{4})",
     re.IGNORECASE,
 )
 _DATE_MONTH_FIRST_RE = re.compile(
-    r"(?P<month>[A-Za-z]+)[\s,]+(?P<day>\d{1,2}),?\s+(?P<year>\d{4})",
+    r"(?P<month>[A-Za-z]+)\.?[\s,]+(?P<day>\d{1,2})\s*(?:st|nd|rd|th)?,?\s+(?P<year>\d{4})",
+    re.IGNORECASE,
+)
+_MONTH_NAMES_ALT = (
+    "january|february|march|april|may|june|july|august|september|october|"
+    "november|december|jan|feb|mar|apr|jun|jul|aug|sept|sep|oct|nov|dec"
+)
+# Dates glued together without spaces, e.g. "29thSeptember2023" (common when
+# pypdf strips whitespace). Anchored on real month names so it can't misfire.
+_DATE_GLUED_RE = re.compile(
+    rf"(?P<day>\d{{1,2}})(?:st|nd|rd|th)?(?P<month>{_MONTH_NAMES_ALT})(?P<year>\d{{4}})",
     re.IGNORECASE,
 )
 _MONTHS = {
@@ -75,15 +85,15 @@ def _format_meeting_date(day: str, month: str, year: str) -> str | None:
 
 
 def parse_date_from_text(text: str) -> str | None:
-    """Find a calendar date in free text or filenames."""
+    """Find the first valid calendar date in free text or filenames."""
     normalized = text.replace("\n", " ")
-    for pattern in (_DATE_DAY_FIRST_RE, _DATE_MONTH_FIRST_RE):
-        match = pattern.search(normalized)
-        if not match:
-            continue
-        parsed = _format_meeting_date(match.group("day"), match.group("month"), match.group("year"))
-        if parsed:
-            return parsed
+    for pattern in (_DATE_DAY_FIRST_RE, _DATE_MONTH_FIRST_RE, _DATE_GLUED_RE):
+        for match in pattern.finditer(normalized):
+            parsed = _format_meeting_date(
+                match.group("day"), match.group("month"), match.group("year")
+            )
+            if parsed:
+                return parsed
     return None
 
 

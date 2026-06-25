@@ -18,6 +18,7 @@ import FacultyContributionsPage from "./modules/contributions/pages/FacultyContr
 import CourseAllocationPage from "./modules/course_allocation/pages/CourseAllocationPage";
 import CourseCatalogPage from "./modules/course_allocation/pages/CourseCatalogPage";
 import FacultyAllocationDetailPage from "./modules/course_allocation/pages/FacultyAllocationDetailPage";
+import AllMeetingsPage from "./modules/documents/pages/AllMeetingsPage";
 import SenateMinutesPage from "./modules/documents/pages/SenateMinutesPage";
 import RequirementTrackerPage from "./modules/notifications/pages/RequirementTrackerPage";
 import AacMeetingsPage from "./modules/documents/pages/AacMeetingsPage";
@@ -112,6 +113,7 @@ export default function App() {
               title="Minutes"
               description="Browse meeting minutes and ask questions scoped to each document set."
               links={[
+                { label: "All Meetings", path: "/all-meetings", description: "Every meeting document in one place" },
                 { label: "Senate Meetings", path: "/senate-minutes", description: "Senate agendas and minutes by year" },
                 { label: "ECE Faculty Meetings", path: "/ece-faculty-meets", description: "ECE faculty agendas and minutes" },
                 { label: "AAC Meetings", path: "/aac-meetings", description: "AAC agendas and minutes" },
@@ -163,6 +165,7 @@ export default function App() {
         />
         <Route path="/course-allocation/faculty/:facultyId" element={<FacultyAllocationDetailPage />} />
         <Route path="/fdps" element={<Navigate to="/contributions" replace />} />
+        <Route path="/all-meetings" element={<AllMeetingsPage />} />
         <Route path="/senate-minutes" element={<SenateMinutesPage />} />
         <Route path="/ece-faculty-meets" element={<EceFacultyMeetsPage />} />
         <Route path="/aac-meetings" element={<AacMeetingsPage />} />

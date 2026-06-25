@@ -5,7 +5,43 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
-from app.documents.models.entities import Meeting, MeetingFile
+from app.documents.models.entities import DOCUMENT_TYPE_LABELS, Meeting, MeetingFile
+
+
+def _meeting_to_dict(meeting: Meeting, *, include_type: bool = False) -> dict:
+    files = {f.file_role: f for f in meeting.files}
+    agenda = files.get("agenda")
+    minutes = files.get("minutes")
+    item = {
+        "id": meeting.id,
+        "title": meeting.meeting_title,
+        "meeting_date": meeting.meeting_date,
+        "year": meeting.year,
+        "has_agenda": agenda is not None,
+        "has_minutes": minutes is not None,
+        "agenda": (
+            {
+                "id": agenda.id,
+                "file_name": agenda.file_name,
+                "description": agenda.description,
+            }
+            if agenda
+            else None
+        ),
+        "minutes": (
+            {
+                "id": minutes.id,
+                "file_name": minutes.file_name,
+                "description": minutes.description,
+            }
+            if minutes
+            else None
+        ),
+    }
+    if include_type:
+        item["document_type"] = meeting.document_type
+        item["document_type_label"] = DOCUMENT_TYPE_LABELS.get(meeting.document_type, meeting.document_type)
+    return item
 
 
 def list_documents_grouped(db: Session, document_type: str) -> dict:
@@ -17,37 +53,19 @@ def list_documents_grouped(db: Session, document_type: str) -> dict:
     ).unique().all()
     years: dict[int, list[dict]] = {}
     for meeting in rows:
-        files = {f.file_role: f for f in meeting.files}
-        agenda = files.get("agenda")
-        minutes = files.get("minutes")
-        years.setdefault(meeting.year, []).append(
-            {
-                "id": meeting.id,
-                "title": meeting.meeting_title,
-                "meeting_date": meeting.meeting_date,
-                "year": meeting.year,
-                "has_agenda": agenda is not None,
-                "has_minutes": minutes is not None,
-                "agenda": (
-                    {
-                        "id": agenda.id,
-                        "file_name": agenda.file_name,
-                        "description": agenda.description,
-                    }
-                    if agenda
-                    else None
-                ),
-                "minutes": (
-                    {
-                        "id": minutes.id,
-                        "file_name": minutes.file_name,
-                        "description": minutes.description,
-                    }
-                    if minutes
-                    else None
-                ),
-            }
-        )
+        years.setdefault(meeting.year, []).append(_meeting_to_dict(meeting))
+    return {"years": [{"year": year, "documents": docs} for year, docs in sorted(years.items(), reverse=True)]}
+
+
+def list_all_documents_grouped(db: Session) -> dict:
+    rows = db.scalars(
+        select(Meeting)
+        .options(joinedload(Meeting.files))
+        .order_by(Meeting.year.desc(), Meeting.document_type.asc(), Meeting.meeting_title.asc())
+    ).unique().all()
+    years: dict[int, list[dict]] = {}
+    for meeting in rows:
+        years.setdefault(meeting.year, []).append(_meeting_to_dict(meeting, include_type=True))
     return {"years": [{"year": year, "documents": docs} for year, docs in sorted(years.items(), reverse=True)]}
 
 
@@ -67,8 +85,10 @@ from app.documents.services.pdf_service import extract_pdf_metadata, parse_date_
 
 async def extract_upload_metadata(file_path: Path) -> dict:
     meta = extract_pdf_metadata(file_path, fallback_title=file_path.stem)
-    sample = "\n".join(text for _, text in meta.pages[:2])
-    auto_description = await generate_document_description(meta.title, sample)
+    sample = "\n".join(text for _, text in meta.pages[:3])
+    auto_description = await generate_document_description(
+        meta.title, sample, file_role="minutes"
+    )
     meeting_date = meta.meeting_date
     if not meeting_date:
         meeting_date = parse_date_from_text(auto_description) or parse_date_from_text(sample)

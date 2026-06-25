@@ -12,6 +12,7 @@ DOCUMENT_TYPE_ECE_FACULTY_MEET = "ece_faculty_meet"
 DOCUMENT_TYPE_AAC = "aac"
 DOCUMENT_TYPE_UGC = "ugc"
 DOCUMENT_TYPE_PGC = "pgc"
+DOCUMENT_TYPE_ALL = "__all__"
 
 ALL_DOCUMENT_TYPES = (
     DOCUMENT_TYPE_SENATE,
@@ -20,6 +21,14 @@ ALL_DOCUMENT_TYPES = (
     DOCUMENT_TYPE_UGC,
     DOCUMENT_TYPE_PGC,
 )
+
+DOCUMENT_TYPE_LABELS: dict[str, str] = {
+    DOCUMENT_TYPE_SENATE: "Senate",
+    DOCUMENT_TYPE_ECE_FACULTY_MEET: "ECE Faculty",
+    DOCUMENT_TYPE_AAC: "AAC",
+    DOCUMENT_TYPE_UGC: "UGC",
+    DOCUMENT_TYPE_PGC: "PGC",
+}
 
 
 class Meeting(Base):
@@ -73,6 +82,7 @@ class DocumentChunk(Base):
     page_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     section_label: Mapped[str | None] = mapped_column(String(128), nullable=True)
     chunk_text: Mapped[str] = mapped_column(Text, nullable=False)
+    embedding_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     meeting_file: Mapped[MeetingFile] = relationship("MeetingFile", back_populates="chunks")

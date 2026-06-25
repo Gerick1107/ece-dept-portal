@@ -14,12 +14,13 @@ from app.auth.dependencies import get_current_user, require_roles
 from app.config import get_settings
 from app.database.models.user import User, UserRole
 from app.database.session import get_db
-from app.documents.models.entities import Meeting, MeetingFile
+from app.documents.models.entities import DOCUMENT_TYPE_ALL, Meeting, MeetingFile
 from app.documents.services.document_service import (
     delete_meeting,
     extract_upload_metadata,
     get_meeting,
     get_meeting_file,
+    list_all_documents_grouped,
     list_documents_grouped,
 )
 from app.documents.services.file_manager import SLUG_TO_TYPE, subdir_for_type
@@ -58,15 +59,19 @@ async def list_documents(
     db: Annotated[Session, Depends(get_db)],
     _: Annotated[User, Depends(get_current_user)],
 ):
+    resolved = _resolve_type(document_type)
     try:
         from app.documents.services.file_manager import ensure_documents_dirs
         from app.documents.services.ingestion_service import sync_new_documents_from_disk
 
         docs_root = ensure_documents_dirs()
-        await sync_new_documents_from_disk(db, docs_root, document_type=_resolve_type(document_type))
+        if resolved != DOCUMENT_TYPE_ALL:
+            await sync_new_documents_from_disk(db, docs_root, document_type=resolved)
     except Exception:
         pass
-    return list_documents_grouped(db, _resolve_type(document_type))
+    if resolved == DOCUMENT_TYPE_ALL:
+        return list_all_documents_grouped(db)
+    return list_documents_grouped(db, resolved)
 
 
 @router.get("/{document_type}/files/{file_id}/download")
@@ -80,7 +85,9 @@ def download_file(
     mf = db.scalar(
         select(MeetingFile).options(joinedload(MeetingFile.meeting)).where(MeetingFile.id == file_id)
     )
-    if not mf or mf.meeting.document_type != resolved:
+    if not mf:
+        raise HTTPException(status_code=404, detail="File not found")
+    if resolved != DOCUMENT_TYPE_ALL and mf.meeting.document_type != resolved:
         raise HTTPException(status_code=404, detail="File not found")
     path = Path(mf.file_path)
     if not path.exists():
@@ -112,7 +119,9 @@ async def preview_upload(
     _: Annotated[User, Depends(require_roles(UserRole.admin))],
     file: UploadFile = File(...),
 ):
-    _resolve_type(document_type)
+    resolved = _resolve_type(document_type)
+    if resolved == DOCUMENT_TYPE_ALL:
+        raise HTTPException(status_code=400, detail="Upload is not supported on the All Meetings view")
     payload = await _read_pdf(file)
     settings = get_settings()
     temp_dir = Path(settings.documents_dir) / "_upload_temp"
@@ -142,6 +151,8 @@ async def upload_document(
     minutes_file: UploadFile | None = File(None),
 ):
     resolved = _resolve_type(document_type)
+    if resolved == DOCUMENT_TYPE_ALL:
+        raise HTTPException(status_code=400, detail="Upload is not supported on the All Meetings view")
     if not agenda_file or not agenda_file.filename:
         agenda_file = None
     if not minutes_file or not minutes_file.filename:
@@ -151,8 +162,7 @@ async def upload_document(
 
     settings = get_settings()
     subdir = subdir_for_type(resolved)
-    dest_dir = Path(settings.documents_dir) / subdir / str(year)
-    dest_dir.mkdir(parents=True, exist_ok=True)
+    base_dir = Path(settings.documents_dir) / subdir / str(year)
 
     previews: dict[str, dict] = {}
     saved: dict[str, Path] = {}
@@ -160,7 +170,9 @@ async def upload_document(
         if not upload:
             continue
         payload = await _read_pdf(upload)
-        temp_path = dest_dir / f"{uuid.uuid4().hex[:8]}_{upload.filename}"
+        role_dir = base_dir / role
+        role_dir.mkdir(parents=True, exist_ok=True)
+        temp_path = role_dir / f"{uuid.uuid4().hex[:8]}_{upload.filename}"
         temp_path.write_bytes(payload)
         saved[role] = temp_path
         previews[role] = await extract_upload_metadata(temp_path)

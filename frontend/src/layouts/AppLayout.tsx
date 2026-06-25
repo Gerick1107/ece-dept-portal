@@ -41,6 +41,7 @@ const navItems: NavItem[] = [
     kind: "group",
     label: "Minutes",
     links: [
+      { to: "/all-meetings", label: "All Meetings", exact: true },
       { to: "/senate-minutes", label: "Senate Meetings", exact: true },
       { to: "/ece-faculty-meets", label: "ECE Faculty Meetings", exact: true },
       { to: "/aac-meetings", label: "AAC Meetings", exact: true },

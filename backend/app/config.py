@@ -137,6 +137,9 @@ class Settings(BaseSettings):
 
     groq_api_key: str = Field(default="", validation_alias="GROQ_API_KEY")
 
+    # Local embeddings for meeting-minutes RAG retrieval
+    rag_embedding_model: str = "all-MiniLM-L6-v2"
+
     @model_validator(mode="after")
     def _assemble_database_url(self) -> "Settings":
         if not self.database_url.strip():

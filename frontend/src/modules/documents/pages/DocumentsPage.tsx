@@ -18,6 +18,8 @@ type DocumentItem = {
   has_minutes: boolean;
   agenda: MeetingFileRef | null;
   minutes: MeetingFileRef | null;
+  document_type?: string;
+  document_type_label?: string;
 };
 
 type YearGroup = { year: number; documents: DocumentItem[] };
@@ -90,10 +92,14 @@ export default function DocumentsPage({
   documentType,
   title,
   description,
+  showDocumentType = false,
+  disableUpload = false,
 }: {
-  documentType: "senate" | "ece-faculty-meets" | "aac-meetings" | "ugc-meetings" | "pgc-meetings";
+  documentType: "senate" | "ece-faculty-meets" | "aac-meetings" | "ugc-meetings" | "pgc-meetings" | "all-meetings";
   title: string;
   description: string;
+  showDocumentType?: boolean;
+  disableUpload?: boolean;
 }) {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
@@ -291,7 +297,7 @@ export default function DocumentsPage({
           <h2 className="text-xl font-semibold">{title}</h2>
           <p className="text-sm text-slate-600 mt-1">{description}</p>
         </div>
-        {isAdmin && (
+        {isAdmin && !disableUpload && (
           <button type="button" onClick={() => setShowUpload(true)} className="rounded-lg bg-teal-700 text-white px-3 py-2 text-sm">
             Upload Document
           </button>
@@ -337,6 +343,11 @@ export default function DocumentsPage({
                   <div>
                     <h3 className="font-medium text-slate-800">{doc.title}</h3>
                     <p className="text-xs text-slate-500">{formatMeetingDate(doc.meeting_date)}</p>
+                    {showDocumentType && doc.document_type_label && (
+                      <span className="inline-block mt-1 text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
+                        {doc.document_type_label}
+                      </span>
+                    )}
                     <div className="flex gap-2 mt-1">
                       {!doc.has_agenda && <span className="text-xs bg-amber-50 text-amber-800 px-2 py-0.5 rounded">Missing Agenda</span>}
                       {!doc.has_minutes && <span className="text-xs bg-amber-50 text-amber-800 px-2 py-0.5 rounded">Missing Minutes</span>}
@@ -355,7 +366,7 @@ export default function DocumentsPage({
                         <button type="button" className="text-xs px-2 py-1 rounded border" disabled={pdfBusyId === doc.minutes.id} onClick={() => downloadFile(doc.minutes!)}>Download Minutes</button>
                       </>
                     )}
-                    {isAdmin && (
+                    {isAdmin && !disableUpload && (
                       <button
                         type="button"
                         className="text-xs px-2 py-1 rounded bg-red-50 text-red-700"
@@ -385,7 +396,12 @@ export default function DocumentsPage({
         </div>
 
         <section className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-3">
-          <h3 className="font-semibold text-slate-800">Ask about this document set</h3>
+          <div>
+            <h3 className="font-semibold text-slate-800">Ask about this document set</h3>
+            <p className="text-xs text-slate-500 mt-1">
+              Searches every meeting in this set across all years (agendas and minutes), not just the selected year tab.
+            </p>
+          </div>
           <textarea
             className="w-full border rounded-lg px-3 py-2 text-sm min-h-[90px]"
             placeholder="Ask a question about these minutes…"
