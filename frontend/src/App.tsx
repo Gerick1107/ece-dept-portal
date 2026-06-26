@@ -14,6 +14,7 @@ import PublicationExportsPage from "./modules/publications/pages/PublicationExpo
 import PublicationsAdminPage from "./modules/publications/pages/PublicationsAdminPage";
 import ProjectsPage from "./modules/projects/pages/ProjectsPage";
 import AwardsPage from "./modules/awards/pages/AwardsPage";
+import BudgetModulePage from "./modules/budget/pages/BudgetModulePage";
 import FacultyContributionsPage from "./modules/contributions/pages/FacultyContributionsPage";
 import CourseAllocationPage from "./modules/course_allocation/pages/CourseAllocationPage";
 import CourseCatalogPage from "./modules/course_allocation/pages/CourseCatalogPage";
@@ -153,6 +154,8 @@ export default function App() {
         <Route path="/publications/admin" element={<PublicationsAdminPage />} />
         <Route path="/projects" element={<ProjectsPage />} />
         <Route path="/awards" element={<AwardsPage />} />
+        <Route path="/budget" element={<BudgetModulePage />} />
+        <Route path="/budget/:section" element={<BudgetModulePage />} />
         <Route path="/contributions" element={<FacultyContributionsPage />} />
         <Route path="/course-allocation" element={<CourseAllocationPage />} />
         <Route
