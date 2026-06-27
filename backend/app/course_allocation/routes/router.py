@@ -226,6 +226,7 @@ def remove_allocation(
 
 @router.post("/upload/preview")
 async def upload_preview(
+    db: Annotated[Session, Depends(get_db)],
     _: Annotated[User, Depends(require_roles(UserRole.admin))],
     file: UploadFile = File(...),
 ):
@@ -235,7 +236,11 @@ async def upload_preview(
     tmp = Path(tempfile.gettempdir()) / f"alloc_{uuid.uuid4().hex}.xlsx"
     tmp.write_bytes(payload)
     try:
-        return preview_upload(tmp)
+        sync_all_course_allocation_csv(db)
+    except Exception:
+        pass
+    try:
+        return preview_upload(tmp, db)
     finally:
         try:
             tmp.unlink()

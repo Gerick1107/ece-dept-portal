@@ -22,7 +22,13 @@ import { CHART_COLORS, ChartCard, getColours, divergingCellStyle, KpiCard } from
 
 function findRunBySemester(runs: CopoRun[], semester: string): CopoRun | null {
   if (!runs.length) return null;
-  return runs.find((r) => r.semester_label === semester) ?? runs[runs.length - 1];
+  return runs.find((r) => (r.run_display_label ?? r.semester_label) === semester) ?? runs.find((r) => r.semester_label === semester) ?? runs[runs.length - 1];
+}
+
+function courseRunLabels(data: CopoAnalyticsData | null, courseKey: string): string[] {
+  const course = findCourse(data, courseKey);
+  if (!course) return [];
+  return course.runs.map((r) => r.run_display_label ?? r.semester_label);
 }
 
 function findCourse(data: CopoAnalyticsData | null, courseKey: string) {
@@ -90,6 +96,7 @@ export default function CopoAnalyticsTab() {
   const [compareSemesterB, setCompareSemesterB] = useState("");
   const [visibleCos, setVisibleCos] = useState<Set<string>>(new Set());
   const [threshold, setThreshold] = useState(60);
+  const [selectedRunId, setSelectedRunId] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -124,6 +131,24 @@ export default function CopoAnalyticsTab() {
 
   const selected = useMemo(() => findCourse(data, course), [data, course]);
 
+  const activeRun = useMemo(() => {
+    if (!selected?.runs.length) return null;
+    if (selectedRunId) {
+      return selected.runs.find((r) => r.public_id === selectedRunId) ?? selected.runs[selected.runs.length - 1];
+    }
+    return selected.runs[selected.runs.length - 1];
+  }, [selected, selectedRunId]);
+
+  useEffect(() => {
+    if (!selected?.runs.length) {
+      setSelectedRunId("");
+      return;
+    }
+    if (!selectedRunId || !selected.runs.some((r) => r.public_id === selectedRunId)) {
+      setSelectedRunId(selected.runs[selected.runs.length - 1].public_id);
+    }
+  }, [course, selected, selectedRunId]);
+
   const cos = useMemo(() => {
     if (!selected?.runs.length) return [];
     const keys = new Set<string>();
@@ -147,7 +172,7 @@ export default function CopoAnalyticsTab() {
       const colors = getColours((selected?.runs ?? []).length);
       return (selected?.runs ?? []).map((run: CopoRun, i) => ({
         key: run.run_key || `${run.semester_label} · ${run.public_id.slice(0, 8)}`,
-        label: run.semester_label,
+        label: run.run_display_label ?? run.semester_label,
         color: colors[i] ?? CHART_COLORS[i % CHART_COLORS.length],
       }));
     },
@@ -168,7 +193,7 @@ export default function CopoAnalyticsTab() {
   const trendData = useMemo(() => {
     if (!selected) return [];
     return selected.runs.map((run, i) => ({
-      semester: run.semester_label,
+      semester: run.run_display_label ?? run.semester_label,
       runKey: runSeries[i]?.key ?? run.semester_label,
       ...run.co_attainment,
     }));
@@ -176,7 +201,15 @@ export default function CopoAnalyticsTab() {
 
   const poChartData = useMemo(() => {
     if (!selected) return [];
-    return PO_PSO_KEYS.map((metric) => {
+    const poKeys = (() => {
+      const keys = new Set<string>();
+      selected.runs.forEach((run) => {
+        Object.keys(run.po_attainment ?? {}).forEach((k) => keys.add(k));
+      });
+      const ordered = PO_PSO_KEYS.filter((k) => keys.has(k));
+      return ordered.length ? ordered : sortPoPso([...keys]);
+    })();
+    return poKeys.map((metric) => {
       const row: Record<string, string | number> = { metric };
       selected.runs.forEach((run, i) => {
         row[runSeries[i]?.key ?? run.semester_label] = run.po_attainment[metric] ?? 0;
@@ -185,7 +218,7 @@ export default function CopoAnalyticsTab() {
     });
   }, [selected, runSeries]);
 
-  const heatmap = selected?.latest_run?.co_po_mapping ?? {};
+  const heatmap = activeRun?.co_po_mapping ?? selected?.latest_run?.co_po_mapping ?? {};
   const heatCos = Object.keys(heatmap);
   const heatPos = useMemo(() => {
     const set = new Set<string>();
@@ -193,8 +226,8 @@ export default function CopoAnalyticsTab() {
     return sortPoPso([...set]);
   }, [heatmap, heatCos]);
 
-  const semestersA = useMemo(() => courseSemesters(data, compareCourseA), [data, compareCourseA]);
-  const semestersB = useMemo(() => courseSemesters(data, compareCourseB), [data, compareCourseB]);
+  const semestersA = useMemo(() => courseRunLabels(data, compareCourseA), [data, compareCourseA]);
+  const semestersB = useMemo(() => courseRunLabels(data, compareCourseB), [data, compareCourseB]);
 
   useEffect(() => {
     if (semestersA.length && !semestersA.includes(compareSemesterA)) {
@@ -276,6 +309,19 @@ export default function CopoAnalyticsTab() {
             onChange={(e) => setThreshold(Number(e.target.value))}
           />
         </label>
+        {selected && selected.runs.length > 1 && (
+          <select
+            className="border rounded-lg px-3 py-2 text-sm"
+            value={selectedRunId}
+            onChange={(e) => setSelectedRunId(e.target.value)}
+          >
+            {selected.runs.map((run) => (
+              <option key={run.public_id} value={run.public_id}>
+                Heatmap: {run.run_display_label ?? run.semester_label}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
       {selected && (
@@ -366,7 +412,7 @@ export default function CopoAnalyticsTab() {
             </ResponsiveContainer>
           </ChartCard>
 
-          <ChartCard title="CO vs PO heatmap" subtitle="Latest run — mapping weights">
+          <ChartCard title="CO vs PO heatmap" subtitle={activeRun ? `${activeRun.run_display_label ?? activeRun.semester_label} — mapping weights` : "Latest run — mapping weights"}>
             <div className="overflow-x-auto">
               <table className="text-xs border-collapse min-w-full">
                 <thead>

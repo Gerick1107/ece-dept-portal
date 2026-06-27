@@ -62,8 +62,10 @@ export type CopoRun = {
   course_title: string;
   course_key?: string;
   section_label?: string | null;
+  programme_label?: string | null;
   semester_label: string;
   run_key?: string;
+  run_display_label?: string;
   run_created_at: string | null;
   co_attainment: Record<string, number>;
   po_attainment: Record<string, number>;

@@ -50,7 +50,7 @@ services:
     volumes:
       - portal_storage:/app/storage
       - portal_documents:/app/documents
-      - ./data/assets:/data/assets:ro
+      - ./data/assets:/data/assets
     networks:
       - portal
 

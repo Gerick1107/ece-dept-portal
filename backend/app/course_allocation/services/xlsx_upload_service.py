@@ -6,9 +6,15 @@ from pathlib import Path
 
 import pandas as pd
 from openpyxl import load_workbook
+from sqlalchemy.orm import Session
 
-from app.course_allocation.services.allocation_faculty_resolver import is_placeholder_name
+from app.course_allocation.services.allocation_faculty_resolver import (
+    is_placeholder_name,
+    refresh_alias_cache,
+    resolve_allocation_faculty,
+)
 from app.course_allocation.services.semester_service import academic_year_for_semester
+from app.utils.contribution_faculty_resolver import FacultyResolveResult
 
 _SEMESTER_BANNER_RE = re.compile(r"^(Monsoon|Winter)\s+(\d{4})\s+Semester", re.I)
 _HEADER_MARKERS = ("course code", "course name", "faculty")
@@ -128,21 +134,38 @@ def parse_allocation_xlsx(path: Path) -> list[dict]:
     return rows_out
 
 
-def preview_upload(path: Path) -> dict:
+def preview_upload(path: Path, db: Session | None = None) -> dict:
     parsed = parse_allocation_xlsx(path)
     semesters = sorted({r["semester"] for r in parsed})
-    unmatched_names = sorted(
+
+    real_names = sorted(
         {
-            r["faculty_name"]
+            r["faculty_name"].strip()
             for r in parsed
             if not r["is_faculty_placeholder"] and (r.get("faculty_name") or "").strip()
         }
     )
+
+    # Resolve each distinct name against the live faculty table / alias map so the
+    # preview reflects what will actually happen on commit. Without a db session we
+    # cannot match, so report nothing as unmatched rather than flag every name.
+    matched_names: list[str] = []
+    unmatched_names: list[str] = []
+    if db is not None:
+        refresh_alias_cache(db)
+        for name in real_names:
+            resolved = resolve_allocation_faculty(db, name)
+            if isinstance(resolved, FacultyResolveResult):
+                matched_names.append(name)
+            else:
+                unmatched_names.append(name)
+
     return {
         "row_count": len(parsed),
         "semesters": semesters,
         "rows": parsed[:50],
         "truncated": len(parsed) > 50,
+        "matched_count": len(matched_names),
         "unmatched_names": unmatched_names,
         "errors": [],
     }

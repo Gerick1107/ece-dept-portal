@@ -11,6 +11,7 @@ import {
 type UploadPreview = {
   semesters: string[];
   rows: Array<Record<string, unknown>>;
+  matched_count?: number;
   unmatched_names: string[];
   errors: string[];
 };
@@ -93,7 +94,16 @@ export default function CourseAllocationAdminPanel({ scope, onChanged }: Props) 
           <div className="text-sm bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1">
             <p>Semesters: {preview.semesters?.join(", ") || "—"}</p>
             <p>Rows to import: {preview.rows?.length ?? 0}</p>
-            {preview.unmatched_names?.length > 0 && <p className="text-amber-800">Unmatched names: {preview.unmatched_names.join(", ")}</p>}
+            {typeof preview.matched_count === "number" && (
+              <p className="text-teal-800">Faculty auto-matched: {preview.matched_count}</p>
+            )}
+            {preview.unmatched_names?.length > 0 ? (
+              <p className="text-amber-800">
+                Names not auto-matched (assign manually after commit): {preview.unmatched_names.join(", ")}
+              </p>
+            ) : (
+              <p className="text-teal-800">All faculty names matched existing records.</p>
+            )}
           </div>
         )}
       </section>
