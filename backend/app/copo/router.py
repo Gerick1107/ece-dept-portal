@@ -7,9 +7,10 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user, require_roles
-from app.config import get_settings
+from app.config import get_settings, DATA_ASSETS
 from app.copo import repository as copo_repo
 from app.copo.download_tokens import issue_download_token, pop_download_path
+from app.utils.storage_paths import resolve_storage_path
 from app.copo.schemas import (
     AdminDataOverviewResponse,
     AdminPurgeResponse,
@@ -173,9 +174,7 @@ async def final_submit(
 @router.get("/template")
 def download_marks_template():
     """Faculty Excel template for consolidated semester marks upload."""
-    from pathlib import Path
-
-    template = Path(__file__).resolve().parents[3] / "data" / "templates" / "Course_Marks_Template.xlsx"
+    template = DATA_ASSETS.parent / "templates" / "Course_Marks_Template.xlsx"
     if not template.exists():
         raise HTTPException(
             status_code=404,
@@ -310,7 +309,7 @@ async def evaluate_standard(
     upload = copo_repo.get_marks_upload(db, upload_id, current_user.id)
     if not upload or upload.status.value == "cleared":
         raise HTTPException(status_code=404, detail="Upload session not found")
-    course_path = upload.storage_path
+    course_path = str(resolve_storage_path(upload.storage_path))
 
     mapping_path = settings.resolved_mapping_path
     mapping_filename = os.path.basename(mapping_path)
@@ -433,13 +432,14 @@ async def evaluate_compare(
         mapping_path = tmp_mapping
         mapping_filename = mapping_file.filename or mapping_filename
 
-    included_rolls = build_included_rolls(upload.storage_path, programmes, branches)
+    marks_path = str(resolve_storage_path(upload.storage_path))
+    included_rolls = build_included_rolls(marks_path, programmes, branches)
     scope_summary = summarize_scope_selection(programmes, branches)
 
     evaluation = None
     try:
         evaluation = evaluation_service.build_evaluation_payload(
-            upload.storage_path,
+            marks_path,
             mapping_path,
             course_title,
             compare_path,
@@ -552,7 +552,8 @@ async def evaluate_bulk(
                 continue
 
             upload = copo_repo.get_marks_upload(db, int(upload_id), current_user.id)
-            if not upload or not os.path.exists(upload.storage_path):
+            resolved_upload = resolve_storage_path(upload.storage_path) if upload else None
+            if not upload or resolved_upload is None or not resolved_upload.exists():
                 results_data.append(
                     {
                         "status": "error",
@@ -568,7 +569,7 @@ async def evaluate_bulk(
             brs = row.get("branches") or []
 
             result = evaluation_service.process_bulk_row(
-                upload.storage_path,
+                str(resolved_upload),
                 compare_path,
                 course_title,
                 mapping_path,
@@ -620,7 +621,11 @@ def get_results(
     if not run or run.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Results not found")
     summary = run.result_summary or {}
-    token = issue_download_token(run.excel_result_path) if run.excel_result_path else None
+    token = (
+        issue_download_token(str(resolve_storage_path(run.excel_result_path)))
+        if run.excel_result_path
+        else None
+    )
     return EvaluationResultResponse(
         public_id=run.public_id,
         course_title=run.course_title,
@@ -656,12 +661,13 @@ def copo_assets_status():
 @router.get("/download/{token}")
 def download_results(token: str):
     excel_path = pop_download_path(token)
-    if not excel_path or not os.path.exists(excel_path):
+    resolved = resolve_storage_path(excel_path) if excel_path else None
+    if not resolved or not resolved.exists():
         raise HTTPException(status_code=404, detail="Results file not found or expired")
     return FileResponse(
-        excel_path,
+        resolved,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        filename=os.path.basename(excel_path),
+        filename=os.path.basename(resolved),
     )
 
 

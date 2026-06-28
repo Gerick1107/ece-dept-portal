@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.analytics.services.copo_service import _resolve_row_section, _resolve_semester_label
+from app.config import get_settings
 from app.analytics.utils.copo_parser import parse_copo_result_summary
 from app.analytics.utils.course_key import course_display_key, normalize_section
 from app.analytics.utils.semester import semester_sort_key
@@ -20,7 +21,8 @@ from app.database.models.copo_analytics import CopoRunAnalyticsSnapshot
 from app.database.models.user import User
 from app.llm.models.entities import LlmInsightsCache
 from app.llm.services.assessment_summary import format_assessment_summary_block, summarize_assessment_ids
-from app.llm.services.groq_service import LlmError, generate_llm_text
+from app.llm.services.groq_service import LlmError
+from app.llm.services.llm_dispatch import generate_text
 from app.llm.services.mapping_descriptions import extract_co_descriptions_for_course, extract_po_descriptions
 
 logger = logging.getLogger(__name__)
@@ -628,6 +630,7 @@ async def generate_insights(
     current_section: str | None = None,
     previous_semester: str | None = None,
     previous_section: str | None = None,
+    provider: str = "groq",
 ) -> dict:
     comparison = get_course_comparison(
         db,
@@ -684,8 +687,14 @@ async def generate_insights(
         previous_assessments=comparison.get("previous_assessments") or [],
     )
 
+    settings = get_settings()
+    insights_max_tokens = (
+        settings.local_llm_insights_max_tokens
+        if provider == "local"
+        else settings.llm_insights_max_tokens
+    )
     try:
-        llm_response = await generate_llm_text(prompt)
+        llm_response = await generate_text(prompt, provider=provider, max_tokens=insights_max_tokens)
     except LlmError:
         raise
 

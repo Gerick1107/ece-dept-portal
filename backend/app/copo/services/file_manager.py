@@ -8,6 +8,7 @@ from pathlib import Path
 from fastapi import UploadFile
 
 from app.config import get_settings
+from app.utils.storage_paths import resolve_storage_path
 
 settings = get_settings()
 
@@ -86,9 +87,12 @@ def finalize_result_workbook(generated_path: str, course_title: str) -> str:
 
 
 def remove_file_if_exists(path: str | None) -> None:
-    if path and os.path.exists(path):
+    if not path:
+        return
+    resolved = resolve_storage_path(path)
+    if resolved.exists():
         try:
-            os.remove(path)
+            resolved.unlink()
         except OSError:
             pass
 
@@ -133,14 +137,15 @@ def cleanup_upload_directory() -> int:
 def archive_result_file(source_path: str, evaluation_public_id: str, course_title: str | None = None) -> str:
     """Move result Excel from storage/results/ into storage/archives/."""
     ensure_storage_dirs()
-    if not source_path or not os.path.exists(source_path):
+    resolved = resolve_storage_path(source_path)
+    if not resolved.exists():
         raise FileNotFoundError("Result file not found for archiving")
     if course_title:
-        name = f"{course_slug(course_title)}_{Path(source_path).name}"
+        name = f"{course_slug(course_title)}_{resolved.name}"
     else:
-        name = f"{evaluation_public_id}_{Path(source_path).name}"
+        name = f"{evaluation_public_id}_{resolved.name}"
     dest = Path(settings.archive_dir) / name
     if dest.exists():
         dest.unlink()
-    shutil.move(source_path, dest)
+    shutil.move(str(resolved), dest)
     return str(dest)

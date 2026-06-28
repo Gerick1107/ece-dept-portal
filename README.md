@@ -65,6 +65,51 @@ npm run dev
 
 Open http://localhost:5173 — API proxied to **http://127.0.0.1:8001**.
 
+## AI providers (LLM insights + meeting-minutes Q&A)
+
+Every LLM-backed feature (CO-PO insight narratives and the meeting-minutes RAG
+chat) can run against **either** of two providers, chosen per request from a
+toggle in the UI:
+
+- **Cloud (Groq)** — fast, online. Set `GROQ_API_KEY`. The model is config-driven
+  via `GROQ_MODEL` (default `openai/gpt-oss-120b`), so a Groq model deprecation
+  only needs an env change, no code change.
+- **Local (Offline)** — free, fully local, no API key. Backed by
+  [Ollama](https://ollama.com).
+
+### Set up the local provider (Ollama)
+
+```bash
+# 1. Install Ollama from https://ollama.com (runs a background service on :11434)
+# 2. Pull a small, CPU-friendly model (recommended default ~2 GB):
+ollama pull llama3.2:3b
+# Alternatives to benchmark:
+#   ollama pull phi3:mini
+#   ollama pull mistral:7b-instruct-q4_K_M   # heavier; MUST be the Q4 quant for CPU speed
+# 3. Verify it answers in seconds, not minutes:
+curl http://localhost:11434/v1/chat/completions \
+  -d '{"model":"llama3.2:3b","messages":[{"role":"user","content":"Hello"}]}'
+```
+
+Config (`backend/.env` or `.env.docker`): `LOCAL_LLM_MODEL` (default
+`llama3.2:3b`), `LOCAL_LLM_BASE_URL` (default `http://localhost:11434/v1`),
+`DEFAULT_LLM_PROVIDER` (`groq` or `local`).
+
+> Docker note: Ollama runs on the **host**, so the backend container reaches it
+> via `http://host.docker.internal:11434/v1` (already wired in `docker-compose.yml`).
+
+### Switching providers
+
+- **UI:** each LLM action (Generate Insights, Ask about minutes) shows a
+  **Cloud (Groq) / Local (Offline)** toggle; the choice persists per session and
+  a dot shows whether the provider is currently reachable.
+- **API:** send `"provider": "groq"` or `"provider": "local"` in the request body
+  to `POST /api/v1/llm-insights/generate` and `POST /api/v1/documents/{type}/query`.
+  `GET /api/v1/llm-insights/providers` reports availability of each.
+
+A 3B–7B local model is weaker than the cloud model on hard reasoning — expected
+tradeoff for zero-cost / offline, not a bug.
+
 ## Modules (summary)
 
 | Module | Route (UI) | API prefix |

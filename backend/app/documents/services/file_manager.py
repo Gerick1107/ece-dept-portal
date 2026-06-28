@@ -41,3 +41,32 @@ def ensure_documents_dirs() -> Path:
 
 def subdir_for_type(document_type: str) -> str:
     return DOCUMENT_TYPE_DIRS.get(document_type, "documents")
+
+
+def resolve_document_path(stored_path: str | Path) -> Path:
+    """Resolve a stored document path to the current documents directory.
+
+    Stored ``file_path`` values are absolute paths from whichever machine ingested
+    the PDF (e.g. a Windows path baked into a DB dump that is later read inside a
+    Linux container, or a friend's differently-named project folder). If the path
+    exists as-is, it is used unchanged; otherwise it is re-anchored under the
+    configured ``documents_dir`` using the known document-type subdir so the same
+    DB works across machines without rewriting stored paths.
+    """
+    raw = str(stored_path)
+    direct = Path(raw)
+    if direct.exists():
+        return direct
+
+    root = Path(get_settings().documents_dir)
+    # Normalize separators so Windows paths split correctly when running on Linux.
+    parts = [p for p in raw.replace("\\", "/").split("/") if p]
+    known = set(DOCUMENT_TYPE_DIRS.values())
+    for i, part in enumerate(parts):
+        if part in known:
+            return root.joinpath(*parts[i:])
+    # Fallback: re-anchor on the last "documents" segment if present.
+    if "documents" in parts:
+        last = len(parts) - 1 - parts[::-1].index("documents")
+        return root.joinpath(*parts[last + 1:])
+    return direct

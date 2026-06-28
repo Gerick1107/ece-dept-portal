@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.auth.dependencies import get_current_user, require_roles
 from app.database.models.user import User, UserRole
 from app.database.session import get_db
+from app.utils.storage_paths import resolve_storage_path
 from app.projects.models.entities import Project, ProjectSdg, ProjectUpload
 from app.projects.schemas.project import (
     ImportSummary,
@@ -400,9 +401,10 @@ def admin_download_upload(
     _: Annotated[User, Depends(require_roles(UserRole.admin))],
 ):
     row = db.get(ProjectUpload, upload_id)
-    if not row or not Path(row.filepath).exists():
+    resolved = resolve_storage_path(row.filepath) if row else None
+    if not row or resolved is None or not resolved.exists():
         raise HTTPException(status_code=404, detail="Upload file not found")
-    return FileResponse(row.filepath, filename=row.filename)
+    return FileResponse(resolved, filename=row.filename)
 
 
 @router.post("/admin/purge-all")

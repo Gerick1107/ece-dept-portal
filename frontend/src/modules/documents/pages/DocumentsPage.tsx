@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../../auth/AuthContext";
 import FileUploadField from "../../../components/FileUploadField";
 import { apiDelete, apiGet, apiPostForm, apiPostJson } from "../../../services/api";
+import ProviderSelector from "../../llm/components/ProviderSelector";
+import { useLlmProvider } from "../../llm/hooks/useLlmProvider";
 
 type MeetingFileRef = {
   id: number;
@@ -115,6 +117,7 @@ export default function DocumentsPage({
   const [queryResult, setQueryResult] = useState<QueryResponse | null>(null);
   const [showContext, setShowContext] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
+  const { provider, setProvider, providers } = useLlmProvider();
   const [uploadStep, setUploadStep] = useState<"pick" | "review">("pick");
   const [uploadYear, setUploadYear] = useState(String(new Date().getFullYear()));
   const [uploadAgendaFile, setUploadAgendaFile] = useState<File | null>(null);
@@ -183,7 +186,10 @@ export default function DocumentsPage({
     setQueryBusy(true);
     setQueryError("");
     try {
-      const result = await apiPostJson<QueryResponse>(`/documents/${documentType}/query`, { question: question.trim() });
+      const result = await apiPostJson<QueryResponse>(`/documents/${documentType}/query`, {
+        question: question.trim(),
+        provider,
+      });
       setQueryResult(result);
       setShowContext(false);
     } catch (e) {
@@ -407,6 +413,12 @@ export default function DocumentsPage({
             placeholder="Ask a question about these minutes…"
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
+          />
+          <ProviderSelector
+            provider={provider}
+            onChange={setProvider}
+            providers={providers}
+            disabled={queryBusy}
           />
           <button
             type="button"

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import LlmComparisonVisuals from "../components/LlmComparisonVisuals";
+import ProviderSelector from "../components/ProviderSelector";
+import { useLlmProvider } from "../hooks/useLlmProvider";
 import {
   fetchCachedInsights,
   fetchCourseComparison,
@@ -194,6 +196,7 @@ export default function LlmInsightsPage() {
   const [loadingInsights, setLoadingInsights] = useState(false);
   const [error, setError] = useState("");
   const loadTokenRef = useRef(0);
+  const { provider, setProvider, providers } = useLlmProvider();
 
   const selectedCourse = useMemo(
     () => courses.find((c) => c.course_key === selectedKey) ?? null,
@@ -277,7 +280,7 @@ export default function LlmInsightsPage() {
       setLoadingInsights(true);
       setError("");
       try {
-        const result = await generateLlmInsights({ ...comparisonParams, regenerate });
+        const result = await generateLlmInsights({ ...comparisonParams, regenerate, provider });
         if (result.comparison) setComparison(result.comparison);
         setInsights(result.insights ?? "");
         setGeneratedAt(result.generated_at);
@@ -287,7 +290,7 @@ export default function LlmInsightsPage() {
         setLoadingInsights(false);
       }
     },
-    [comparisonParams]
+    [comparisonParams, provider]
   );
 
   const availableSemesters = comparison?.available_semesters ?? selectedCourse?.semesters ?? [];
@@ -441,7 +444,14 @@ export default function LlmInsightsPage() {
               <h3 className="font-semibold text-slate-800">
                 AI Insights — {selectedCourse.course_key} ({currentLabel})
               </h3>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-col items-end gap-2">
+                <ProviderSelector
+                  provider={provider}
+                  onChange={setProvider}
+                  providers={providers}
+                  disabled={loadingInsights}
+                />
+                <div className="flex flex-wrap gap-2">
                 {!insights && !loadingInsights && (
                   <button
                     type="button"
@@ -461,6 +471,7 @@ export default function LlmInsightsPage() {
                     Regenerate ↺
                   </button>
                 )}
+                </div>
               </div>
             </div>
 

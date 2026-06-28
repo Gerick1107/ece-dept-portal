@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
@@ -23,7 +23,7 @@ from app.documents.services.document_service import (
     list_all_documents_grouped,
     list_documents_grouped,
 )
-from app.documents.services.file_manager import SLUG_TO_TYPE, subdir_for_type
+from app.documents.services.file_manager import SLUG_TO_TYPE, resolve_document_path, subdir_for_type
 from app.documents.services.ingestion_service import ingest_meeting_file
 from app.documents.services.rag_service import answer_document_question
 from app.llm.services.groq_service import LlmError
@@ -35,6 +35,7 @@ MAX_PDF_BYTES = 25 * 1024 * 1024
 
 class DocumentQueryRequest(BaseModel):
     question: str = Field(min_length=3, max_length=2000)
+    provider: Literal["groq", "local"] = "groq"
 
 
 def _resolve_type(document_type: str) -> str:
@@ -89,7 +90,7 @@ def download_file(
         raise HTTPException(status_code=404, detail="File not found")
     if resolved != DOCUMENT_TYPE_ALL and mf.meeting.document_type != resolved:
         raise HTTPException(status_code=404, detail="File not found")
-    path = Path(mf.file_path)
+    path = resolve_document_path(mf.file_path)
     if not path.exists():
         raise HTTPException(status_code=404, detail="File missing on disk")
     return FileResponse(path, media_type="application/pdf", filename=mf.file_name)
@@ -108,6 +109,7 @@ async def query_documents(
             document_type=_resolve_type(document_type),
             question=body.question.strip(),
             user_id=user.id,
+            provider=body.provider,
         )
     except LlmError as exc:
         raise HTTPException(status_code=exc.status_code or 502, detail=str(exc)) from exc

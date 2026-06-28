@@ -9,13 +9,13 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import DATA_ASSETS
 from app.publications.models.entities import Affiliation, Faculty, FacultyAffiliation
 from app.utils.name_utils import names_match, strip_name_prefix
 
 logger = logging.getLogger(__name__)
 
-_PROJECT_ROOT = Path(__file__).resolve().parents[4]
-DEFAULT_LINKS_PATH = _PROJECT_ROOT / "data" / "assets" / "Links.txt"
+DEFAULT_LINKS_PATH = DATA_ASSETS / "Links.txt"
 
 _AFFILIATION_LINE_RE = re.compile(
     r"^(.+?)\s*\((https?://[^)]+)\)\s*:\s*(.+)$",

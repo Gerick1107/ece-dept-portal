@@ -1,5 +1,26 @@
 import { apiGet, apiPostJson } from "../../../services/api";
 
+export type LlmProviderId = "groq" | "local";
+
+export type LlmProviderInfo = {
+  id: LlmProviderId;
+  label: string;
+  available: boolean;
+  message: string;
+  model: string;
+};
+
+export type LlmProvidersResponse = {
+  default: LlmProviderId;
+  providers: LlmProviderInfo[];
+};
+
+export function fetchLlmProviders() {
+  return apiGet<{ success: boolean; data: LlmProvidersResponse }>("/llm-insights/providers").then(
+    (r) => r.data
+  );
+}
+
 export type ComparisonRow = {
   metric: string;
   previous: number | null;
@@ -106,7 +127,7 @@ export function fetchCachedInsights(params: ComparisonParams) {
 }
 
 export function generateLlmInsights(
-  body: ComparisonParams & { regenerate?: boolean; run_id?: string }
+  body: ComparisonParams & { regenerate?: boolean; run_id?: string; provider?: LlmProviderId }
 ) {
   return apiPostJson<{ success: boolean; data: GenerateInsightsResponse }>("/llm-insights/generate", body).then(
     (r) => r.data

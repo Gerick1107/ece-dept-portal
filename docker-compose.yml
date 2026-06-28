@@ -45,12 +45,43 @@ services:
       ENABLE_REQUIREMENT_REMINDERS: ${ENABLE_REQUIREMENT_REMINDERS:-true}
       REQUIREMENT_REMINDER_POLL_MINUTES: ${REQUIREMENT_REMINDER_POLL_MINUTES:-1}
       GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: ${GROQ_MODEL:-openai/gpt-oss-120b}
+      LLM_INSIGHTS_MAX_TOKENS: ${LLM_INSIGHTS_MAX_TOKENS:-5000}
+      LOCAL_LLM_INSIGHTS_MAX_TOKENS: ${LOCAL_LLM_INSIGHTS_MAX_TOKENS:-2000}
+      LOCAL_LLM_BASE_URL: ${LOCAL_LLM_BASE_URL:-http://host.docker.internal:11434/v1}
+      LOCAL_LLM_MODEL: ${LOCAL_LLM_MODEL:-llama3.2:3b}
+      DEFAULT_LLM_PROVIDER: ${DEFAULT_LLM_PROVIDER:-groq}
+      # SDG auto-tagging for BTP/IP projects (local embeddings, no API key).
+      ENABLE_SDG_LLM: ${ENABLE_SDG_LLM:-true}
+      SDG_EMBEDDING_MODEL: ${SDG_EMBEDDING_MODEL:-BAAI/bge-large-en-v1.5}
+      SDG_TOP_K: ${SDG_TOP_K:-5}
+      SDG_REQUEST_DELAY_SECONDS: ${SDG_REQUEST_DELAY_SECONDS:-0.5}
+      # Email (welcome mails, password reset, requirement reminders). Off unless creds set.
       SMTP_ENABLED: ${SMTP_ENABLED:-false}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-true}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
+      # Publications scraping. Needs SerpAPI keys; the container has no browser for scholarly.
+      SCRAPER_BACKEND: ${SCRAPER_BACKEND:-serpapi}
+      SERP_API_KEY: ${SERP_API_KEY:-}
+      SERP_API_KEYS: ${SERP_API_KEYS:-}
       DATA_ASSETS: /data/assets
+    extra_hosts:
+      # Lets the container reach an Ollama instance running on the host machine.
+      - "host.docker.internal:host-gateway"
     volumes:
-      - portal_storage:/app/storage
-      - portal_documents:/app/documents
+      - ./backend/storage:/app/storage
+      # Bind-mount the actual PDFs from the host so the container can read them.
+      # The DB stores absolute paths from the ingesting machine; the app re-anchors
+      # them under /app/documents at read time (see resolve_document_path).
+      - ./backend/documents:/app/documents
       - ./data/assets:/data/assets
+      - ./data/templates:/data/templates
+      # Persist downloaded embedding models (SDG + RAG) across rebuilds.
+      - hf_cache:/root/.cache
     networks:
       - portal
 
@@ -70,8 +101,7 @@ services:
 
 volumes:
   mysql_data:
-  portal_storage:
-  portal_documents:
+  hf_cache:
 
 networks:
   portal:

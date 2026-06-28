@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.documents.models.entities import DOCUMENT_TYPE_LABELS, Meeting, MeetingFile
+from app.documents.services.file_manager import resolve_document_path
 
 
 def _meeting_to_dict(meeting: Meeting, *, include_type: bool = False) -> dict:
@@ -100,7 +101,7 @@ async def extract_upload_metadata(file_path: Path) -> dict:
 
 
 def delete_meeting(db: Session, meeting: Meeting) -> None:
-    paths = [Path(f.file_path) for f in meeting.files]
+    paths = [resolve_document_path(f.file_path) for f in meeting.files]
     db.delete(meeting)
     db.commit()
     for path in paths:

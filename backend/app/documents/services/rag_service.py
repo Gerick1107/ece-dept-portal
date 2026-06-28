@@ -15,7 +15,8 @@ from app.documents.services.embedding_service import (
     embedding_from_json,
     embedding_to_json,
 )
-from app.llm.services.groq_service import LlmError, generate_llm_text_with_system
+from app.llm.services.groq_service import LlmError
+from app.llm.services.llm_dispatch import generate_text
 
 _MIN_RELEVANCE_SCORE = 0.32
 _TOP_K = 12
@@ -113,6 +114,7 @@ async def answer_document_question(
     document_type: str,
     question: str,
     user_id: int | None,
+    provider: str = "groq",
 ) -> dict:
     chunks = retrieve_chunks(db, document_type=document_type, question=question)
     max_score = max((c.score for c in chunks), default=0)
@@ -145,7 +147,9 @@ async def answer_document_question(
         "Never use outside knowledge. Always cite sources from the context."
     )
     try:
-        answer = await generate_llm_text_with_system(prompt, system_prompt=system, temperature=0.2, max_tokens=1200)
+        answer = await generate_text(
+            prompt, provider=provider, system_prompt=system, temperature=0.2, max_tokens=1200
+        )
     except LlmError as exc:
         raise exc
 

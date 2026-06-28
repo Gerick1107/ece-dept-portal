@@ -6,6 +6,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from app.projects.models.entities import ProjectUpload
+from app.utils.storage_paths import resolve_storage_path
 
 
 def list_project_uploads(db: Session, limit: int = 200) -> list[dict]:
@@ -40,7 +41,7 @@ def purge_all_projects(db: Session) -> dict:
 
     removed_files = 0
     for upload in db.query(ProjectUpload).all():
-        path = Path(upload.filepath)
+        path = resolve_storage_path(upload.filepath)
         if path.exists():
             try:
                 path.unlink()
@@ -72,7 +73,7 @@ def delete_project_upload(db: Session, upload_id: int) -> dict:
     row = db.query(ProjectUpload).filter(ProjectUpload.id == upload_id).first()
     if not row:
         return {"deleted": False}
-    path = Path(row.filepath)
+    path = resolve_storage_path(row.filepath)
     if path.exists():
         try:
             os.remove(path)

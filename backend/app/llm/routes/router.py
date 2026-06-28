@@ -16,12 +16,20 @@ from app.llm.schemas import (
 )
 from app.llm.services.groq_service import LlmError
 from app.llm.services import insights_service
+from app.llm.services.llm_dispatch import provider_status
 
 router = APIRouter(prefix="/llm-insights", tags=["llm-insights"])
 
 
 def _envelope(data: dict) -> dict:
     return {"success": True, "data": data}
+
+
+@router.get("/providers")
+def llm_providers(
+    _: Annotated[User, Depends(get_current_user)],
+):
+    return _envelope(provider_status())
 
 
 @router.get("/courses")
@@ -100,6 +108,7 @@ async def generate_insights(
             current_section=body.current_section,
             previous_semester=body.previous_semester,
             previous_section=body.previous_section,
+            provider=body.provider,
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

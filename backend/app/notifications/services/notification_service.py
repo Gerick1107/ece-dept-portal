@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -24,6 +23,7 @@ from app.notifications.services.requirement_service import (
     upsert_requirement_on_send,
 )
 from app.utils.email_service import send_email
+from app.utils.storage_paths import resolve_storage_path
 
 NOTIFICATIONS_DIR = Path(get_settings().upload_dir).parent / "notifications"
 REPLY_MAX_BYTES = 10 * 1024 * 1024
@@ -261,7 +261,7 @@ def get_attachment_for_user(db: Session, user_id: int, attachment_id: int) -> No
     )
     if not rec:
         return None
-    if not att.storage_path or not os.path.exists(att.storage_path):
+    if not att.storage_path or not resolve_storage_path(att.storage_path).exists():
         return None
     return att
 
@@ -356,14 +356,14 @@ def get_reply_attachment_for_user(
             NotificationRecipient.user_id == user_id,
         )
     )
-    if not att or not att.storage_path or not os.path.exists(att.storage_path):
+    if not att or not att.storage_path or not resolve_storage_path(att.storage_path).exists():
         return None
     return att
 
 
 def get_reply_attachment_for_admin(db: Session, attachment_id: int) -> NotificationReplyAttachment | None:
     att = db.get(NotificationReplyAttachment, attachment_id)
-    if not att or not att.storage_path or not os.path.exists(att.storage_path):
+    if not att or not att.storage_path or not resolve_storage_path(att.storage_path).exists():
         return None
     return att
 

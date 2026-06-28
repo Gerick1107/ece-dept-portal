@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -11,6 +13,7 @@ class GenerateInsightsRequest(BaseModel):
     current_section: str | None = None
     previous_semester: str | None = None
     previous_section: str | None = None
+    provider: Literal["groq", "local"] = "groq"
 
 
 class AssessmentSummaryItem(BaseModel):

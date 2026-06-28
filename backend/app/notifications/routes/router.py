@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.auth.dependencies import get_current_user, require_roles
 from app.database.models.user import User, UserRole
 from app.database.session import get_db
+from app.utils.storage_paths import resolve_storage_path
 from app.notifications.services.notification_service import (
     create_and_send_notification,
     get_admin_notification_detail,
@@ -91,7 +92,7 @@ def download_reply_attachment(
     if not att:
         raise HTTPException(status_code=404, detail="Attachment not found")
     return FileResponse(
-        att.storage_path,
+        resolve_storage_path(att.storage_path),
         filename=att.original_filename,
         media_type=att.mime_type or "application/octet-stream",
     )
@@ -126,7 +127,7 @@ def download_attachment(
     if not att:
         raise HTTPException(status_code=404, detail="Attachment not found")
     return FileResponse(
-        att.storage_path,
+        resolve_storage_path(att.storage_path),
         filename=att.original_filename,
         media_type=att.mime_type or "application/octet-stream",
     )

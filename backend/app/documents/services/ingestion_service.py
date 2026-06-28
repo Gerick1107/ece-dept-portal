@@ -6,13 +6,15 @@ from pathlib import Path
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, joinedload
 
+from app.config import get_settings
 from app.database.session import SessionLocal
 
 from app.documents.models.entities import DocumentChunk, Meeting, MeetingFile
 from app.documents.services.embedding_service import embed_texts, embedding_to_json
-from app.documents.services.file_manager import DOCUMENT_TYPE_DIRS
+from app.documents.services.file_manager import DOCUMENT_TYPE_DIRS, resolve_document_path
 from app.documents.services.pdf_service import extract_pdf_metadata
-from app.llm.services.groq_service import LlmError, generate_llm_text_with_system
+from app.llm.services.groq_service import LlmError
+from app.llm.services.llm_dispatch import generate_text
 
 _CHUNK_SIZE = 1200
 _CHUNK_OVERLAP = 200
@@ -92,13 +94,17 @@ async def generate_document_description(
         "You summarize academic meeting documents for faculty. Be factual and concise. "
         "Do not invent details beyond the excerpt."
     )
-    return await generate_llm_text_with_system(
-        prompt, system_prompt=system, temperature=0.3, max_tokens=180
+    return await generate_text(
+        prompt,
+        provider=get_settings().default_llm_provider,
+        system_prompt=system,
+        temperature=0.3,
+        max_tokens=180,
     )
 
 
 async def regenerate_meeting_file_description(db: Session, meeting_file: MeetingFile) -> str:
-    path = Path(meeting_file.file_path)
+    path = resolve_document_path(meeting_file.file_path)
     if not path.exists():
         raise FileNotFoundError(f"PDF missing on disk: {path}")
     meeting = meeting_file.meeting
@@ -294,9 +300,13 @@ async def sync_new_documents_from_disk(
             return (year, id_key)
 
         for (rtype, year, identity), files in sorted(groups.items(), key=_sort_key):
-            resolved_paths = {role: str(p.resolve()) for role, p in files.items()}
+            # Dedup by the (hash-prefixed, unique) basename rather than the full path:
+            # stored paths are absolute to the ingesting machine, so a Windows path in a
+            # DB dump never equals the container's /app/documents/... path and would
+            # otherwise re-ingest every file as a duplicate on each scan.
+            candidate_names = [p.name for p in files.values()]
             already = db.scalars(
-                select(MeetingFile).where(MeetingFile.file_path.in_(list(resolved_paths.values())))
+                select(MeetingFile).where(MeetingFile.file_name.in_(candidate_names))
             ).all()
             if already:
                 continue
