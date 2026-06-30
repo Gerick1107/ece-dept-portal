@@ -33,7 +33,8 @@ const navItems: NavItem[] = [
     kind: "group",
     label: "Course Allocation",
     links: [
-      { to: "/course-allocation", label: "Allocations", exact: true },
+      { to: "/course-allocation", label: "Faculty-Wise Allocations", exact: true },
+      { to: "/course-allocation/courses", label: "Course-Wise Allocations", exact: true },
       { to: "/course-allocation/catalog", label: "Course Catalog", exact: true },
     ],
   },
@@ -80,7 +81,10 @@ function isNavActive(pathname: string, to: string, exact?: boolean): boolean {
       pathname === to ||
       pathname.startsWith(`${to}/results/`) ||
       (to === "/publications/faculty" && pathname.startsWith("/publications/faculty/")) ||
-      (to === "/course-allocation" && pathname.startsWith("/course-allocation/"))
+      (to === "/course-allocation" &&
+        (pathname === "/course-allocation" || pathname.startsWith("/course-allocation/faculty/"))) ||
+      (to === "/course-allocation/courses" &&
+        (pathname === "/course-allocation/courses" || pathname.startsWith("/course-allocation/course/")))
     );
   }
   return pathname === to || pathname.startsWith(`${to}/`);

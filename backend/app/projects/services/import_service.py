@@ -13,6 +13,7 @@ from app.projects.services.faculty_resolver import match_ece_faculty, resolve_fa
 from app.projects.services.file_manager import save_project_upload
 from app.projects.services.project_service import create_project, find_merge_candidate, merge_project
 from app.projects.services.sdg_queue import enqueue_sdg_tags
+from app.analytics.utils.semester import semester_sort_key
 from app.projects.utils.column_mapping import (
     DEPARTMENT_REQUIRED_FIELDS,
     cell_str,
@@ -359,7 +360,7 @@ def list_distinct_semester_tags(db: Session) -> list[str]:
             cleaned = part.strip()
             if cleaned:
                 tags.add(cleaned)
-    return sorted(tags)
+    return sorted(tags, key=semester_sort_key)
 
 
 def list_distinct_co_guides(db: Session) -> list[str]:

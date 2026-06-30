@@ -12,6 +12,8 @@ from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user, require_roles
 from app.course_allocation.services.allocation_service import (
+    course_history,
+    courses_dashboard_summary,
     create_allocation,
     dashboard_summary,
     delete_allocation,
@@ -19,12 +21,13 @@ from app.course_allocation.services.allocation_service import (
     get_allocation,
     list_allocations_view,
     list_catalog,
+    list_courses_view,
     resolve_allocation_faculty_row,
     update_allocation,
     update_catalog_entry,
 )
 from app.course_allocation.services.csv_sync import sync_all_course_allocation_csv, write_allocations_csv
-from app.course_allocation.services.export_service import export_allocations_xlsx
+from app.course_allocation.services.export_service import export_allocations_xlsx, export_courses_xlsx
 from app.course_allocation.services.semester_service import effective_current_semester
 from app.course_allocation.services.xlsx_upload_service import parse_allocation_xlsx, preview_upload
 from app.database.models.user import User, UserRole
@@ -114,6 +117,81 @@ def faculty_detail(
     data = faculty_history(db, faculty_id)
     if not data:
         raise HTTPException(status_code=404, detail="Faculty not found")
+    return data
+
+
+@router.get("/courses/dashboard-summary")
+def courses_summary(
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_user)],
+    semester: str | None = None,
+):
+    sem = semester or effective_current_semester()
+    return courses_dashboard_summary(db, sem)
+
+
+@router.get("/courses")
+def courses_list_view(
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_user)],
+    scope: str | None = None,
+    query: str | None = None,
+    ug_pg: str | None = None,
+    core_elective: str | None = None,
+    first_year_only: bool = False,
+):
+    try:
+        sync_all_course_allocation_csv(db)
+    except Exception:
+        pass
+    if not scope:
+        scope = effective_current_semester()
+    return list_courses_view(
+        db,
+        scope=scope,
+        query=query,
+        ug_pg=ug_pg,
+        core_elective=core_elective,
+        first_year_only=first_year_only,
+    )
+
+
+@router.get("/courses/export")
+def courses_export_view(
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_user)],
+    scope: str | None = None,
+    query: str | None = None,
+    ug_pg: str | None = None,
+    core_elective: str | None = None,
+    first_year_only: bool = False,
+):
+    if not scope:
+        scope = effective_current_semester()
+    payload = export_courses_xlsx(
+        db,
+        scope=scope,
+        query=query,
+        ug_pg=ug_pg,
+        core_elective=core_elective,
+        first_year_only=first_year_only,
+    )
+    return Response(
+        content=payload,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=course_wise_allocations.xlsx"},
+    )
+
+
+@router.get("/courses/{course_catalog_id}")
+def course_detail(
+    course_catalog_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_user)],
+):
+    data = course_history(db, course_catalog_id)
+    if not data:
+        raise HTTPException(status_code=404, detail="Course not found")
     return data
 
 

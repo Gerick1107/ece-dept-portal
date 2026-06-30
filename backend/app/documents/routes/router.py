@@ -33,9 +33,15 @@ router = APIRouter(prefix="/documents", tags=["documents"])
 MAX_PDF_BYTES = 25 * 1024 * 1024
 
 
+class ChatTurn(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=8000)
+
+
 class DocumentQueryRequest(BaseModel):
     question: str = Field(min_length=3, max_length=2000)
     provider: Literal["groq", "local"] = "groq"
+    history: list[ChatTurn] = Field(default_factory=list, max_length=20)
 
 
 def _resolve_type(document_type: str) -> str:
@@ -110,6 +116,7 @@ async def query_documents(
             question=body.question.strip(),
             user_id=user.id,
             provider=body.provider,
+            history=[turn.model_dump() for turn in body.history],
         )
     except LlmError as exc:
         raise HTTPException(status_code=exc.status_code or 502, detail=str(exc)) from exc

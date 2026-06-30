@@ -15,6 +15,7 @@ from app.database.session import get_db
 from app.utils.storage_paths import resolve_storage_path
 from app.projects.models.entities import Project, ProjectSdg, ProjectUpload
 from app.projects.schemas.project import (
+    BulkSdgAcceptRequest,
     ImportSummary,
     ProjectCreate,
     ProjectListResponse,
@@ -23,6 +24,7 @@ from app.projects.schemas.project import (
     SdgEditRequest,
 )
 from app.projects.services.admin_data_service import delete_project_upload, list_project_uploads, purge_all_projects
+from app.projects.services.bulk_sdg_service import bulk_accept_sdgs, preview_bulk_accept_sdgs
 from app.projects.services.export_service import export_projects_csv, export_projects_excel, export_projects_pdf
 from app.projects.services.import_service import (
     build_template_bytes,
@@ -326,6 +328,37 @@ def edit_sdgs(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return ProjectResponse.model_validate(project_to_dict(db, project))
+
+
+@router.post("/bulk-accept-sdgs/preview")
+def preview_bulk_sdgs(
+    body: BulkSdgAcceptRequest,
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_user)],
+):
+    _assert_sdg_access()
+    return preview_bulk_accept_sdgs(
+        db,
+        faculty_id=body.faculty_id,
+        from_semester=body.from_semester.strip(),
+        to_semester=body.to_semester.strip(),
+    )
+
+
+@router.post("/bulk-accept-sdgs")
+def commit_bulk_sdgs(
+    body: BulkSdgAcceptRequest,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+):
+    _assert_sdg_access()
+    return bulk_accept_sdgs(
+        db,
+        faculty_id=body.faculty_id,
+        from_semester=body.from_semester.strip(),
+        to_semester=body.to_semester.strip(),
+        actor_email=user.email,
+    )
 
 
 @router.get("/export")

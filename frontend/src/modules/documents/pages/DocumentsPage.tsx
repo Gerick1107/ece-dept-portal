@@ -4,6 +4,7 @@ import FileUploadField from "../../../components/FileUploadField";
 import { apiDelete, apiGet, apiPostForm, apiPostJson } from "../../../services/api";
 import ProviderSelector from "../../llm/components/ProviderSelector";
 import { useLlmProvider } from "../../llm/hooks/useLlmProvider";
+import MarkdownMessage from "../components/MarkdownMessage";
 
 type MeetingFileRef = {
   id: number;
@@ -49,6 +50,10 @@ type QueryResponse = {
   context_chunks: QueryChunk[];
   not_found: boolean;
 };
+
+type ChatTurn =
+  | { role: "user"; content: string }
+  | { role: "assistant"; content: string; sources: QuerySource[]; context_chunks: QueryChunk[]; not_found: boolean };
 
 type PreviewMeta = {
   title: string;
@@ -114,8 +119,8 @@ export default function DocumentsPage({
   const [question, setQuestion] = useState("");
   const [queryBusy, setQueryBusy] = useState(false);
   const [queryError, setQueryError] = useState("");
-  const [queryResult, setQueryResult] = useState<QueryResponse | null>(null);
-  const [showContext, setShowContext] = useState(false);
+  const [conversation, setConversation] = useState<ChatTurn[]>([]);
+  const [showContextFor, setShowContextFor] = useState<number | null>(null);
   const [showUpload, setShowUpload] = useState(false);
   const { provider, setProvider, providers } = useLlmProvider();
   const [uploadStep, setUploadStep] = useState<"pick" | "review">("pick");
@@ -182,18 +187,35 @@ export default function DocumentsPage({
   }
 
   async function runQuery() {
-    if (!question.trim()) return;
+    const asked = question.trim();
+    if (!asked) return;
     setQueryBusy(true);
     setQueryError("");
+    // History sent to the server: prior turns as plain {role, content}.
+    const history = conversation.map((t) => ({ role: t.role, content: t.content }));
+    setConversation((prev) => [...prev, { role: "user", content: asked }]);
+    setQuestion("");
     try {
       const result = await apiPostJson<QueryResponse>(`/documents/${documentType}/query`, {
-        question: question.trim(),
+        question: asked,
         provider,
+        history,
       });
-      setQueryResult(result);
-      setShowContext(false);
+      setConversation((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: result.answer,
+          sources: result.sources,
+          context_chunks: result.context_chunks,
+          not_found: result.not_found,
+        },
+      ]);
     } catch (e) {
       setQueryError(e instanceof Error ? e.message : "Query failed");
+      // Drop the optimistic user turn if the request failed, and restore the text.
+      setConversation((prev) => (prev[prev.length - 1]?.role === "user" ? prev.slice(0, -1) : prev));
+      setQuestion(asked);
     } finally {
       setQueryBusy(false);
     }
@@ -402,15 +424,89 @@ export default function DocumentsPage({
         </div>
 
         <section className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-3">
-          <div>
-            <h3 className="font-semibold text-slate-800">Ask about this document set</h3>
-            <p className="text-xs text-slate-500 mt-1">
-              Searches every meeting in this set across all years (agendas and minutes), not just the selected year tab.
-            </p>
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h3 className="font-semibold text-slate-800">Ask about this document set</h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Searches every meeting in this set across all years (agendas and minutes), not just the selected year tab.
+                You can ask follow-up questions — earlier answers stay in context.
+              </p>
+            </div>
+            {conversation.length > 0 && (
+              <button
+                type="button"
+                className="text-xs text-slate-500 underline shrink-0"
+                onClick={() => {
+                  setConversation([]);
+                  setShowContextFor(null);
+                  setQueryError("");
+                }}
+              >
+                New conversation
+              </button>
+            )}
           </div>
+
+          {conversation.length > 0 && (
+            <div className="space-y-3 max-h-[28rem] overflow-y-auto pr-1">
+              {conversation.map((turn, index) =>
+                turn.role === "user" ? (
+                  <div key={index} className="text-sm">
+                    <p className="inline-block bg-teal-50 border border-teal-100 text-slate-800 rounded-lg px-3 py-2 whitespace-pre-wrap">
+                      {turn.content}
+                    </p>
+                  </div>
+                ) : (
+                  <div key={index} className="space-y-2 text-sm border-l-2 border-slate-200 pl-3">
+                    <MarkdownMessage content={turn.content} />
+                    {turn.sources.length > 0 && (
+                      <div>
+                        <p className="font-medium text-slate-700">Sources</p>
+                        <ul className="list-disc pl-5 text-slate-600">
+                          {turn.sources.map((s) => (
+                            <li key={s.document_id}>
+                              {s.title} ({s.year})
+                              {s.pages.length ? ` — pages ${s.pages.join(", ")}` : ""}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {turn.context_chunks.length > 0 && (
+                      <>
+                        <button
+                          type="button"
+                          className="text-xs text-teal-700 underline"
+                          onClick={() => setShowContextFor((v) => (v === index ? null : index))}
+                        >
+                          {showContextFor === index ? "Hide context" : "Verify context"}
+                        </button>
+                        {showContextFor === index && (
+                          <div className="max-h-48 overflow-y-auto bg-slate-50 border rounded-lg p-2 text-xs text-slate-600 space-y-2">
+                            {turn.context_chunks.map((chunk, ci) => (
+                              <div key={`${chunk.document_id}-${ci}`}>
+                                <p className="font-medium">
+                                  {chunk.title} ({chunk.year})
+                                  {chunk.file_role ? ` — ${chunk.file_role}` : ""}
+                                  {chunk.section_label ? ` (${chunk.section_label})` : ""}
+                                  {chunk.page_number ? ` p.${chunk.page_number}` : ""}
+                                </p>
+                                <p>{chunk.text}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )
+              )}
+            </div>
+          )}
+
           <textarea
             className="w-full border rounded-lg px-3 py-2 text-sm min-h-[90px]"
-            placeholder="Ask a question about these minutes…"
+            placeholder={conversation.length ? "Ask a follow-up question…" : "Ask a question about these minutes…"}
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
           />
@@ -426,43 +522,12 @@ export default function DocumentsPage({
             onClick={runQuery}
             className="w-full rounded-lg bg-teal-700 text-white px-3 py-2 text-sm disabled:opacity-50"
           >
-            {queryBusy ? "Searching…" : "Ask"}
+            {queryBusy ? "Searching…" : conversation.length ? "Send" : "Ask"}
           </button>
           {queryError && (
             <div className="text-sm text-red-800 space-y-2">
               <p>{queryError}</p>
               <button type="button" className="text-xs underline" onClick={runQuery}>Retry</button>
-            </div>
-          )}
-          {queryResult && (
-            <div className="space-y-3 text-sm">
-              <p className="text-slate-800 whitespace-pre-wrap">{queryResult.answer}</p>
-              {queryResult.sources.length > 0 && (
-                <div>
-                  <p className="font-medium text-slate-700">Sources</p>
-                  <ul className="list-disc pl-5 text-slate-600">
-                    {queryResult.sources.map((s) => (
-                      <li key={s.document_id}>
-                        {s.title} ({s.year})
-                        {s.pages.length ? ` — pages ${s.pages.join(", ")}` : ""}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              <button type="button" className="text-xs text-teal-700 underline" onClick={() => setShowContext((v) => !v)}>
-                {showContext ? "Hide context" : "Verify context"}
-              </button>
-              {showContext && (
-                <div className="max-h-48 overflow-y-auto bg-slate-50 border rounded-lg p-2 text-xs text-slate-600 space-y-2">
-                  {queryResult.context_chunks.map((chunk, index) => (
-                    <div key={`${chunk.document_id}-${index}`}>
-                      <p className="font-medium">{chunk.title} ({chunk.year}){chunk.file_role ? ` — ${chunk.file_role}` : ""}{chunk.page_number ? ` p.${chunk.page_number}` : ""}</p>
-                      <p>{chunk.text}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           )}
         </section>

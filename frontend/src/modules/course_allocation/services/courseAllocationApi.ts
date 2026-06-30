@@ -90,6 +90,93 @@ export function getFacultyAllocationHistory(facultyId: number) {
   return apiGet<FacultyAllocationHistory>(`/course-allocation/faculty/${facultyId}`);
 }
 
+export type CourseAllocationRow = {
+  course_key: string;
+  course_catalog_id: number | null;
+  course_code: string;
+  course_name: string;
+  allocations: AllocationCourse[];
+  has_allocations: boolean;
+};
+
+export type CourseListResponse = {
+  course_rows: CourseAllocationRow[];
+  semesters: string[];
+  academic_years: string[];
+};
+
+export type CoursesDashboardSummary = {
+  semester: string;
+  total_courses: number;
+  faculty_involved: number;
+  ug_courses: number;
+  pg_courses: number;
+  ug_pg_courses: number;
+  core_courses: number;
+  elective_courses: number;
+  first_year_courses: number;
+};
+
+export type CourseAllocationHistory = {
+  course: { id: number; course_code: string; course_name: string };
+  history: AllocationCourse[];
+  faculty_counts: Array<{
+    faculty_id: number | null;
+    faculty_name: string;
+    times_taught: number;
+    semesters: string[];
+    most_recent_semester: string;
+  }>;
+  analytics: {
+    instances_per_semester: Array<{ semester: string; count: number }>;
+    ug_pg_split: Record<string, number>;
+    core_elective_split: Record<string, number>;
+  };
+};
+
+export function listCoursesAllocations(params?: {
+  scope?: string;
+  query?: string;
+  ug_pg?: string;
+  core_elective?: string;
+  first_year_only?: boolean;
+}) {
+  const q = new URLSearchParams();
+  if (params?.scope) q.set("scope", params.scope);
+  if (params?.query) q.set("query", params.query);
+  if (params?.ug_pg) q.set("ug_pg", params.ug_pg);
+  if (params?.core_elective) q.set("core_elective", params.core_elective);
+  if (params?.first_year_only) q.set("first_year_only", "true");
+  const s = q.toString();
+  return apiGet<CourseListResponse>(`/course-allocation/courses${s ? `?${s}` : ""}`);
+}
+
+export function getCoursesDashboardSummary(semester?: string) {
+  const p = semester ? `?semester=${encodeURIComponent(semester)}` : "";
+  return apiGet<CoursesDashboardSummary>(`/course-allocation/courses/dashboard-summary${p}`);
+}
+
+export function getCourseAllocationHistory(courseCatalogId: number) {
+  return apiGet<CourseAllocationHistory>(`/course-allocation/courses/${courseCatalogId}`);
+}
+
+export async function downloadCoursesAllocationsExport(scope?: string) {
+  const API_BASE = import.meta.env.VITE_API_BASE ?? "/api/v1";
+  const q = scope ? `?scope=${encodeURIComponent(scope)}` : "";
+  const token = localStorage.getItem("access_token");
+  const res = await fetch(`${API_BASE}/course-allocation/courses/export${q}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw new Error("Export failed");
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "course_wise_allocations.xlsx";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export async function downloadAllocationsExport(scope?: string) {
   const API_BASE = import.meta.env.VITE_API_BASE ?? "/api/v1";
   const q = scope ? `?scope=${encodeURIComponent(scope)}` : "";

@@ -106,6 +106,12 @@ class SdgEditRequest(BaseModel):
     sdg_numbers: list[int] = Field(default_factory=list)
 
 
+class BulkSdgAcceptRequest(BaseModel):
+    faculty_id: int
+    from_semester: str = Field(min_length=1)
+    to_semester: str = Field(min_length=1)
+
+
 class ProjectUploadResponse(BaseModel):
     id: int
     filename: str

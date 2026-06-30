@@ -5,12 +5,17 @@ from datetime import datetime
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.course_allocation.models.entities import CourseAllocation, CourseCatalogEntry
+from app.course_allocation.models.entities import CourseAllocation, CourseCatalogEntry, CourseCodeAlias
 from app.course_allocation.services.allocation_faculty_resolver import (
     is_placeholder_name,
     resolve_allocation_faculty,
 )
+from app.course_allocation.services.course_identity_resolver import (
+    collapse_repeated_dept_prefix,
+    tokenize_course_codes,
+)
 from app.course_allocation.services.csv_sync import write_allocations_csv, write_catalog_csv
+from app.analytics.utils.semester import semester_sort_key
 from app.course_allocation.services.semester_service import scope_semesters
 from app.publications.models.entities import Faculty
 from app.utils.contribution_faculty_resolver import FacultyResolveFailure, FacultyResolveResult
@@ -69,7 +74,12 @@ def list_allocations_view(
 
     faculty_rows = []
     for faculty in _active_faculty(db):
-        courses = by_faculty.get(faculty.id, [])
+        courses = sorted(
+            by_faculty.get(faculty.id, []),
+            key=lambda c: (semester_sort_key(c.semester), c.course_code),
+        )
+        # Newest semester first; stable sort keeps course_code ascending within a term.
+        courses = sorted(courses, key=lambda c: semester_sort_key(c.semester), reverse=True)
         faculty_rows.append(
             {
                 "faculty_id": faculty.id,
@@ -84,7 +94,7 @@ def list_allocations_view(
     all_semesters = [
         s for s in db.scalars(select(CourseAllocation.semester).distinct()).all() if s
     ]
-    semester_set = sorted(set(all_semesters), key=_semester_sort_key)
+    semester_set = sorted(set(all_semesters), key=semester_sort_key, reverse=True)
     all_academic_years = sorted(
         {ay for ay in db.scalars(select(CourseAllocation.academic_year).distinct()).all() if ay},
         reverse=True,
@@ -97,18 +107,6 @@ def list_allocations_view(
         "semesters": semester_set,
         "academic_years": all_academic_years,
     }
-
-
-def _semester_sort_key(semester: str) -> tuple[int, int]:
-    parts = semester.split()
-    if len(parts) != 2:
-        return (0, 0)
-    term = 0 if parts[0].lower() == "monsoon" else 1
-    try:
-        year = int(parts[1])
-    except ValueError:
-        year = 0
-    return (year, term)
 
 
 def _allocation_dict(row: CourseAllocation) -> dict:
@@ -155,12 +153,17 @@ def faculty_history(db: Session, faculty_id: int) -> dict | None:
         return None
     rows = list(
         db.scalars(
-            select(CourseAllocation)
-            .where(CourseAllocation.faculty_id == faculty_id, CourseAllocation.is_faculty_placeholder.is_(False))
-            .order_by(CourseAllocation.semester.asc(), CourseAllocation.course_code.asc())
+            select(CourseAllocation).where(
+                CourseAllocation.faculty_id == faculty_id,
+                CourseAllocation.is_faculty_placeholder.is_(False),
+            )
         ).all()
     )
-    history = [_allocation_dict(r) for r in rows]
+    rows.sort(key=lambda r: (semester_sort_key(r.semester), r.course_code))
+    # Full history table shows newest semester first; ties keep course_code ascending
+    # (stable sort preserves the secondary ordering established above).
+    history_rows = sorted(rows, key=lambda r: semester_sort_key(r.semester), reverse=True)
+    history = [_allocation_dict(r) for r in history_rows]
 
     course_counts: dict[str, dict] = {}
     for r in rows:
@@ -177,7 +180,7 @@ def faculty_history(db: Session, faculty_id: int) -> dict | None:
         )
         entry["times_taught"] += 1
         entry["semesters"].append(r.semester)
-        if _semester_sort_key(r.semester) >= _semester_sort_key(entry["most_recent_semester"]):
+        if semester_sort_key(r.semester) >= semester_sort_key(entry["most_recent_semester"]):
             entry["most_recent_semester"] = r.semester
 
     first_year: dict[str, int] = {}
@@ -196,13 +199,253 @@ def faculty_history(db: Session, faculty_id: int) -> dict | None:
         if r.core_elective in core_elective:
             core_elective[r.core_elective] += 1
 
+    for entry in course_counts.values():
+        entry["semesters"] = sorted(entry["semesters"], key=semester_sort_key)
+
     return {
         "faculty": {"id": faculty.id, "name": faculty.name},
         "history": history,
         "course_counts": list(course_counts.values()),
         "first_year_counts": [{"name": k, "count": v} for k, v in sorted(first_year.items())],
         "analytics": {
-            "courses_per_semester": [{"semester": k, "count": v} for k, v in sorted(by_semester.items(), key=lambda x: _semester_sort_key(x[0]))],
+            "courses_per_semester": [
+                {"semester": k, "count": v}
+                for k, v in sorted(by_semester.items(), key=lambda x: semester_sort_key(x[0]))
+            ],
+            "ug_pg_split": ug_pg,
+            "core_elective_split": core_elective,
+        },
+    }
+
+
+def _build_catalog_lookup(db: Session) -> tuple[dict[str, CourseCatalogEntry], dict[str, CourseCatalogEntry]]:
+    """Map variant codes and individual code tokens to canonical catalog entries."""
+    variant_to_course: dict[str, CourseCatalogEntry] = {}
+    token_to_course: dict[str, CourseCatalogEntry] = {}
+    for entry in db.scalars(select(CourseCatalogEntry)).all():
+        variant_to_course[entry.course_code.strip().upper()] = entry
+        for tok in tokenize_course_codes(entry.course_code):
+            token_to_course[tok] = entry
+    for alias in db.scalars(select(CourseCodeAlias)).all():
+        catalog_entry = db.get(CourseCatalogEntry, alias.course_id)
+        if not catalog_entry:
+            continue
+        variant_to_course[alias.variant_code.strip().upper()] = catalog_entry
+        for tok in tokenize_course_codes(alias.variant_code):
+            token_to_course.setdefault(tok, catalog_entry)
+    return variant_to_course, token_to_course
+
+
+def _resolve_catalog_for_allocation(
+    row: CourseAllocation,
+    variant_to_course: dict[str, CourseCatalogEntry],
+    token_to_course: dict[str, CourseCatalogEntry],
+    db: Session,
+) -> CourseCatalogEntry | None:
+    if row.course_catalog_id:
+        return db.get(CourseCatalogEntry, row.course_catalog_id)
+    code_key = collapse_repeated_dept_prefix(row.course_code).upper()
+    entry = variant_to_course.get(code_key)
+    if entry:
+        return entry
+    for tok in tokenize_course_codes(row.course_code):
+        entry = token_to_course.get(tok)
+        if entry:
+            return entry
+    return None
+
+
+def _course_group_id(
+    row: CourseAllocation,
+    variant_to_course: dict[str, CourseCatalogEntry],
+    token_to_course: dict[str, CourseCatalogEntry],
+    db: Session,
+) -> str:
+    entry = _resolve_catalog_for_allocation(row, variant_to_course, token_to_course, db)
+    if entry:
+        return f"catalog:{entry.id}"
+    return f"code:{collapse_repeated_dept_prefix(row.course_code).upper()}"
+
+
+def list_courses_view(
+    db: Session,
+    *,
+    scope: str | None = None,
+    query: str | None = None,
+    ug_pg: str | None = None,
+    core_elective: str | None = None,
+    first_year_only: bool = False,
+) -> dict:
+    semesters = scope_semesters(scope)
+    stmt = select(CourseAllocation).where(CourseAllocation.is_faculty_placeholder.is_(False))
+    if semesters:
+        stmt = stmt.where(CourseAllocation.semester.in_(semesters))
+    if ug_pg and ug_pg.upper() != "ALL":
+        stmt = stmt.where(CourseAllocation.ug_pg == ug_pg)
+    if core_elective and core_elective.upper() != "ALL":
+        stmt = stmt.where(CourseAllocation.core_elective == core_elective)
+    if first_year_only:
+        stmt = stmt.where(CourseAllocation.is_first_year.is_(True))
+    allocations = list(db.scalars(stmt).all())
+
+    variant_to_course, token_to_course = _build_catalog_lookup(db)
+
+    if query:
+        q = query.strip().lower()
+        allocations = [
+            a
+            for a in allocations
+            if q in (a.course_code or "").lower()
+            or q in (a.course_name or "").lower()
+            or q in (a.faculty_name or "").lower()
+        ]
+
+    by_course: dict[str, list[CourseAllocation]] = {}
+    course_meta: dict[str, dict] = {}
+    for row in allocations:
+        group_id = _course_group_id(row, variant_to_course, token_to_course, db)
+        by_course.setdefault(group_id, []).append(row)
+        if group_id not in course_meta:
+            catalog_entry = _resolve_catalog_for_allocation(row, variant_to_course, token_to_course, db)
+            course_meta[group_id] = {
+                "course_catalog_id": catalog_entry.id if catalog_entry else None,
+                "course_code": catalog_entry.course_code if catalog_entry else row.course_code,
+                "course_name": catalog_entry.course_name if catalog_entry else row.course_name,
+            }
+
+    course_rows = []
+    for group_id, rows in by_course.items():
+        meta = course_meta[group_id]
+        sorted_rows = sorted(
+            rows, key=lambda r: (semester_sort_key(r.semester), r.faculty_name or "", r.course_code)
+        )
+        # Newest semester first; stable sort keeps faculty/course ordering within a term.
+        sorted_rows = sorted(sorted_rows, key=lambda r: semester_sort_key(r.semester), reverse=True)
+        course_rows.append(
+            {
+                "course_key": group_id,
+                "course_catalog_id": meta["course_catalog_id"],
+                "course_code": meta["course_code"],
+                "course_name": meta["course_name"],
+                "allocations": [_allocation_dict(r) for r in sorted_rows],
+                "has_allocations": bool(sorted_rows),
+            }
+        )
+
+    course_rows.sort(key=lambda r: (r["course_code"], r["course_name"]))
+
+    all_semesters = [
+        s for s in db.scalars(select(CourseAllocation.semester).distinct()).all() if s
+    ]
+    semester_set = sorted(set(all_semesters), key=semester_sort_key, reverse=True)
+    all_academic_years = sorted(
+        {ay for ay in db.scalars(select(CourseAllocation.academic_year).distinct()).all() if ay},
+        reverse=True,
+    )
+
+    return {
+        "course_rows": course_rows,
+        "semesters": semester_set,
+        "academic_years": all_academic_years,
+    }
+
+
+def courses_dashboard_summary(db: Session, semester: str) -> dict:
+    rows = list(
+        db.scalars(
+            select(CourseAllocation).where(
+                CourseAllocation.semester == semester,
+                CourseAllocation.is_faculty_placeholder.is_(False),
+            )
+        ).all()
+    )
+    variant_to_course, token_to_course = _build_catalog_lookup(db)
+    course_groups: set[str] = set()
+    faculty_ids: set[int] = set()
+    for r in rows:
+        course_groups.add(_course_group_id(r, variant_to_course, token_to_course, db))
+        if r.faculty_id:
+            faculty_ids.add(r.faculty_id)
+    return {
+        "semester": semester,
+        "total_courses": len(course_groups),
+        "faculty_involved": len(faculty_ids),
+        "ug_courses": sum(1 for r in rows if r.ug_pg == "UG"),
+        "pg_courses": sum(1 for r in rows if r.ug_pg == "PG"),
+        "ug_pg_courses": sum(1 for r in rows if r.ug_pg == "UG/PG"),
+        "core_courses": sum(1 for r in rows if r.core_elective == "Core"),
+        "elective_courses": sum(1 for r in rows if r.core_elective == "Elective"),
+        "first_year_courses": sum(1 for r in rows if r.is_first_year),
+    }
+
+
+def course_history(db: Session, course_catalog_id: int) -> dict | None:
+    entry = db.get(CourseCatalogEntry, course_catalog_id)
+    if not entry:
+        return None
+
+    variant_to_course, token_to_course = _build_catalog_lookup(db)
+    all_rows = list(
+        db.scalars(
+            select(CourseAllocation).where(CourseAllocation.is_faculty_placeholder.is_(False))
+        ).all()
+    )
+    rows = [
+        r
+        for r in all_rows
+        if _resolve_catalog_for_allocation(r, variant_to_course, token_to_course, db)
+        and _resolve_catalog_for_allocation(r, variant_to_course, token_to_course, db).id == entry.id
+    ]
+    rows.sort(key=lambda r: (semester_sort_key(r.semester), r.faculty_name or "", r.course_code))
+    # Full history table shows newest semester first; ties keep the secondary
+    # ordering above (stable sort preserves faculty_name / course_code ordering).
+    history_rows = sorted(rows, key=lambda r: semester_sort_key(r.semester), reverse=True)
+    history = [_allocation_dict(r) for r in history_rows]
+
+    faculty_counts: dict[str, dict] = {}
+    for r in rows:
+        key = str(r.faculty_id) if r.faculty_id else r.faculty_name
+        fentry = faculty_counts.setdefault(
+            key,
+            {
+                "faculty_id": r.faculty_id,
+                "faculty_name": r.faculty_name,
+                "times_taught": 0,
+                "semesters": [],
+                "most_recent_semester": r.semester,
+            },
+        )
+        fentry["times_taught"] += 1
+        fentry["semesters"].append(r.semester)
+        if semester_sort_key(r.semester) >= semester_sort_key(fentry["most_recent_semester"]):
+            fentry["most_recent_semester"] = r.semester
+
+    for fentry in faculty_counts.values():
+        fentry["semesters"] = sorted(fentry["semesters"], key=semester_sort_key)
+
+    by_semester: dict[str, int] = {}
+    ug_pg = {"UG": 0, "PG": 0, "UG/PG": 0}
+    core_elective = {"Core": 0, "Elective": 0, "Core/Elective": 0}
+    for r in rows:
+        by_semester[r.semester] = by_semester.get(r.semester, 0) + 1
+        if r.ug_pg in ug_pg:
+            ug_pg[r.ug_pg] += 1
+        if r.core_elective in core_elective:
+            core_elective[r.core_elective] += 1
+
+    return {
+        "course": {
+            "id": entry.id,
+            "course_code": entry.course_code,
+            "course_name": entry.course_name,
+        },
+        "history": history,
+        "faculty_counts": list(faculty_counts.values()),
+        "analytics": {
+            "instances_per_semester": [
+                {"semester": k, "count": v}
+                for k, v in sorted(by_semester.items(), key=lambda x: semester_sort_key(x[0]))
+            ],
             "ug_pg_split": ug_pg,
             "core_elective_split": core_elective,
         },

@@ -10,6 +10,10 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE:-ece_dept_portal}
       MYSQL_USER: ${MYSQL_USER:-portal_user}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-change_portal_password}
+    ports:
+      # Bind to localhost only so the DB isn't reachable beyond this machine.
+      # Host port 3307 avoids clashing with a native MySQL on 3306.
+      - "127.0.0.1:3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:

@@ -33,9 +33,16 @@ def parse_semester_tag(tag: str) -> tuple[str, int] | None:
 
 
 def semester_sort_key(tag: str) -> tuple[int, int]:
+    """True chronological order key.
+
+    Within a calendar year the terms run Winter (Jan–May) → Summer (May–Jul)
+    → Monsoon (Aug–Dec), so e.g. Winter 2023 precedes Monsoon 2023. This also
+    yields academic-year grouping: Monsoon 2022 → Winter 2023, then
+    Monsoon 2023 → Winter 2024, and so on.
+    """
     parsed = parse_semester_tag(tag)
     if not parsed:
         return (0, 0)
     term, year = parsed
-    order = {"Monsoon": 1, "Winter": 2, "Summer": 3}
+    order = {"Winter": 1, "Summer": 2, "Monsoon": 3}
     return (year, order.get(term, 0))

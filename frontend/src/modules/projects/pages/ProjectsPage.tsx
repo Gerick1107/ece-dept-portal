@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../../auth/AuthContext";
 import {
   acceptSdgs,
+  bulkAcceptSdgs,
   createProject,
   deleteProject,
   downloadImportTemplate,
@@ -13,9 +14,11 @@ import {
   importProjects,
   listProjects,
   listSdgCatalog,
+  previewBulkAcceptSdgs,
   purgeAllProjects,
   rejectSdgs,
   updateProject,
+  type BulkSdgPreview,
 } from "../services/projectsApi";
 import type { ImportSummary, Project, ProjectFilterOptions, SdgCatalogItem } from "../types/projects";
 
@@ -128,6 +131,12 @@ export default function ProjectsPage() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Project | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showBulkSdgModal, setShowBulkSdgModal] = useState(false);
+  const [bulkGuideId, setBulkGuideId] = useState("");
+  const [bulkFromSemester, setBulkFromSemester] = useState("");
+  const [bulkToSemester, setBulkToSemester] = useState("");
+  const [bulkPreview, setBulkPreview] = useState<BulkSdgPreview | null>(null);
+  const [bulkPreviewBusy, setBulkPreviewBusy] = useState(false);
   const [importSummary, setImportSummary] = useState<ImportSummary | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -363,6 +372,19 @@ export default function ProjectsPage() {
           >
             Download template
           </button>
+          {canReviewSdgs && (
+            <button
+              type="button"
+              onClick={() => {
+                setError("");
+                setBulkPreview(null);
+                setShowBulkSdgModal(true);
+              }}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50"
+            >
+              Bulk accept SDGs
+            </button>
+          )}
           {canImport && (
             <button
               type="button"
@@ -893,6 +915,163 @@ export default function ProjectsPage() {
                 </button>
               )}
               <button type="button" className="text-sm ml-auto" onClick={() => setReviewProject(null)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showBulkSdgModal && filterOptions && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-lg max-w-lg w-full p-6 space-y-4">
+            <h3 className="font-semibold">Bulk accept SDGs</h3>
+            <p className="text-sm text-slate-600">
+              Accept auto-suggested SDGs (≥50% confidence) for all pending-review projects where the selected
+              faculty member is the <strong>primary guide</strong> and at least one semester falls in the range.
+            </p>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-slate-500">Guide (primary only)</label>
+                <select
+                  className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
+                  value={bulkGuideId}
+                  onChange={(e) => {
+                    setBulkGuideId(e.target.value);
+                    setBulkPreview(null);
+                  }}
+                >
+                  <option value="">— Select guide —</option>
+                  {filterOptions.guides.map((g) => (
+                    <option key={g.id} value={String(g.id)}>
+                      {g.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-slate-500">From semester</label>
+                  <select
+                    className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
+                    value={bulkFromSemester}
+                    onChange={(e) => {
+                      setBulkFromSemester(e.target.value);
+                      setBulkPreview(null);
+                    }}
+                  >
+                    <option value="">—</option>
+                    {filterOptions.semesters.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500">To semester</label>
+                  <select
+                    className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
+                    value={bulkToSemester}
+                    onChange={(e) => {
+                      setBulkToSemester(e.target.value);
+                      setBulkPreview(null);
+                    }}
+                  >
+                    <option value="">—</option>
+                    {filterOptions.semesters.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              disabled={!bulkGuideId || !bulkFromSemester || !bulkToSemester || bulkPreviewBusy}
+              className="text-sm border border-slate-300 rounded-lg px-3 py-2 hover:bg-slate-50 disabled:opacity-50"
+              onClick={async () => {
+                setBulkPreviewBusy(true);
+                setError("");
+                try {
+                  const preview = await previewBulkAcceptSdgs({
+                    faculty_id: Number(bulkGuideId),
+                    from_semester: bulkFromSemester,
+                    to_semester: bulkToSemester,
+                  });
+                  setBulkPreview(preview);
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : "Preview failed");
+                } finally {
+                  setBulkPreviewBusy(false);
+                }
+              }}
+            >
+              {bulkPreviewBusy ? "Loading preview…" : "Preview matching projects"}
+            </button>
+            {bulkPreview && (
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm space-y-2 max-h-48 overflow-y-auto">
+                <p>
+                  <strong>{bulkPreview.count}</strong> project{bulkPreview.count === 1 ? "" : "s"} with pending SDGs
+                  will be accepted.
+                </p>
+                {bulkPreview.projects.length > 0 && (
+                  <ul className="text-xs text-slate-600 space-y-1">
+                    {bulkPreview.projects.map((p) => (
+                      <li key={p.id}>
+                        {p.project_title} ({p.semesters.join(", ")}) — SDGs {p.sdg_numbers.join(", ")}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={!bulkPreview || bulkPreview.count === 0 || busy}
+                className="text-sm bg-teal-700 text-white px-3 py-1.5 rounded-lg disabled:opacity-50"
+                onClick={async () => {
+                  if (
+                    !window.confirm(
+                      `Accept SDGs for ${bulkPreview?.count ?? 0} project(s)? Already-reviewed projects are skipped.`
+                    )
+                  ) {
+                    return;
+                  }
+                  setBusy(true);
+                  setError("");
+                  try {
+                    const result = await bulkAcceptSdgs({
+                      faculty_id: Number(bulkGuideId),
+                      from_semester: bulkFromSemester,
+                      to_semester: bulkToSemester,
+                    });
+                    setShowBulkSdgModal(false);
+                    setBulkPreview(null);
+                    setMessage(
+                      `Bulk accepted SDGs for ${result.accepted_count} project(s) on ${new Date(result.accepted_at).toLocaleString()}.`
+                    );
+                    await load();
+                  } catch (e) {
+                    setError(e instanceof Error ? e.message : "Bulk accept failed");
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                Confirm bulk accept
+              </button>
+              <button
+                type="button"
+                className="text-sm ml-auto"
+                onClick={() => {
+                  setShowBulkSdgModal(false);
+                  setBulkPreview(null);
+                }}
+              >
                 Close
               </button>
             </div>

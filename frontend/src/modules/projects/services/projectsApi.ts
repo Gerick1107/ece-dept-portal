@@ -98,6 +98,32 @@ export function editSdgs(projectId: number, sdgNumbers: number[]) {
   return apiPostJson<Project>(`/projects/${projectId}/edit-sdgs`, { sdg_numbers: sdgNumbers });
 }
 
+export type BulkSdgPreview = {
+  faculty_id: number;
+  from_semester: string;
+  to_semester: string;
+  count: number;
+  projects: Array<{
+    id: number;
+    project_title: string;
+    semesters: string[];
+    sdg_numbers: number[];
+  }>;
+};
+
+export function previewBulkAcceptSdgs(body: { faculty_id: number; from_semester: string; to_semester: string }) {
+  return apiPostJson<BulkSdgPreview>("/projects/bulk-accept-sdgs/preview", body);
+}
+
+export function bulkAcceptSdgs(body: { faculty_id: number; from_semester: string; to_semester: string }) {
+  return apiPostJson<{
+    accepted_count: number;
+    accepted_project_ids: number[];
+    accepted_at: string;
+    accepted_by: string | null;
+  }>("/projects/bulk-accept-sdgs", body);
+}
+
 export async function downloadProjectExport(filters: ProjectFilters, format: "csv" | "xlsx" | "pdf") {
   const p = new URLSearchParams({ format, ...Object.fromEntries(
     Object.entries(filters).filter(([, v]) => v !== undefined && v !== null && v !== "")

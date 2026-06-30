@@ -16,7 +16,9 @@ import ProjectsPage from "./modules/projects/pages/ProjectsPage";
 import AwardsPage from "./modules/awards/pages/AwardsPage";
 import FacultyContributionsPage from "./modules/contributions/pages/FacultyContributionsPage";
 import CourseAllocationPage from "./modules/course_allocation/pages/CourseAllocationPage";
+import CourseAllocationDetailPage from "./modules/course_allocation/pages/CourseAllocationDetailPage";
 import CourseCatalogPage from "./modules/course_allocation/pages/CourseCatalogPage";
+import CourseWiseAllocationPage from "./modules/course_allocation/pages/CourseWiseAllocationPage";
 import FacultyAllocationDetailPage from "./modules/course_allocation/pages/FacultyAllocationDetailPage";
 import AllMeetingsPage from "./modules/documents/pages/AllMeetingsPage";
 import SenateMinutesPage from "./modules/documents/pages/SenateMinutesPage";
@@ -155,6 +157,8 @@ export default function App() {
         <Route path="/awards" element={<AwardsPage />} />
         <Route path="/contributions" element={<FacultyContributionsPage />} />
         <Route path="/course-allocation" element={<CourseAllocationPage />} />
+        <Route path="/course-allocation/courses" element={<CourseWiseAllocationPage />} />
+        <Route path="/course-allocation/course/:courseCatalogId" element={<CourseAllocationDetailPage />} />
         <Route
           path="/course-allocation/catalog"
           element={
