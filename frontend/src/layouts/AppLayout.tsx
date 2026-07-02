@@ -31,6 +31,15 @@ const navItems: NavItem[] = [
   { kind: "link", to: "/projects", label: "BTP / IP Projects", exact: true },
   {
     kind: "group",
+    label: "Budget",
+    links: [
+      { to: "/budget/accumulated-income", label: "Accumulated Income", exact: true },
+      { to: "/budget/expenditure-budget", label: "Expenditure Budget", exact: true },
+      { to: "/budget/inventory", label: "Inventory", exact: true },
+    ],
+  },
+  {
+    kind: "group",
     label: "Course Allocation",
     links: [
       { to: "/course-allocation", label: "Faculty-Wise Allocations", exact: true },

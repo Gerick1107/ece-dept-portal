@@ -20,6 +20,7 @@ export default function DashboardPage() {
       { name: "CO-PO Attainment", path: "/modules/copo", status: "Active" },
       { name: "Publications", path: "/modules/publications", status: "Active" },
       { name: "BTP / IP", path: "/projects", status: "Active" },
+      { name: "Budget", path: "/modules/budget", status: "Active" },
       { name: "Course Allocation", path: "/course-allocation", status: "Active" },
       { name: "Minutes", path: "/modules/minutes", status: "Active" },
       { name: "Analytics", path: "/modules/analytics", status: "Active" },

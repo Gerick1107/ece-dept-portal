@@ -28,6 +28,9 @@ import UgcMeetingsPage from "./modules/documents/pages/UgcMeetingsPage";
 import PgcMeetingsPage from "./modules/documents/pages/PgcMeetingsPage";
 import EceFacultyMeetsPage from "./modules/documents/pages/EceFacultyMeetsPage";
 import AnalyticsPage from "./modules/analytics/pages/AnalyticsPage";
+import AccumulatedIncomePage from "./modules/budget/pages/AccumulatedIncomePage";
+import ExpenditureBudgetPage from "./modules/budget/pages/ExpenditureBudgetPage";
+import InventoryPage from "./modules/budget/pages/InventoryPage";
 import LlmInsightsPage from "./modules/llm/pages/LlmInsightsPage";
 import NotificationsPage from "./modules/notifications/pages/NotificationsPage";
 import AdminNotificationsPage from "./modules/notifications/pages/AdminNotificationsPage";
@@ -109,6 +112,20 @@ export default function App() {
           }
         />
         <Route
+          path="/modules/budget"
+          element={
+            <ModuleHubPage
+              title="Budget"
+              description="Department budget tracking for accumulated income, expenditure, and inventory."
+              links={[
+                { label: "Accumulated Income", path: "/budget/accumulated-income", description: "Track approved budget heads and utilization" },
+                { label: "Expenditure Budget", path: "/budget/expenditure-budget", description: "Review expenditure heads, usage, and invoices" },
+                { label: "Inventory", path: "/budget/inventory", description: "Track purchased items and invoice references" },
+              ]}
+            />
+          }
+        />
+        <Route
           path="/modules/minutes"
           element={
             <ModuleHubPage
@@ -154,6 +171,9 @@ export default function App() {
         <Route path="/publications/exports" element={<PublicationExportsPage />} />
         <Route path="/publications/admin" element={<PublicationsAdminPage />} />
         <Route path="/projects" element={<ProjectsPage />} />
+        <Route path="/budget/accumulated-income" element={<AccumulatedIncomePage />} />
+        <Route path="/budget/expenditure-budget" element={<ExpenditureBudgetPage />} />
+        <Route path="/budget/inventory" element={<InventoryPage />} />
         <Route path="/awards" element={<AwardsPage />} />
         <Route path="/contributions" element={<FacultyContributionsPage />} />
         <Route path="/course-allocation" element={<CourseAllocationPage />} />
