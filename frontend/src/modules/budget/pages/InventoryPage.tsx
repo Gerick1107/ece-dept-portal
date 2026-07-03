@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../auth/AuthContext";
+import { createBudgetRecord, deleteBudgetRecord, downloadBudgetInvoice, listBudgetRecords, updateBudgetRecord, uploadBudgetInvoice } from "../budgetApi";
 
 type InventoryItem = {
   id: number;
@@ -11,6 +12,7 @@ type InventoryItem = {
   purchaseDate: string;
   amount: number;
   invoice?: string;
+  invoiceUrl?: string;
 };
 
 type InventoryForm = {
@@ -21,43 +23,8 @@ type InventoryForm = {
   purchaseDate: string;
   amount: string;
   invoiceName: string;
+  invoiceUrl: string;
 };
-
-const seedItems: InventoryItem[] = [
-  {
-    id: 1,
-    item: "Digital Storage Oscilloscope",
-    category: "Lab Equipment",
-    quantity: 6,
-    quantityGiven: 0,
-    location: "ECE Lab 204",
-    purchaseDate: "2026-04-18",
-    amount: 420000,
-    invoice: "tek-scope-invoice.pdf",
-  },
-  {
-    id: 2,
-    item: "Soldering Station",
-    category: "Tools",
-    quantity: 12,
-    quantityGiven: 0,
-    location: "ECE Workshop",
-    purchaseDate: "2026-05-07",
-    amount: 48000,
-    invoice: "soldering-stations.pdf",
-  },
-  {
-    id: 3,
-    item: "FPGA Trainer Kit",
-    category: "Teaching Aid",
-    quantity: 10,
-    quantityGiven: 0,
-    location: "Digital Systems Lab",
-    purchaseDate: "2026-06-04",
-    amount: 310000,
-    invoice: "fpga-kits.pdf",
-  },
-];
 
 const categories = ["Lab Equipment", "Tools", "Consumables", "Teaching Aid", "Furniture"];
 const initialForm: InventoryForm = {
@@ -68,6 +35,7 @@ const initialForm: InventoryForm = {
   purchaseDate: "",
   amount: "",
   invoiceName: "",
+  invoiceUrl: "",
 };
 
 const currency = new Intl.NumberFormat("en-IN", {
@@ -119,14 +87,34 @@ function exportCsv(rows: InventoryItem[]) {
 export default function InventoryPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin" || user?.role === "hod";
-  const [items, setItems] = useState<InventoryItem[]>(seedItems);
+  const [items, setItems] = useState<InventoryItem[]>([]);
   const [form, setForm] = useState<InventoryForm>(initialForm);
+  const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [financialYearFilter, setFinancialYearFilter] = useState(() => getFinancialYear(new Date().toISOString()));
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    listBudgetRecords<InventoryItem>("inventory")
+      .then((records) => {
+        if (!cancelled) setItems(records);
+      })
+      .catch((loadError) => {
+        if (!cancelled) setError(loadError instanceof Error ? loadError.message : "Could not load inventory records");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const categoryOptions = useMemo(
     () => [...new Set([...categories, ...items.map((item) => item.category).filter(Boolean)])],
@@ -148,7 +136,7 @@ export default function InventoryPage() {
   const inventoryValue = filteredItems.reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const remainingQuantity = Math.max(Number(form.totalQuantity || 0) - Number(form.quantityGiven || 0), 0);
 
-  function saveInventoryItem(event: React.FormEvent<HTMLFormElement>) {
+  async function saveInventoryItem(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     try {
       setSuccess("");
@@ -159,6 +147,7 @@ export default function InventoryPage() {
       if (Number(form.amount) <= 0) throw new Error("Purchase amount must be greater than zero");
 
       const category = form.category === "Other" ? form.customCategory.trim() : form.category;
+      const uploadedInvoice = invoiceFile ? await uploadBudgetInvoice(invoiceFile) : null;
       const item: InventoryItem = {
         id: editingId ?? Math.max(0, ...items.map((record) => record.id)) + 1,
         item: "Inventory Purchase",
@@ -168,11 +157,19 @@ export default function InventoryPage() {
         location: "Not specified",
         purchaseDate: form.purchaseDate,
         amount: Number(form.amount),
-        invoice: form.invoiceName.trim() || "Not Attached",
+        invoice: uploadedInvoice?.invoice || form.invoiceName.trim() || "Not Attached",
+        invoiceUrl: uploadedInvoice?.invoiceUrl || form.invoiceUrl,
       };
-      setItems((current) => (editingId ? current.map((record) => (record.id === editingId ? item : record)) : [item, ...current]));
+      if (editingId) {
+        const saved = await updateBudgetRecord<InventoryItem>("inventory", editingId, item);
+        setItems((current) => current.map((record) => (record.id === editingId ? saved : record)));
+      } else {
+        const saved = await createBudgetRecord<InventoryItem>("inventory", item);
+        setItems((current) => [saved, ...current]);
+      }
       setEditingId(null);
       setForm(initialForm);
+      setInvoiceFile(null);
       setSuccess("Saved Successfully");
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Save failed");
@@ -191,12 +188,20 @@ export default function InventoryPage() {
       purchaseDate: item.purchaseDate,
       amount: String(item.amount),
       invoiceName: item.invoice && item.invoice !== "Not Attached" ? item.invoice : "",
+      invoiceUrl: item.invoiceUrl || "",
     });
+    setInvoiceFile(null);
   }
 
-  function deleteItem(item: InventoryItem) {
+  async function deleteItem(item: InventoryItem) {
     if (!window.confirm("Delete this inventory record?")) return;
-    setItems((current) => current.filter((record) => record.id !== item.id));
+    try {
+      setError("");
+      await deleteBudgetRecord("inventory", item.id);
+      setItems((current) => current.filter((record) => record.id !== item.id));
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "Delete failed");
+    }
   }
 
   return (
@@ -217,11 +222,13 @@ export default function InventoryPage() {
         </div>
       </section>
 
+      {loading && <p className="text-sm font-medium text-slate-600">Loading inventory records...</p>}
+
       {isAdmin && (
         <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
           <div className="mb-5">
             <h3 className="text-lg font-semibold text-slate-950">{editingId ? "Edit Inventory Item" : "Add Inventory Item"}</h3>
-            <p className="mt-1 text-sm text-slate-600">Invoice upload is optional in the original portal; this first pass stores the invoice name.</p>
+            <p className="mt-1 text-sm text-slate-600">Upload a PDF invoice when proof is available.</p>
           </div>
           <form className="grid gap-4 md:grid-cols-2" onSubmit={saveInventoryItem}>
             <label className="grid gap-1 text-sm font-medium text-slate-700">
@@ -259,15 +266,35 @@ export default function InventoryPage() {
               <input className="rounded-lg border border-slate-300 px-3 py-2" required min="1" type="number" value={form.amount} onChange={(event) => setForm((current) => ({ ...current, amount: event.target.value }))} />
             </label>
             <label className="grid gap-1 text-sm font-medium text-slate-700">
-              Invoice / Document Name
-              <input className="rounded-lg border border-slate-300 px-3 py-2" value={form.invoiceName} onChange={(event) => setForm((current) => ({ ...current, invoiceName: event.target.value }))} />
+              Invoice PDF
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-teal-600">
+                  <svg aria-hidden="true" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path d="M12 16V4m0 0 4 4m-4-4-4 4" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Choose file
+                  <input
+                    className="sr-only"
+                    accept="application/pdf"
+                    type="file"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] || null;
+                      setInvoiceFile(file);
+                      if (file) setForm((current) => ({ ...current, invoiceName: file.name }));
+                    }}
+                  />
+                </label>
+                <span className="text-sm font-semibold text-slate-400">{invoiceFile?.name || "No file selected"}</span>
+              </div>
+              {form.invoiceName && <span className="text-xs text-slate-500">Current: {form.invoiceName}</span>}
             </label>
             <div className="flex flex-wrap gap-2 md:col-span-2">
               <button className="rounded-lg bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-600" type="submit">
                 {editingId ? "Update Inventory Item" : "Save Inventory Item"}
               </button>
               {editingId && (
-                <button className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium" type="button" onClick={() => { setEditingId(null); setForm(initialForm); }}>
+                <button className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium" type="button" onClick={() => { setEditingId(null); setForm(initialForm); setInvoiceFile(null); }}>
                   Cancel Edit
                 </button>
               )}
@@ -331,7 +358,15 @@ export default function InventoryPage() {
                   <td className="border-b border-slate-100 px-4 py-3">{Number(item.quantityGiven || 0)}</td>
                   <td className="border-b border-slate-100 px-4 py-3">{Math.max(item.quantity - Number(item.quantityGiven || 0), 0)}</td>
                   <td className="border-b border-slate-100 px-4 py-3">{currency.format(item.amount)}</td>
-                  <td className="border-b border-slate-100 px-4 py-3">{item.invoice || "Not Attached"}</td>
+                  <td className="border-b border-slate-100 px-4 py-3">
+                    {item.invoiceUrl ? (
+                      <button className="font-semibold text-teal-700 hover:underline" type="button" onClick={() => downloadBudgetInvoice(item.invoiceUrl || "", item.invoice || "invoice.pdf")}>
+                        {item.invoice || "View Invoice"}
+                      </button>
+                    ) : (
+                      item.invoice || "Not Attached"
+                    )}
+                  </td>
                   {isAdmin && (
                     <td className="border-b border-slate-100 px-4 py-3">
                       <div className="flex gap-2">

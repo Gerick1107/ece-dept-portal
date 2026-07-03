@@ -14,6 +14,7 @@ from app.copo.download_tokens import cleanup_stale_tokens
 from app.analytics.router import router as analytics_router
 from app.notifications.routes.router import router as notifications_router
 from app.awards.routes.router import router as awards_router
+from app.budget.routes.router import router as budget_router
 from app.documents.routes.router import router as documents_router
 from app.contributions.routes.router import router as contributions_router
 from app.course_allocation.routes.router import router as course_allocation_router
@@ -109,6 +110,7 @@ api.include_router(auth_router)
 api.include_router(copo_router)
 api.include_router(courses_router)
 api.include_router(awards_router)
+api.include_router(budget_router)
 api.include_router(contributions_router)
 api.include_router(course_allocation_router)
 api.include_router(documents_router)

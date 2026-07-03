@@ -1,5 +1,6 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../../auth/AuthContext";
+import { createBudgetRecord, deleteBudgetRecord, downloadBudgetInvoice, listBudgetRecords, updateBudgetRecord, uploadBudgetInvoice } from "../budgetApi";
 
 type ExpenseRecord = {
   id: number;
@@ -12,6 +13,7 @@ type ExpenseRecord = {
   date: string;
   amount: number;
   invoice?: string;
+  invoiceUrl?: string;
   status: "Pending" | "Approved" | "Rejected";
 };
 
@@ -23,6 +25,7 @@ type ExpenseForm = {
   date: string;
   status: "Pending" | "Approved" | "Rejected";
   invoiceName: string;
+  invoiceUrl: string;
 };
 
 const expenditureBudgetHeads = [
@@ -36,95 +39,6 @@ const expenditureBudgetHeads = [
   "Department development budget",
 ];
 
-const seedRecords: ExpenseRecord[] = [
-  {
-    id: 1,
-    head: expenditureBudgetHeads[0],
-    budgetLakh: 1.5,
-    expensesDescription: "4504 / April 2026 / 8654 / May 2026 / 20444 / May 2026",
-    utilizedLakh: 0.34,
-    balanceLakh: 1.16,
-    vendor: "ECE Department",
-    date: "2026-04-01",
-    amount: 34000,
-    invoice: "Not attached",
-    status: "Approved",
-  },
-  {
-    id: 2,
-    head: expenditureBudgetHeads[1],
-    budgetLakh: 0.5,
-    vendor: "ECE Department",
-    date: "2026-04-01",
-    amount: 0,
-    invoice: "Not attached",
-    status: "Pending",
-  },
-  {
-    id: 3,
-    head: expenditureBudgetHeads[2],
-    budgetLakh: 0.68,
-    vendor: "ECE Department",
-    date: "2026-04-01",
-    amount: 0,
-    invoice: "Not attached",
-    status: "Pending",
-  },
-  {
-    id: 4,
-    head: expenditureBudgetHeads[3],
-    budgetLakh: 0.5,
-    vendor: "ECE Department",
-    date: "2026-04-01",
-    amount: 0,
-    invoice: "Not attached",
-    status: "Pending",
-  },
-  {
-    id: 5,
-    head: expenditureBudgetHeads[4],
-    budgetLakh: 0.5,
-    vendor: "ECE Department",
-    date: "2026-04-01",
-    amount: 0,
-    invoice: "Not attached",
-    status: "Pending",
-  },
-  {
-    id: 6,
-    head: expenditureBudgetHeads[5],
-    budgetLakh: 1,
-    vendor: "ECE Department",
-    date: "2026-04-01",
-    amount: 0,
-    invoice: "Not attached",
-    status: "Pending",
-  },
-  {
-    id: 7,
-    head: expenditureBudgetHeads[6],
-    budgetLakh: 0.5,
-    vendor: "ECE Department",
-    date: "2026-04-01",
-    amount: 0,
-    invoice: "Not attached",
-    status: "Pending",
-  },
-  {
-    id: 8,
-    head: expenditureBudgetHeads[7],
-    budgetLakh: 2.5,
-    expensesDescription: "130000 / April 2026 / 9359 / May 2026",
-    utilizedLakh: 1.4,
-    balanceLakh: 1.1,
-    vendor: "ECE Department",
-    date: "2026-04-01",
-    amount: 140000,
-    invoice: "Not attached",
-    status: "Approved",
-  },
-];
-
 const initialForm: ExpenseForm = {
   head: "",
   budgetLakh: "",
@@ -133,6 +47,7 @@ const initialForm: ExpenseForm = {
   date: "",
   status: "Pending",
   invoiceName: "",
+  invoiceUrl: "",
 };
 
 const currency = new Intl.NumberFormat("en-IN", {
@@ -182,9 +97,11 @@ function exportCsv(fileName: string, rows: ExpenseRecord[]) {
 export default function ExpenditureBudgetPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin" || user?.role === "hod";
-  const [records, setRecords] = useState<ExpenseRecord[]>(seedRecords);
+  const [records, setRecords] = useState<ExpenseRecord[]>([]);
   const [form, setForm] = useState<ExpenseForm>(initialForm);
+  const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [headFilter, setHeadFilter] = useState("all");
   const [financialYearFilter, setFinancialYearFilter] = useState(() => getFinancialYear(new Date().toISOString()));
@@ -192,6 +109,24 @@ export default function ExpenditureBudgetPage() {
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
   const formRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    listBudgetRecords<ExpenseRecord>("expenses")
+      .then((items) => {
+        if (!cancelled) setRecords(items);
+      })
+      .catch((loadError) => {
+        if (!cancelled) setError(loadError instanceof Error ? loadError.message : "Could not load expenditure records");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const budgetHeadOptions = useMemo(
     () => [...new Set([...expenditureBudgetHeads, ...records.map((record) => record.head).filter(Boolean)])],
@@ -240,7 +175,7 @@ export default function ExpenditureBudgetPage() {
     .reduce((sum, record) => sum + Number(record.amount || 0), 0);
   const calculatedRemaining = Math.max(Number(form.budgetLakh || 0) * 100000 - otherUtilizedForHead - Number(form.utilizedAmount || 0), 0);
 
-  function saveExpense(event: React.FormEvent<HTMLFormElement>) {
+  async function saveExpense(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     try {
       setSuccess("");
@@ -250,6 +185,7 @@ export default function ExpenditureBudgetPage() {
       if (calculatedRemaining < 0) throw new Error("Utilized amount cannot exceed the remaining budget");
 
       const amount = Number(form.utilizedAmount || 0);
+      const uploadedInvoice = invoiceFile ? await uploadBudgetInvoice(invoiceFile) : null;
       const record: ExpenseRecord = {
         id: editingId ?? Math.max(0, ...records.map((item) => item.id)) + 1,
         head: form.head,
@@ -259,12 +195,20 @@ export default function ExpenditureBudgetPage() {
         vendor: form.vendor.trim(),
         date: form.date || "2026-04-01",
         amount,
-        invoice: form.invoiceName.trim() || "Not Attached",
+        invoice: uploadedInvoice?.invoice || form.invoiceName.trim() || "Not Attached",
+        invoiceUrl: uploadedInvoice?.invoiceUrl || form.invoiceUrl,
         status: form.status,
       };
-      setRecords((current) => (editingId ? current.map((item) => (item.id === editingId ? record : item)) : [record, ...current]));
+      if (editingId) {
+        const saved = await updateBudgetRecord<ExpenseRecord>("expenses", editingId, record);
+        setRecords((current) => current.map((item) => (item.id === editingId ? saved : item)));
+      } else {
+        const saved = await createBudgetRecord<ExpenseRecord>("expenses", record);
+        setRecords((current) => [saved, ...current]);
+      }
       setEditingId(null);
       setForm(initialForm);
+      setInvoiceFile(null);
       setSuccess("Saved Successfully");
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Save failed");
@@ -283,13 +227,21 @@ export default function ExpenditureBudgetPage() {
       date: record.date || "",
       status: record.status,
       invoiceName: record.invoice && record.invoice !== "Not attached" ? record.invoice : "",
+      invoiceUrl: record.invoiceUrl || "",
     });
+    setInvoiceFile(null);
     requestAnimationFrame(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   }
 
-  function deleteRecord(record: ExpenseRecord) {
+  async function deleteRecord(record: ExpenseRecord) {
     if (!window.confirm(`Delete this ${currency.format(record.amount)} expenditure entry?`)) return;
-    setRecords((current) => current.filter((item) => item.id !== record.id));
+    try {
+      setError("");
+      await deleteBudgetRecord("expenses", record.id);
+      setRecords((current) => current.filter((item) => item.id !== record.id));
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "Delete failed");
+    }
   }
 
   function toggleHead(head: string) {
@@ -319,6 +271,8 @@ export default function ExpenditureBudgetPage() {
           <p className="mt-2 text-sm text-slate-600">Budget {currency.format(totalBudget)} | Utilized {currency.format(totalUtilized)}</p>
         </div>
       </section>
+
+      {loading && <p className="text-sm font-medium text-slate-600">Loading expenditure records...</p>}
 
       {isAdmin && (
         <section ref={formRef} className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
@@ -363,15 +317,35 @@ export default function ExpenditureBudgetPage() {
               </select>
             </label>
             <label className="grid gap-1 text-sm font-medium text-slate-700">
-              Invoice / Document Name
-              <input className="rounded-lg border border-slate-300 px-3 py-2" value={form.invoiceName} onChange={(event) => setForm((current) => ({ ...current, invoiceName: event.target.value }))} />
+              Invoice PDF
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-teal-600">
+                  <svg aria-hidden="true" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path d="M12 16V4m0 0 4 4m-4-4-4 4" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Choose file
+                  <input
+                    className="sr-only"
+                    accept="application/pdf"
+                    type="file"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] || null;
+                      setInvoiceFile(file);
+                      if (file) setForm((current) => ({ ...current, invoiceName: file.name }));
+                    }}
+                  />
+                </label>
+                <span className="text-sm font-semibold text-slate-400">{invoiceFile?.name || "No file selected"}</span>
+              </div>
+              {form.invoiceName && <span className="text-xs text-slate-500">Current: {form.invoiceName}</span>}
             </label>
             <div className="flex flex-wrap gap-2 md:col-span-2">
               <button className="rounded-lg bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-600" type="submit">
                 {editingId ? "Update Expenditure Entry" : "Save Expenditure Entry"}
               </button>
               {editingId && (
-                <button className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium" type="button" onClick={() => { setEditingId(null); setForm(initialForm); }}>
+                <button className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium" type="button" onClick={() => { setEditingId(null); setForm(initialForm); setInvoiceFile(null); }}>
                   Cancel Edit
                 </button>
               )}
@@ -392,21 +366,21 @@ export default function ExpenditureBudgetPage() {
             Export CSV
           </button>
         </div>
-        <div className="mb-5 grid gap-3 md:grid-cols-3">
-          <label className="grid gap-1 text-sm font-medium text-slate-700">
+        <div className="mb-5 grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
+          <label className="grid min-w-0 gap-1 text-sm font-medium text-slate-700">
             Search
-            <input className="rounded-lg border border-slate-300 px-3 py-2" value={search} onChange={(event) => setSearch(event.target.value)} />
+            <input className="min-w-0 rounded-lg border border-slate-300 px-3 py-2" value={search} onChange={(event) => setSearch(event.target.value)} />
           </label>
-          <label className="grid gap-1 text-sm font-medium text-slate-700">
+          <label className="grid min-w-0 gap-1 text-sm font-medium text-slate-700">
             Budget Head
-            <select className="rounded-lg border border-slate-300 px-3 py-2" value={headFilter} onChange={(event) => setHeadFilter(event.target.value)}>
+            <select className="min-w-0 max-w-full truncate rounded-lg border border-slate-300 px-3 py-2" value={headFilter} onChange={(event) => setHeadFilter(event.target.value)}>
               <option value="all">All budget heads</option>
               {budgetHeadOptions.map((head) => <option key={head} value={head}>{head}</option>)}
             </select>
           </label>
-          <label className="grid gap-1 text-sm font-medium text-slate-700">
+          <label className="grid min-w-0 gap-1 text-sm font-medium text-slate-700">
             Financial Year
-            <select className="rounded-lg border border-slate-300 px-3 py-2" value={financialYearFilter} onChange={(event) => setFinancialYearFilter(event.target.value)}>
+            <select className="min-w-0 rounded-lg border border-slate-300 px-3 py-2" value={financialYearFilter} onChange={(event) => setFinancialYearFilter(event.target.value)}>
               <option value="all">All financial years</option>
               {financialYearOptions.map((year) => <option key={year}>{year}</option>)}
             </select>
@@ -432,7 +406,18 @@ export default function ExpenditureBudgetPage() {
                     <td className="border-b border-slate-100 px-4 py-3">{index + 1}</td>
                     <td className="border-b border-slate-100 px-4 py-3">
                       <button className="flex w-full items-start gap-2 text-left font-semibold text-teal-900" type="button" onClick={() => toggleHead(group.head)}>
-                        <span>{isExpanded ? "v" : ">"}</span>
+                        <svg
+                          aria-hidden="true"
+                          className={`mt-1 h-3.5 w-3.5 shrink-0 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                          fill="none"
+                          stroke="currentColor"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2.5"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="m9 18 6-6-6-6" />
+                        </svg>
                         <span>{group.head}</span>
                       </button>
                       {isExpanded && (
@@ -455,7 +440,15 @@ export default function ExpenditureBudgetPage() {
                                   <td className="border-b px-3 py-2">{record.vendor}</td>
                                   <td className="border-b px-3 py-2">{currency.format(record.amount)}</td>
                                   <td className="border-b px-3 py-2">{record.status}</td>
-                                  <td className="border-b px-3 py-2">{record.invoice || "Not Attached"}</td>
+                                  <td className="border-b px-3 py-2">
+                                    {record.invoiceUrl ? (
+                                      <button className="font-semibold text-teal-700 hover:underline" type="button" onClick={() => downloadBudgetInvoice(record.invoiceUrl || "", record.invoice || "invoice.pdf")}>
+                                        {record.invoice || "View Invoice"}
+                                      </button>
+                                    ) : (
+                                      record.invoice || "Not Attached"
+                                    )}
+                                  </td>
                                   {isAdmin && (
                                     <td className="border-b px-3 py-2">
                                       <div className="flex gap-2">

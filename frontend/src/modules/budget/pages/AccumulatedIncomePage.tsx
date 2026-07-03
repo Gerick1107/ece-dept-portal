@@ -1,5 +1,6 @@
-import { Fragment, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../../auth/AuthContext";
+import { createBudgetRecord, deleteBudgetRecord, downloadBudgetInvoice, listBudgetRecords, updateBudgetRecord, uploadBudgetInvoice } from "../budgetApi";
 
 type IncomeRecord = {
   id: number;
@@ -24,131 +25,8 @@ type FormState = {
   description: string;
   purchasesFor: string;
   invoiceName: string;
+  invoiceUrl: string;
 };
-
-const seedRecords: IncomeRecord[] = [
-  {
-    id: 1,
-    budgetHead: "End-to-End Testbed on Beyond 5G",
-    amountText: "Rs. 50 Lakhs",
-    amount: 5000000,
-    description: "Hardware for Beyond 5G, including NTN, SDRs, UAVs, and underwater communication setups.",
-    utilisedAmountLakh: 5.07933,
-    purchasesFor: "",
-    invoice: "Not attached",
-    invoiceUrl: "",
-  },
-  {
-    id: 2,
-    budgetHead: "Dedicated Servers for ECE Department",
-    amountText: "Rs. 5 Crores",
-    amount: 50000000,
-    description: "DGX-like and CPU servers for high computational power needs in research.",
-    utilisedAmountLakh: 0.59205,
-    purchasesFor: "3.8 Cr, (Dr. Saket)",
-    invoice: "Not attached",
-    invoiceUrl: "",
-  },
-  {
-    id: 3,
-    budgetHead: "Distinguished Guests",
-    amountText: "Rs. 10 Lakhs/year for 2 years (Total 20 lakhs)",
-    amount: 2000000,
-    description: "Engage international faculty for mentoring and collaborative grant writing.",
-    utilisedAmountLakh: 0,
-    purchasesFor: "",
-    invoice: "Not attached",
-    invoiceUrl: "",
-  },
-  {
-    id: 4,
-    budgetHead: "ECE Floor Transformation",
-    amountText: "Rs. 3 Lakhs",
-    amount: 300000,
-    description: "Enhance floor with lab pictures, screens, and video demos.",
-    utilisedAmountLakh: 0,
-    purchasesFor: "",
-    invoice: "Not attached",
-    invoiceUrl: "",
-  },
-  {
-    id: 5,
-    budgetHead: "Hosting Conferences",
-    amountText: "Rs. 2 Lakhs/year for 2 years (Total 4 lakhs)",
-    amount: 400000,
-    description: "Hosting academic conferences to improve research visibility.",
-    utilisedAmountLakh: 0,
-    purchasesFor: "",
-    invoice: "Not attached",
-    invoiceUrl: "",
-  },
-  {
-    id: 6,
-    budgetHead: "Scholarship for Top Performers",
-    amountText: "Rs. 12 Lakhs for 2 years",
-    amount: 1200000,
-    description: "Retain high-performing students through scholarships.",
-    utilisedAmountLakh: 1.51612,
-    purchasesFor: "",
-    invoice: "Not attached",
-    invoiceUrl: "",
-  },
-  {
-    id: 7,
-    budgetHead: "Inviting School Students",
-    amountText: "Rs. 2.5 Lakhs for 2 years",
-    amount: 250000,
-    description: "Training modules and challenges for school students to attract bright minds.",
-    utilisedAmountLakh: 0,
-    purchasesFor: "",
-    invoice: "Not attached",
-    invoiceUrl: "",
-  },
-  {
-    id: 8,
-    budgetHead: "Industry-Academia Ideathons",
-    amountText: "Rs. 15 Lakhs/year for 2 years (Total 30 lakhs)",
-    amount: 3000000,
-    description: "Ideathons to connect industry with academia and improve UG student perception.",
-    utilisedAmountLakh: 10.05,
-    purchasesFor: "Events of CiPD with ECE; 1.5 for Telecom Shakti",
-    invoice: "Not attached",
-    invoiceUrl: "",
-  },
-  {
-    id: 9,
-    budgetHead: "Digital Whiteboards for Faculty",
-    amountText: "Rs. 10 Lakhs",
-    amount: 1000000,
-    description: "Equip offices with digital whiteboards for enhanced discussions and screen-sharing, air-purifiers.",
-    utilisedAmountLakh: 3.9,
-    purchasesFor: "Panel & Camera",
-    invoice: "Not attached",
-    invoiceUrl: "",
-  },
-  {
-    id: 10,
-    budgetHead: "Embedded Systems Equipment",
-    amountText: "Rs. 29 Lakhs",
-    amount: 2900000,
-    description: "Advanced embedded system boards for teaching and research.",
-    utilisedAmountLakh: 1.28634,
-    purchasesFor: "",
-    invoice: "Not attached",
-    invoiceUrl: "",
-  },
-  {
-    id: 11,
-    budgetHead: "Nanofabrication Consumables",
-    amountText: "Rs. 15 Lakhs/year for 2 years (Total 30 lakhs)",
-    amount: 3000000,
-    description: "Contingency budget for consumables and imported items for VLSI labs.",
-    utilisedAmountLakh: 0,
-    purchasesFor: "",
-    invoice: "Not attached",
-    invoiceUrl: "",
-  },
-];
 
 const initialForm: FormState = {
   date: "",
@@ -158,6 +36,7 @@ const initialForm: FormState = {
   description: "",
   purchasesFor: "",
   invoiceName: "",
+  invoiceUrl: "",
 };
 
 const currency = new Intl.NumberFormat("en-IN", {
@@ -224,9 +103,11 @@ function exportCsv(fileName: string, rows: Record<string, unknown>[], columns: {
 export default function AccumulatedIncomePage() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin" || user?.role === "hod";
-  const [records, setRecords] = useState<IncomeRecord[]>(seedRecords);
+  const [records, setRecords] = useState<IncomeRecord[]>([]);
   const [form, setForm] = useState<FormState>(initialForm);
+  const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [headFilter, setHeadFilter] = useState("all");
   const [financialYearFilter, setFinancialYearFilter] = useState(() => getFinancialYear(new Date().toISOString()));
@@ -235,6 +116,24 @@ export default function AccumulatedIncomePage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const formSectionRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    listBudgetRecords<IncomeRecord>("income")
+      .then((items) => {
+        if (!cancelled) setRecords(items);
+      })
+      .catch((loadError) => {
+        if (!cancelled) setError(loadError instanceof Error ? loadError.message : "Could not load income records");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const budgetHeadOptions = useMemo(
     () => [...new Set(records.map((record) => record.budgetHead).filter(Boolean))],
@@ -357,13 +256,14 @@ export default function AccumulatedIncomePage() {
     }
   }
 
-  function saveIncomeRecord(event: React.FormEvent<HTMLFormElement>) {
+  async function saveIncomeRecord(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     try {
       setError("");
       setSuccess("");
       validateForm();
 
+      const uploadedInvoice = invoiceFile ? await uploadBudgetInvoice(invoiceFile) : null;
       const payload: IncomeRecord = {
         id: editingId ?? Math.max(0, ...records.map((record) => record.id)) + 1,
         date: form.date,
@@ -374,18 +274,21 @@ export default function AccumulatedIncomePage() {
         description: form.description.trim(),
         utilisedAmountLakh: Number(form.utilizedAmount || 0) / 100000,
         purchasesFor: form.purchasesFor.trim(),
-        invoice: form.invoiceName.trim() || "Not Attached",
-        invoiceUrl: "",
+        invoice: uploadedInvoice?.invoice || form.invoiceName.trim() || "Not Attached",
+        invoiceUrl: uploadedInvoice?.invoiceUrl || form.invoiceUrl,
       };
 
       if (editingId) {
-        setRecords((current) => current.map((record) => (record.id === editingId ? payload : record)));
+        const saved = await updateBudgetRecord<IncomeRecord>("income", editingId, payload);
+        setRecords((current) => current.map((record) => (record.id === editingId ? saved : record)));
       } else {
-        setRecords((current) => [payload, ...current]);
+        const saved = await createBudgetRecord<IncomeRecord>("income", payload);
+        setRecords((current) => [saved, ...current]);
       }
 
       setEditingId(null);
       setForm(initialForm);
+      setInvoiceFile(null);
       setSuccess("Saved Successfully");
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Save failed");
@@ -404,13 +307,15 @@ export default function AccumulatedIncomePage() {
       description: record.description || record.notes || "",
       purchasesFor: record.purchasesFor || "",
       invoiceName: record.invoice && record.invoice !== "Not attached" ? record.invoice : "",
+      invoiceUrl: record.invoiceUrl || "",
     });
+    setInvoiceFile(null);
     requestAnimationFrame(() => {
       formSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   }
 
-  function deleteIncomeRecord(record: IncomeRecord) {
+  async function deleteIncomeRecord(record: IncomeRecord) {
     const entriesUnderHead = records.filter(
       (item) => item.budgetHead === record.budgetHead && getRecordFinancialYear(item) === getRecordFinancialYear(record),
     ).length;
@@ -419,7 +324,13 @@ export default function AccumulatedIncomePage() {
         ? `Warning: this is the only entry under "${record.budgetHead}" for ${getRecordFinancialYear(record)}. Deleting it will also remove the budget head. Continue?`
         : "Delete only this accumulated-income entry?";
     if (!window.confirm(message)) return;
-    setRecords((current) => current.filter((item) => item.id !== record.id));
+    try {
+      setError("");
+      await deleteBudgetRecord("income", record.id);
+      setRecords((current) => current.filter((item) => item.id !== record.id));
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "Delete failed");
+    }
   }
 
   function toggleBudgetHead(key: string) {
@@ -463,6 +374,8 @@ export default function AccumulatedIncomePage() {
           </p>
         </div>
       </section>
+
+      {loading && <p className="text-sm font-medium text-slate-600">Loading budget records...</p>}
 
       {isAdmin && (
         <section ref={formSectionRef} className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
@@ -540,8 +453,28 @@ export default function AccumulatedIncomePage() {
               <input className="rounded-lg border border-slate-300 px-3 py-2" value={form.purchasesFor} onChange={(event) => updateField("purchasesFor", event.target.value)} placeholder="Panel & Camera" />
             </label>
             <label className="grid gap-1 text-sm font-medium text-slate-700">
-              Invoice / Document Name
-              <input className="rounded-lg border border-slate-300 px-3 py-2" value={form.invoiceName} onChange={(event) => updateField("invoiceName", event.target.value)} placeholder="invoice.pdf" />
+              Invoice PDF
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-teal-600">
+                  <svg aria-hidden="true" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path d="M12 16V4m0 0 4 4m-4-4-4 4" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Choose file
+                  <input
+                    className="sr-only"
+                    accept="application/pdf"
+                    type="file"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] || null;
+                      setInvoiceFile(file);
+                      if (file) updateField("invoiceName", file.name);
+                    }}
+                  />
+                </label>
+                <span className="text-sm font-semibold text-slate-400">{invoiceFile?.name || "No file selected"}</span>
+              </div>
+              {form.invoiceName && <span className="text-xs text-slate-500">Current: {form.invoiceName}</span>}
             </label>
             <label className="grid gap-1 text-sm font-medium text-slate-700 md:col-span-2">
               Description
@@ -552,7 +485,7 @@ export default function AccumulatedIncomePage() {
                 {editingId ? "Update Income Entry" : "Save Income Entry"}
               </button>
               {editingId && (
-                <button className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50" type="button" onClick={() => { setEditingId(null); setForm(initialForm); }}>
+                <button className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50" type="button" onClick={() => { setEditingId(null); setForm(initialForm); setInvoiceFile(null); }}>
                   Cancel Edit
                 </button>
               )}
@@ -605,11 +538,11 @@ export default function AccumulatedIncomePage() {
           <table className="min-w-[900px] w-full border-collapse text-sm">
             <thead className="bg-teal-50 text-left text-teal-950">
               <tr>
-                <th className="border-b border-slate-200 px-4 py-3">S. N.</th>
+                <th className="border-b border-slate-200 px-4 py-3">S.<br />N.</th>
                 <th className="border-b border-slate-200 px-4 py-3">Budget Head</th>
-                <th className="border-b border-slate-200 px-4 py-3">Total Amount Approved (INR)</th>
-                <th className="border-b border-slate-200 px-4 py-3">Utilized (INR)</th>
-                <th className="border-b border-slate-200 px-4 py-3">Remaining (INR)</th>
+                <th className="border-b border-slate-200 px-4 py-3">Budget</th>
+                <th className="border-b border-slate-200 px-4 py-3">Utilized</th>
+                <th className="border-b border-slate-200 px-4 py-3">Remaining</th>
                 <th className="border-b border-slate-200 px-4 py-3">Entries</th>
               </tr>
             </thead>
@@ -617,66 +550,73 @@ export default function AccumulatedIncomePage() {
               {groupedBudgetHeads.map((group, index) => {
                 const isExpanded = expandedHeads.has(group.key);
                 return (
-                  <Fragment key={group.key}>
-                    <tr className="hover:bg-slate-50">
-                      <td className="border-b border-slate-100 px-4 py-3">{index + 1}</td>
+                  <tr key={group.key} className="align-top">
+                    <td className="border-b border-slate-100 px-4 py-3">{index + 1}</td>
                       <td className="border-b border-slate-100 px-4 py-3">
                         <button className="flex w-full items-start gap-2 text-left font-semibold text-teal-900" type="button" aria-expanded={isExpanded} onClick={() => toggleBudgetHead(group.key)}>
-                          <span>{isExpanded ? "v" : ">"}</span>
-                          <span>{group.head}</span>
-                        </button>
-                      </td>
-                      <td className="border-b border-slate-100 px-4 py-3">{inrNumber.format(group.approvedAmount)}</td>
-                      <td className="border-b border-slate-100 px-4 py-3">{inrNumber.format(group.utilizedAmount)}</td>
-                      <td className="border-b border-slate-100 px-4 py-3">{inrNumber.format(group.remainingAmount)}</td>
-                      <td className="border-b border-slate-100 px-4 py-3">{group.entries.length}</td>
-                    </tr>
+                        <svg
+                          aria-hidden="true"
+                          className={`mt-1 h-3.5 w-3.5 shrink-0 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                          fill="none"
+                          stroke="currentColor"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2.5"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="m9 18 6-6-6-6" />
+                        </svg>
+                        <span>{group.head}</span>
+                      </button>
                     {isExpanded && (
-                      <tr>
-                        <td className="border-b border-slate-100 bg-slate-50 p-4" colSpan={6}>
-                          <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-                            <table className="min-w-[860px] w-full text-sm">
-                              <thead className="bg-slate-50 text-left text-slate-700">
-                                <tr>
-                                  <th className="border-b border-slate-200 px-3 py-2">S. N.</th>
-                                  <th className="border-b border-slate-200 px-3 py-2">Date</th>
-                                  <th className="border-b border-slate-200 px-3 py-2">Description</th>
-                                  <th className="border-b border-slate-200 px-3 py-2">Purchases For</th>
-                                  <th className="border-b border-slate-200 px-3 py-2">Utilized (INR)</th>
-                                  <th className="border-b border-slate-200 px-3 py-2">Invoice</th>
-                                  {isAdmin && <th className="border-b border-slate-200 px-3 py-2">Actions</th>}
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {group.entries.map((record, entryIndex) => (
-                                  <tr key={record.id}>
-                                    <td className="border-b border-slate-100 px-3 py-2">{entryIndex + 1}</td>
-                                    <td className="border-b border-slate-100 px-3 py-2">{record.date || "Not recorded"}</td>
-                                    <td className="border-b border-slate-100 px-3 py-2">{record.description || record.notes || "No description"}</td>
-                                    <td className="border-b border-slate-100 px-3 py-2">{record.purchasesFor || "-"}</td>
-                                    <td className="border-b border-slate-100 px-3 py-2">{inrNumber.format(getUtilizedAmount(record))}</td>
-                                    <td className="border-b border-slate-100 px-3 py-2">{record.invoice || "Not Attached"}</td>
-                                    {isAdmin && (
-                                      <td className="border-b border-slate-100 px-3 py-2">
-                                        <div className="flex flex-wrap gap-2">
-                                          <button className="rounded border border-slate-300 px-2 py-1 text-xs font-semibold hover:bg-slate-50" type="button" onClick={() => editRecord(record)}>
-                                            Edit
-                                          </button>
-                                          <button className="rounded border border-slate-300 px-2 py-1 text-xs font-semibold hover:bg-slate-50" type="button" onClick={() => deleteIncomeRecord(record)}>
-                                            Delete
-                                          </button>
-                                        </div>
-                                      </td>
-                                    )}
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </td>
-                      </tr>
+                      <div className="mt-3 overflow-x-auto rounded-lg border border-slate-200 bg-white">
+                        <table className="min-w-[760px] w-full text-xs">
+                          <thead className="bg-slate-50 text-left">
+                            <tr>
+                              <th className="border-b px-3 py-2">Date</th>
+                              <th className="border-b px-3 py-2">Description</th>
+                              <th className="border-b px-3 py-2">Purchases For</th>
+                              <th className="border-b px-3 py-2">Amount</th>
+                              <th className="border-b px-3 py-2">Invoice</th>
+                              {isAdmin && <th className="border-b px-3 py-2">Actions</th>}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {group.entries.map((record) => (
+                              <tr key={record.id}>
+                                <td className="border-b px-3 py-2">{record.date || "Not recorded"}</td>
+                                <td className="border-b px-3 py-2">{record.description || record.notes || "No description"}</td>
+                                <td className="border-b px-3 py-2">{record.purchasesFor || "-"}</td>
+                                <td className="border-b px-3 py-2">{inrNumber.format(getUtilizedAmount(record))}</td>
+                                <td className="border-b px-3 py-2">
+                                  {record.invoiceUrl ? (
+                                    <button className="font-semibold text-teal-700 hover:underline" type="button" onClick={() => downloadBudgetInvoice(record.invoiceUrl || "", record.invoice || "invoice.pdf")}>
+                                      {record.invoice || "View Invoice"}
+                                    </button>
+                                  ) : (
+                                    record.invoice || "Not Attached"
+                                  )}
+                                </td>
+                                {isAdmin && (
+                                  <td className="border-b px-3 py-2">
+                                    <div className="flex gap-2">
+                                      <button className="rounded border px-2 py-1 font-semibold" type="button" onClick={() => editRecord(record)}>Edit</button>
+                                      <button className="rounded border px-2 py-1 font-semibold" type="button" onClick={() => deleteIncomeRecord(record)}>Delete</button>
+                                    </div>
+                                  </td>
+                                )}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     )}
-                  </Fragment>
+                    </td>
+                    <td className="border-b border-slate-100 px-4 py-3">{currency.format(group.approvedAmount)}</td>
+                    <td className="border-b border-slate-100 px-4 py-3">{currency.format(group.utilizedAmount)}</td>
+                    <td className="border-b border-slate-100 px-4 py-3">{currency.format(group.remainingAmount)}</td>
+                    <td className="border-b border-slate-100 px-4 py-3">{group.entries.length}</td>
+                  </tr>
                 );
               })}
               {groupedBudgetHeads.length === 0 && (
