@@ -155,7 +155,7 @@ cd backend
 python -m alembic upgrade head
 ```
 
-Recent migrations include course allocation (`029`), faculty contributions expansions (`030`), and notification replies (`031`).
+Recent migrations include course allocation (`029`), faculty contributions expansions (`030`), notification replies (`031`), document embeddings (`032`), and the budget module (`033`).
 
 ---
 

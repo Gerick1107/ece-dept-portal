@@ -2,7 +2,7 @@
 
 Unified departmental automation platform for the ECE Department at IIIT-D.
 
-**Modules:** CO-PO attainment · Publications · BTP/IP & ECE/EVE projects · Course allocation · Faculty contributions · Meeting minutes · Notifications & requirement tracker · Analytics · LLM insights · Faculty awards
+**Modules:** CO-PO attainment · Publications · BTP/IP & ECE/EVE projects · Course allocation · Faculty contributions · Meeting minutes · Budget · Notifications & requirement tracker · Analytics · LLM insights · Faculty awards
 
 ## Stack
 
@@ -122,6 +122,7 @@ tradeoff for zero-cost / offline, not a bug.
 | Faculty contributions | `/contributions` | `/api/v1/contributions` |
 | Faculty awards | `/awards` | `/api/v1/awards` |
 | Meeting minutes | `/senate-minutes`, `/ece-faculty-meets`, … | `/api/v1/documents` |
+| Budget | `/budget/accumulated-income`, `/budget/expenditure-budget`, `/budget/inventory` | `/api/v1/budget` |
 | Notifications | `/notifications` (faculty), `/admin/notifications` | `/api/v1/notifications` |
 | Requirement tracker | `/admin/requirement-tracker` | `/api/v1/notifications/admin/requirements` |
 | Analytics | `/analytics` | `/api/v1/analytics` |

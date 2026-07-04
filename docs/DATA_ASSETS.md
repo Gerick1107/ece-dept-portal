@@ -25,8 +25,11 @@ Place these files in `data/assets/` (create the folder if missing):
 | `course_code_aliases.csv` | Course code resolution |
 | `faculty_name_aliases.csv` | Faculty name resolution |
 | `non_faculty_placeholders.csv` | Placeholder faculty rows |
+| `Monsoon YYYY.csv`, `Winter YYYY.csv` (or `WinterYYYY.csv`) | Historical CO-PO attainment for analytics backfill (`backend/scripts/backfill_legacy_copo.py`) |
 
 Admin UI edits for contributions and allocations **write back** to the CSVs in this folder.
+
+**Budget** data lives only in MySQL (`budget_income`, `budget_expenses`, `budget_inventory`); there is no budget CSV in `data/assets/`.
 
 ## Setup
 

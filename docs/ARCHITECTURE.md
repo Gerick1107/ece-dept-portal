@@ -2,14 +2,14 @@
 
 ## Vision
 
-A single departmental system for CO-PO attainment, publications, projects, course allocation, faculty contributions, meeting minutes, notifications, analytics, and AI-assisted insights.
+A single departmental system for CO-PO attainment, publications, projects, course allocation, faculty contributions, meeting minutes, budget tracking, notifications, analytics, and AI-assisted insights.
 
 ## Principles
 
 1. **Preserve business logic** — `backend/app/copo/engine/legacy_engine.py` wraps the original CO-PO engine unchanged.
 2. **Excel/CSV as operational I/O** — MySQL holds users, transactional data, and JSON snapshots; many modules sync from `data/assets/` CSVs.
 3. **Backend aggregates analytics** — frontend does not compute heavy summaries from raw rows.
-4. **Modular monorepo** — `backend/app/{auth,copo,publications,projects,course_allocation,contributions,documents,notifications,...}`.
+4. **Modular monorepo** — `backend/app/{auth,copo,publications,projects,course_allocation,contributions,documents,budget,notifications,...}`.
 
 ## Layer diagram
 
@@ -53,10 +53,11 @@ MySQL + filesystem storage
 | Course allocation | `backend/app/course_allocation/` | CSV + XLSX upload |
 | Contributions | `backend/app/contributions/` | Multi-tab faculty data |
 | Awards | `backend/app/awards/` | CSV sync |
-| Documents / Minutes | `backend/app/documents/` | PDF storage + ingestion |
+| Documents / Minutes | `backend/app/documents/` | PDF storage + RAG Q&A |
+| Budget | `backend/app/budget/` | Income, expenditure, inventory |
 | Notifications | `backend/app/notifications/` | Tracker, replies, reminders |
 | Analytics | `backend/app/analytics/` | Dashboards |
-| LLM Insights | `backend/app/llm/` | Groq narratives |
+| LLM Insights | `backend/app/llm/` | Groq or local (Ollama) narratives |
 | Auth | `backend/app/auth/` | Users, JWT |
 
 Details: [MODULES.md](MODULES.md).
@@ -75,7 +76,7 @@ Reminders send email when SMTP is enabled; portal notification fallback when SMT
 ```
 frontend/src/
   modules/auth, copo, publications, projects, analytics, llm, awards
-  modules/contributions, course_allocation, documents, notifications
+  modules/contributions, course_allocation, documents, budget, notifications
   layouts/          App shell & navigation
   pages/            Login, dashboard, admin
 ```

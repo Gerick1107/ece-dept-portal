@@ -40,6 +40,8 @@ def upgrade() -> None:
         )
 
     if not _has_table("affiliations"):
+        # Prefix unique index (not full-column UNIQUE): utf8mb4 InnoDB caps indexes at
+        # 3072 bytes, and name(512)+url(1024) would be 6144 and fail with MySQL 1071.
         op.create_table(
             "affiliations",
             sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
@@ -59,7 +61,14 @@ def upgrade() -> None:
                 nullable=False,
             ),
             sa.PrimaryKeyConstraint("id"),
-            sa.UniqueConstraint("name", "url", name="uq_affiliation_name_url"),
+        )
+    if _has_table("affiliations") and not _has_index("affiliations", "uq_affiliation_name_url"):
+        op.create_index(
+            "uq_affiliation_name_url",
+            "affiliations",
+            ["name", "url"],
+            unique=True,
+            mysql_length={"name": 191, "url": 191},
         )
     if _has_table("affiliations") and not _has_index("affiliations", "ix_affiliations_category"):
         op.create_index("ix_affiliations_category", "affiliations", ["category"])
@@ -95,6 +104,8 @@ def downgrade() -> None:
     if _has_table("affiliations"):
         if _has_index("affiliations", "ix_affiliations_category"):
             op.drop_index("ix_affiliations_category", table_name="affiliations")
+        if _has_index("affiliations", "uq_affiliation_name_url"):
+            op.drop_index("uq_affiliation_name_url", table_name="affiliations")
         op.drop_table("affiliations")
     if _has_column("copo_run_analytics_snapshots", "section_label"):
         op.drop_column("copo_run_analytics_snapshots", "section_label")

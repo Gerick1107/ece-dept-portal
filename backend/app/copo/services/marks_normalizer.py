@@ -28,7 +28,16 @@ _RESULT_LABELS = frozenset(
     {"result", "total_marks", "total_marks_100", "total_marks_aft", "total_marks_after_bonus", "final marks", "final_marks"}
 )
 _GRADE_LABELS = frozenset(
-    {"grade_point", "grade point", "grade", "final grade", "final_grade", "numerical value", "numerical_grade"}
+    {
+        "grade_point",
+        "grade point",
+        "grade",
+        "grades",
+        "final grade",
+        "final_grade",
+        "numerical value",
+        "numerical_grade",
+    }
 )
 
 

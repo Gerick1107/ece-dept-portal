@@ -5,7 +5,7 @@ Old semesters were recorded only as final CO and PO/PSO numbers in CSV files in
 analytics snapshots in the same JSON shape the portal produces for live runs.
 
 This is the generalized successor to ``backfill_winter2023_copo.py``. The older CSVs
-(Monsoon 2022/2023, Winter 2024) are less regular:
+(Monsoon 2022–2025, Winter 2024/2025) are less regular:
   - some course rows have no leading index number,
   - PO headers sometimes read ``P10,P11,P12`` instead of ``PO10,PO11,PO12``,
   - a course's CO labels can sit on the row *above* an inline values row.
@@ -53,6 +53,9 @@ FILES = [
     ("Monsoon 2022.csv", "Monsoon 2022", "m2022", datetime(2022, 11, 1)),
     ("Monsoon 2023.csv", "Monsoon 2023", "m2023", datetime(2023, 11, 1)),
     ("Winter2024.csv", "Winter 2024", "w2024", datetime(2024, 5, 1)),
+    ("Monsoon 2024.csv", "Monsoon 2024", "m2024", datetime(2024, 11, 1)),
+    ("Winter 2025.csv", "Winter 2025", "w2025", datetime(2025, 5, 1)),
+    ("Monsoon 2025.csv", "Monsoon 2025", "m2025", datetime(2025, 11, 1)),
 ]
 
 PO_ORDER = [f"PO{i}" for i in range(1, 13)] + ["PSO1", "PSO2", "PSO3"]
@@ -321,6 +324,7 @@ def parse_legacy_csv(path: Path, db, semester_label: str, tag: str) -> list[dict
         if variant_count == 0:
             continue
 
+        variants: list[dict] = []
         for k in range(variant_count):
             co_label_row, co_value_row, co_vidx = cos[k] if k < len(cos) else ({}, [], anchor_idx)
             po_label_row, po_value_row, _ = pos[k] if k < len(pos) else ({}, [], anchor_idx)
@@ -333,13 +337,8 @@ def parse_legacy_csv(path: Path, db, semester_label: str, tag: str) -> list[dict
             programme_token = _programme_token(rows, anchor_idx, co_vidx)
             programme = _infer_programme(programme_token, po_attainment)
             co_po_mapping = _load_co_po_mapping(canonical_title, programme)
-
-            suffix = f"_{programme.lower()}" if variant_count > 1 else ""
-            public_id = f"backfill_{tag}_{seq:02d}{suffix}"
-
-            evaluations.append(
+            variants.append(
                 {
-                    "public_id": public_id,
                     "course_code": code or "(no code)",
                     "raw_title": raw_title,
                     "matched": matched,
@@ -352,6 +351,31 @@ def parse_legacy_csv(path: Path, db, semester_label: str, tag: str) -> list[dict
                     "semester_label": semester_label,
                 }
             )
+
+        # public_id / section_label:
+        #   single variant -> backfill_m2024_06, section=None
+        #   UG+PG pair     -> backfill_m2024_06_ug / _pg, section=None
+        #   two UG sections -> section A/B (same as live portal), public_id …_ug_a / …_ug_b
+        # Analytics groups by (course_title, section_label, semester_label).
+        prog_counts: dict[str, int] = {}
+        for v in variants:
+            prog_counts[v["programme_label"]] = prog_counts.get(v["programme_label"], 0) + 1
+        prog_seen: dict[str, int] = {}
+        for v in variants:
+            programme = v["programme_label"]
+            section_label = None
+            if len(variants) == 1:
+                public_id = f"backfill_{tag}_{seq:02d}"
+            elif prog_counts[programme] == 1:
+                public_id = f"backfill_{tag}_{seq:02d}_{programme.lower()}"
+            else:
+                prog_seen[programme] = prog_seen.get(programme, 0) + 1
+                # A, B, C… — matches live CO-PO section selection / analytics display.
+                section_label = chr(ord("A") + prog_seen[programme] - 1)
+                public_id = f"backfill_{tag}_{seq:02d}_{programme.lower()}_{section_label.lower()}"
+            v["public_id"] = public_id
+            v["section_label"] = section_label
+            evaluations.append(v)
     return evaluations
 
 
@@ -374,7 +398,7 @@ def build_result_summary(ev: dict) -> dict:
         "course_title": ev["course_title"],
         "scope_summary": ev["scope_summary"],
         "semester_label": ev["semester_label"],
-        "section_label": None,
+        "section_label": ev.get("section_label"),
         "programme_label": ev.get("programme_label"),
         "target_value": TARGET_VALUE,
         "intermediate": intermediate,
@@ -407,7 +431,11 @@ def main() -> int:
             for ev in evaluations:
                 flag = "MATCHED" if ev["matched"] else "NEW    "
                 mapping_flag = "mapping OK" if ev.get("co_po_mapping") else "no mapping"
-                print(f"[{flag}] {ev['public_id']}  ->  {ev['course_title']}  ({ev['programme_label']}, {mapping_flag})")
+                sec = f", Sec {ev['section_label']}" if ev.get("section_label") else ""
+                print(
+                    f"[{flag}] {ev['public_id']}  ->  {ev['course_title']}  "
+                    f"({ev['programme_label']}{sec}, {mapping_flag})"
+                )
                 print(f"          raw='{ev['raw_title']}'")
                 print(f"          CO: {ev['co_attainment']}")
                 print(f"          PO({sum(1 for k in ev['po_attainment'] if k.startswith('PO'))} PO): {ev['po_attainment']}")
@@ -427,7 +455,7 @@ def main() -> int:
                     existing.evaluation_type = EVALUATION_TYPE
                     existing.scope_summary = ev["scope_summary"]
                     existing.semester_label = ev["semester_label"]
-                    existing.section_label = None
+                    existing.section_label = ev.get("section_label")
                     existing.result_summary = result_summary
                     existing.run_created_at = run_created_at
                     updated += 1
@@ -440,7 +468,7 @@ def main() -> int:
                             evaluation_type=EVALUATION_TYPE,
                             scope_summary=ev["scope_summary"],
                             semester_label=ev["semester_label"],
-                            section_label=None,
+                            section_label=ev.get("section_label"),
                             result_summary=result_summary,
                             run_created_at=run_created_at,
                         )

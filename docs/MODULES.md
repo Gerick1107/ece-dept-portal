@@ -42,21 +42,43 @@ Workflow: [WORKFLOW_A.md](WORKFLOW_A.md)
 
 | Item | Detail |
 |------|--------|
-| UI | `/course-allocation`, `/course-allocation/faculty/:id` |
+| UI | `/course-allocation` (faculty-wise), `/course-allocation/courses` (course-wise), `/course-allocation/faculty/:id`, `/course-allocation/course/:id` |
 | Admin only | `/course-allocation/catalog` (Course Catalog) |
 | API | `/api/v1/course-allocation` |
 | CSV | `course_allocations.csv`, `course_catalog.csv`, `course_code_aliases.csv`, `faculty_name_aliases.csv`, `non_faculty_placeholders.csv` |
 
 **Features:**
 
-- Faculty-grouped allocation view with expandable course tables
+- **Faculty-wise** and **course-wise** allocation views with expandable tables
 - Filters: **by semester**, **by academic year** (`YYYY-YYYY` or `YYYY-YY`), or **all data**
+- Semesters listed newest-first within each group
 - Dashboard summary widget (faculty teaching, UG/PG, core/elective, first-year counts)
-- Faculty allocation history and analytics per person
+- Faculty and course drill-in history / analytics pages
 - Admin: upload XLSX, resolve unmatched faculty names, edit catalog entries
 - Export allocations to Excel
 
 Faculty and HOD see **Allocations** only; **Course Catalog** is hidden from faculty nav and route-guarded to admin.
+
+---
+
+## Budget
+
+| Item | Detail |
+|------|--------|
+| UI | `/budget/accumulated-income`, `/budget/expenditure-budget`, `/budget/inventory` (also `/modules/budget` hub) |
+| API | `/api/v1/budget` |
+| Tables | `budget_income`, `budget_expenses`, `budget_inventory` (migration `033_budget_module`) |
+| Invoices | PDF uploads under `storage/uploads/budget-invoices/` |
+
+**Tabs:**
+
+| Tab | Purpose |
+|-----|---------|
+| Accumulated Income | Budget heads by financial year — approved amount, utilised, remaining; optional invoice PDF |
+| Expenditure Budget | Expense heads, utilisation, vendor, status, invoices |
+| Inventory | Purchased items, category, quantity on hand / issued, location, invoices |
+
+**Access:** any authenticated user can **read**; **create / update / delete** and invoice upload require **HOD** (or admin if granted that role). Seed rows for the current financial year are inserted by migration `033` on first `alembic upgrade head`.
 
 ---
 
@@ -142,7 +164,7 @@ See [MAINTENANCE.md](MAINTENANCE.md) for CSV sync behaviour.
 | API | `/api/v1/documents/{type}` |
 | Storage | `backend/documents/` or `DOCUMENTS_DIR` |
 
-**Features:** year-grouped PDF lists, admin upload (PDF), dual agenda/minutes files per meeting where applicable, scoped LLM Q&A per document set.
+**Features:** year-grouped PDF lists, admin upload (PDF), dual agenda/minutes files per meeting where applicable, multi-turn RAG Q&A scoped per document set (Groq or local Ollama).
 
 ---
 
@@ -215,7 +237,7 @@ Controlled separately from publication scraping:
 |------|--------|
 | UI | `/llm-insights` |
 | API | `/api/v1/llm-insights` |
-| Provider | Groq (`GROQ_API_KEY`) |
+| Providers | Cloud (Groq) or local (Ollama) — per-request toggle; see root README |
 
 ---
 

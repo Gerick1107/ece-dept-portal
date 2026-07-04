@@ -58,7 +58,7 @@ pip install -r requirements.txt
 alembic upgrade head
 ```
 
-Current head includes migrations through **031** (notifications replies, course allocation, faculty contributions). Run `alembic current` to verify.
+Current head includes migrations through **033** (budget module tables + seed rows). Run `alembic current` to verify.
 
 ### 6. Verify
 

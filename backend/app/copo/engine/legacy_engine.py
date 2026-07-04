@@ -571,6 +571,7 @@ def main_process(
             "GRADEPOINT",
             "GRADE_POINT",
             "GRADE",
+            "GRADES",
             "FINALGRADE",
             "FINAL_GRADE",
             "GRADELETTER",
