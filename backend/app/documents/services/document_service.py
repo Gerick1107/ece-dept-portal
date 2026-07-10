@@ -5,7 +5,12 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
-from app.documents.models.entities import DOCUMENT_TYPE_LABELS, Meeting, MeetingFile
+from app.documents.models.entities import (
+    DOCUMENT_TYPE_ECE_FACULTY_MEET,
+    DOCUMENT_TYPE_LABELS,
+    Meeting,
+    MeetingFile,
+)
 from app.documents.services.file_manager import resolve_document_path
 
 
@@ -84,7 +89,7 @@ from app.documents.services.ingestion_service import generate_document_descripti
 from app.documents.services.pdf_service import extract_pdf_metadata, parse_date_from_text
 
 
-async def extract_upload_metadata(file_path: Path) -> dict:
+async def extract_upload_metadata(file_path: Path, *, document_type: str | None = None) -> dict:
     meta = extract_pdf_metadata(file_path, fallback_title=file_path.stem)
     sample = "\n".join(text for _, text in meta.pages[:3])
     auto_description = await generate_document_description(
@@ -93,8 +98,19 @@ async def extract_upload_metadata(file_path: Path) -> dict:
     meeting_date = meta.meeting_date
     if not meeting_date:
         meeting_date = parse_date_from_text(auto_description) or parse_date_from_text(sample)
+
+    title = meta.title
+    # ECE Faculty Meets are named by meeting type (e.g. "Moderation Meeting"),
+    # not by an ordinal, so derive a proper title from the document content.
+    if document_type == DOCUMENT_TYPE_ECE_FACULTY_MEET:
+        from app.documents.services.meeting_title_service import derive_meeting_title
+
+        derived = await derive_meeting_title(sample)
+        if derived:
+            title = derived
+
     return {
-        "title": meta.title,
+        "title": title,
         "meeting_date": meeting_date,
         "description": auto_description,
     }

@@ -14,7 +14,7 @@ from app.llm.schemas import (
     GenerateInsightsResponse,
     InsightCourseOption,
 )
-from app.llm.services.groq_service import LlmError
+from app.llm.services.errors import LlmError
 from app.llm.services import insights_service
 from app.llm.services.llm_dispatch import provider_status
 

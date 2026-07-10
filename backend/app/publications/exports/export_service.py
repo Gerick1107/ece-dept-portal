@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from datetime import date
 from io import BytesIO
 from zipfile import ZIP_DEFLATED, ZipFile
 
@@ -8,8 +9,10 @@ import pandas as pd
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.utils.docx_export import records_to_table_docx_bytes
 from app.utils.pdf_tables import records_to_list_pdf_bytes
 from app.publications.models import Faculty, Publication, PublicationFaculty
+from app.publications.utils.dates import extract_year, within_range
 
 PUBLICATION_EXPORT_COLUMNS = [
     "title",
@@ -60,6 +63,8 @@ def _query_publications(
     publication_year: int | None = None,
     year_start: int | None = None,
     year_end: int | None = None,
+    date_start: date | None = None,
+    date_end: date | None = None,
     export_type: str = "both",
 ) -> list[Publication]:
     stmt = select(Publication)
@@ -92,7 +97,12 @@ def _query_publications(
         Publication.publication_year.desc(),
         Publication.id.desc(),
     )
-    return list(db.scalars(stmt).all())
+    rows = list(db.scalars(stmt).all())
+    # Date-range filter is applied in Python because publication_date is a
+    # free-form string of mixed precision (full date / year-month / year).
+    if date_start is not None or date_end is not None:
+        rows = [r for r in rows if within_range(r.publication_date, date_start, date_end)]
+    return rows
 
 
 def _publication_record(row: Publication, faculty_names: str) -> dict:
@@ -130,27 +140,39 @@ def _records_from_rows(
     rows: list[Publication],
     export_type: str,
 ) -> tuple[list[dict], list[str]]:
+    from app.publications.services.custom_columns_service import get_custom_fields, list_columns
+
     names_map = _faculty_names_map(db, [r.id for r in rows])
+    custom_columns = list_columns(db, enabled_only=True)
+
+    def _augment(record: dict, row: Publication) -> dict:
+        if custom_columns:
+            values = get_custom_fields(row)
+            for col in custom_columns:
+                record[col.label] = values.get(col.key, "")
+        return record
+
     publication_records: list[dict] = []
     patent_records: list[dict] = []
     for row in rows:
         faculty_names = names_map.get(row.id, "")
         if row.is_patent:
             if export_type in {"patents", "both"}:
-                patent_records.append(_patent_record(row, faculty_names))
+                patent_records.append(_augment(_patent_record(row, faculty_names), row))
         elif export_type in {"publications", "both"}:
-            publication_records.append(_publication_record(row, faculty_names))
+            publication_records.append(_augment(_publication_record(row, faculty_names), row))
 
+    custom_labels = [col.label for col in custom_columns]
     if export_type == "patents":
-        return patent_records, PATENT_EXPORT_COLUMNS
+        return patent_records, PATENT_EXPORT_COLUMNS + custom_labels
     if export_type == "publications":
-        return publication_records, PUBLICATION_EXPORT_COLUMNS
+        return publication_records, PUBLICATION_EXPORT_COLUMNS + custom_labels
 
     combined = publication_records + patent_records
     columns = PUBLICATION_EXPORT_COLUMNS if publication_records else PATENT_EXPORT_COLUMNS
     if publication_records and patent_records:
         columns = list(dict.fromkeys(PUBLICATION_EXPORT_COLUMNS + PATENT_EXPORT_COLUMNS))
-    return combined, columns
+    return combined, list(dict.fromkeys(list(columns) + custom_labels))
 
 
 def _dataframe(records: list[dict], columns: list[str]) -> pd.DataFrame:
@@ -165,6 +187,8 @@ def export_publications_csv(
     publication_year: int | None = None,
     year_start: int | None = None,
     year_end: int | None = None,
+    date_start: date | None = None,
+    date_end: date | None = None,
     export_type: str = "both",
 ) -> bytes:
     rows = _query_publications(
@@ -174,6 +198,8 @@ def export_publications_csv(
         publication_year=publication_year,
         year_start=year_start,
         year_end=year_end,
+        date_start=date_start,
+        date_end=date_end,
         export_type=export_type,
     )
     records, columns = _records_from_rows(db, rows, export_type)
@@ -188,6 +214,8 @@ def export_publications_excel(
     publication_year: int | None = None,
     year_start: int | None = None,
     year_end: int | None = None,
+    date_start: date | None = None,
+    date_end: date | None = None,
     scope: str = "all",
     export_type: str = "both",
 ) -> bytes:
@@ -198,6 +226,8 @@ def export_publications_excel(
         publication_year=publication_year,
         year_start=year_start,
         year_end=year_end,
+        date_start=date_start,
+        date_end=date_end,
         export_type=export_type,
     )
     records, columns = _records_from_rows(db, rows, export_type)
@@ -217,7 +247,8 @@ def export_publications_excel(
         elif scope == "year":
             by_year: dict[str, list[dict]] = defaultdict(list)
             for rec in records:
-                year_key = str(rec.get("publication_date") or rec.get("publication_year") or "Unknown")
+                year = extract_year(rec.get("publication_date")) or rec.get("publication_year")
+                year_key = str(year) if year else "Unknown"
                 by_year[year_key].append(rec)
             for year_key, items in sorted(by_year.items(), reverse=True):
                 _dataframe(items, columns).to_excel(writer, index=False, sheet_name=f"Year_{year_key}"[:31])
@@ -281,6 +312,8 @@ def export_publications_pdf(
     publication_year: int | None = None,
     year_start: int | None = None,
     year_end: int | None = None,
+    date_start: date | None = None,
+    date_end: date | None = None,
     title: str = "Publications Export",
     export_type: str = "both",
 ) -> bytes:
@@ -291,6 +324,8 @@ def export_publications_pdf(
         publication_year=publication_year,
         year_start=year_start,
         year_end=year_end,
+        date_start=date_start,
+        date_end=date_end,
         export_type=export_type,
     )
     if export_type == "both":
@@ -306,6 +341,34 @@ def export_publications_pdf(
     return records_to_list_pdf_bytes(title, pdf_records, entry_title_key="Title")
 
 
+def export_publications_docx(
+    db: Session,
+    *,
+    faculty_id: int | None = None,
+    faculty_ids: list[int] | None = None,
+    publication_year: int | None = None,
+    year_start: int | None = None,
+    year_end: int | None = None,
+    date_start: date | None = None,
+    date_end: date | None = None,
+    title: str = "Publications Export",
+    export_type: str = "both",
+) -> bytes:
+    rows = _query_publications(
+        db,
+        faculty_id=faculty_id,
+        faculty_ids=faculty_ids,
+        publication_year=publication_year,
+        year_start=year_start,
+        year_end=year_end,
+        date_start=date_start,
+        date_end=date_end,
+        export_type=export_type,
+    )
+    records, columns = _records_from_rows(db, rows, export_type)
+    return records_to_table_docx_bytes(title, columns, records)
+
+
 def export_publications_grouped_archive(
     db: Session,
     *,
@@ -315,6 +378,8 @@ def export_publications_grouped_archive(
     publication_year: int | None = None,
     year_start: int | None = None,
     year_end: int | None = None,
+    date_start: date | None = None,
+    date_end: date | None = None,
     export_type: str = "both",
 ) -> bytes:
     rows = _query_publications(
@@ -323,6 +388,8 @@ def export_publications_grouped_archive(
         publication_year=publication_year,
         year_start=year_start,
         year_end=year_end,
+        date_start=date_start,
+        date_end=date_end,
         export_type=export_type,
     )
     records, columns = _records_from_rows(db, rows, export_type)
@@ -336,7 +403,8 @@ def export_publications_grouped_archive(
     elif scope == "year":
         grouped = defaultdict(list)
         for rec in records:
-            grouped[str(rec.get("publication_date") or "Unknown")].append(rec)
+            year = extract_year(rec.get("publication_date"))
+            grouped[str(year) if year else "Unknown"].append(rec)
     else:
         raise ValueError(f"Unsupported grouping scope: {scope}")
 

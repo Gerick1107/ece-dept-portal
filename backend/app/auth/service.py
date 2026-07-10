@@ -42,6 +42,7 @@ def create_user(
     *,
     must_change_password: bool | None = None,
     send_welcome_email: bool = False,
+    faculty_id: int | None = None,
 ) -> tuple[User, bool]:
     if must_change_password is None:
         must_change_password = role == UserRole.faculty
@@ -51,6 +52,7 @@ def create_user(
         hashed_password=hash_password(password),
         role=role,
         must_change_password=must_change_password,
+        faculty_id=faculty_id,
     )
     db.add(user)
     db.commit()

@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user, require_roles
+from app.auth.dependencies import FacultyScope, get_current_user, get_faculty_scope, require_roles
 from app.database.models.user import User, UserRole
 from app.database.session import get_db
 from app.ece_eve_projects.services.ece_eve_service import (
@@ -35,7 +35,7 @@ def admin_purge_ece_eve_projects(
 @router.get("")
 def list_ece_eve_projects(
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[User, Depends(get_current_user)],
+    scope: Annotated[FacultyScope, Depends(get_faculty_scope)],
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=500),
     branch: str | None = Query(default=None, description="ECE, EVE, or omit for both"),
@@ -52,6 +52,8 @@ def list_ece_eve_projects(
     project_type: str | None = None,
     query: str | None = None,
 ):
+    if not scope.see_all:
+        faculty_id = scope.faculty_id if scope.faculty_id is not None else -1
     semester_list = [s.strip() for s in (semesters or "").split(",") if s.strip()]
     code_list = [s.strip() for s in (course_codes or "").split(",") if s.strip()]
     filters = EceEveProjectFilters(
@@ -96,7 +98,7 @@ def ece_eve_project_filters(
 @router.get("/export")
 def export_ece_eve_projects(
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[User, Depends(get_current_user)],
+    scope: Annotated[FacultyScope, Depends(get_faculty_scope)],
     format: str = Query(default="xlsx", pattern="^(csv|xlsx|pdf)$"),
     branch: str | None = Query(default=None),
     faculty_id: int | None = None,
@@ -112,6 +114,8 @@ def export_ece_eve_projects(
     project_type: str | None = None,
     query: str | None = None,
 ):
+    if not scope.see_all:
+        faculty_id = scope.faculty_id if scope.faculty_id is not None else -1
     filters = EceEveProjectFilters(
         branch=branch,
         year=year,

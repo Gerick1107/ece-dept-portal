@@ -82,19 +82,6 @@ export default function ProjectsAnalyticsTab() {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Course code distribution" className="lg:col-span-2">
-          <ResponsiveContainer width="100%" height={280}>
-            <PieChart>
-              <Pie data={data.course_code_distribution} dataKey="count" nameKey="course_code" cx="50%" cy="50%" outerRadius={110} label>
-                {data.course_code_distribution.map((_, i) => (
-                  <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
-        </ChartCard>
-
         <ChartCard title="Faculty load" subtitle="Guide vs co-guide" className="lg:col-span-2">
           <button type="button" className="text-xs text-teal-700 mb-2" onClick={() => setShowAllFaculty((v) => !v)}>
             {showAllFaculty ? "Show top 15" : "Show all faculty"}

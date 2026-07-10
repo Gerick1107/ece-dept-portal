@@ -26,7 +26,7 @@ from app.documents.services.document_service import (
 from app.documents.services.file_manager import SLUG_TO_TYPE, resolve_document_path, subdir_for_type
 from app.documents.services.ingestion_service import ingest_meeting_file
 from app.documents.services.rag_service import answer_document_question
-from app.llm.services.groq_service import LlmError
+from app.llm.services.errors import LlmError
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -40,7 +40,7 @@ class ChatTurn(BaseModel):
 
 class DocumentQueryRequest(BaseModel):
     question: str = Field(min_length=3, max_length=2000)
-    provider: Literal["groq", "local"] = "groq"
+    provider: Literal["local"] = "local"
     history: list[ChatTurn] = Field(default_factory=list, max_length=20)
 
 
@@ -138,7 +138,7 @@ async def preview_upload(
     temp_path = temp_dir / f"{uuid.uuid4().hex}_{file.filename}"
     temp_path.write_bytes(payload)
     try:
-        return await extract_upload_metadata(temp_path)
+        return await extract_upload_metadata(temp_path, document_type=resolved)
     finally:
         try:
             temp_path.unlink()

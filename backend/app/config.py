@@ -86,6 +86,20 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 480
 
+    # --- Security hardening ---
+    # Block non-browser automation tools (curl/wget/postman/python-requests/...).
+    block_automation_agents: bool = True
+    # General per-IP API rate limits (in addition to the stricter login limit).
+    rate_limit_enabled: bool = True
+    rate_limit_per_second: int = 25
+    rate_limit_per_minute: int = 300
+    rate_limit_per_hour: int = 6000
+    # Login brute-force limit (per IP).
+    login_max_attempts: int = 10
+    login_window_seconds: int = 300
+    # Idle auto-logout used by the frontend (minutes of no activity).
+    inactivity_timeout_minutes: int = 30
+
     # Prefer MYSQL_* fields (passwords with @, #, etc. work without URL encoding).
     # Optional: set DATABASE_URL to override the assembled URL (production).
     database_url: str = ""
@@ -135,30 +149,21 @@ class Settings(BaseSettings):
     sdg_top_k: int = 5
     sdg_request_delay_seconds: float = 0.5
 
-    # --- Cloud LLM (Groq, OpenAI-compatible) ---
-    groq_api_key: str = Field(default="", validation_alias="GROQ_API_KEY")
-    # Model name is config-driven so a Groq model deprecation needs only a .env change.
-    # Default is Groq's recommended replacement for the retired 70b-versatile model.
-    groq_model: str = Field(default="openai/gpt-oss-120b", validation_alias="GROQ_MODEL")
-    # Max completion tokens for CO-PO insight generation. prompt(~2k) + this must stay
-    # under the model's tokens-per-minute limit (Groq free-tier gpt-oss-120b = 8000 TPM),
-    # otherwise Groq rejects the request with HTTP 413. Raise on a paid tier.
-    llm_insights_max_tokens: int = Field(default=5000, validation_alias="LLM_INSIGHTS_MAX_TOKENS")
-    # Local insights are CPU-bound (~5-10 tok/s on a laptop), so use a smaller budget
-    # than the cloud path to keep generation within the request timeout window.
-    local_llm_insights_max_tokens: int = Field(
-        default=2000, validation_alias="LOCAL_LLM_INSIGHTS_MAX_TOKENS"
-    )
-
     # --- Local LLM (Ollama, OpenAI-compatible, fully offline / free) ---
+    # All generative LLM features run on this local model. No cloud provider is used.
     # Inside Docker, point this at the host: http://host.docker.internal:11434/v1
     local_llm_base_url: str = Field(
         default="http://localhost:11434/v1", validation_alias="LOCAL_LLM_BASE_URL"
     )
     local_llm_model: str = Field(default="llama3.2:3b", validation_alias="LOCAL_LLM_MODEL")
+    # Local insights are CPU-bound (~5-10 tok/s on a laptop), so use a modest budget
+    # to keep generation within the request timeout window.
+    local_llm_insights_max_tokens: int = Field(
+        default=2000, validation_alias="LOCAL_LLM_INSIGHTS_MAX_TOKENS"
+    )
 
-    # Which provider the UI selects by default ("groq" or "local").
-    default_llm_provider: str = Field(default="groq", validation_alias="DEFAULT_LLM_PROVIDER")
+    # Retained for backward compatibility; the only supported provider is "local".
+    default_llm_provider: str = Field(default="local", validation_alias="DEFAULT_LLM_PROVIDER")
 
     # Local embeddings for meeting-minutes RAG retrieval
     rag_embedding_model: str = "all-MiniLM-L6-v2"

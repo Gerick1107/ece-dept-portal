@@ -29,6 +29,8 @@ class ProjectSearchFilters:
         sdg_number: int | None = None,
         credit: str | None = None,
         confirmed_sdg_only: bool = False,
+        scope_faculty_id: int | None = None,
+        scope_faculty_name: str | None = None,
     ):
         self.query = query
         self.faculty_id = faculty_id
@@ -42,6 +44,11 @@ class ProjectSearchFilters:
         self.sdg_number = sdg_number
         self.credit = credit
         self.confirmed_sdg_only = confirmed_sdg_only
+        # Per-faculty visibility scope: restricts results to projects the faculty
+        # is involved in as EITHER guide (faculty_id) OR co-guide (name match).
+        # When set with an id but no resolvable name, only the guide side applies.
+        self.scope_faculty_id = scope_faculty_id
+        self.scope_faculty_name = scope_faculty_name
 
 
 def _normalize_type(value: str) -> str:
@@ -148,6 +155,17 @@ def project_to_dict(db: Session, project: Project) -> dict:
 
 
 def _apply_filters(stmt, filters: ProjectSearchFilters):
+    # Per-faculty scope (guide OR co-guide) — applied first so it always narrows.
+    if filters.scope_faculty_id is not None or filters.scope_faculty_name:
+        conditions = []
+        if filters.scope_faculty_id is not None:
+            conditions.append(Project.faculty_id == filters.scope_faculty_id)
+        if filters.scope_faculty_name:
+            name = strip_name_prefix(filters.scope_faculty_name.strip())
+            if name:
+                conditions.append(Project.co_guide.ilike(f"%{name}%"))
+                conditions.append(Project.guide_name.ilike(f"%{name}%"))
+        stmt = stmt.where(or_(*conditions)) if conditions else stmt.where(Project.id == -1)
     if filters.faculty_id:
         stmt = stmt.where(Project.faculty_id == filters.faculty_id)
     if filters.project_type:

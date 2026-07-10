@@ -31,6 +31,7 @@ type QuerySource = {
   document_id: number;
   title: string;
   year: number;
+  meeting_date?: string | null;
   pages: number[];
 };
 
@@ -125,6 +126,7 @@ export default function DocumentsPage({
   const { provider, setProvider, providers } = useLlmProvider();
   const [uploadStep, setUploadStep] = useState<"pick" | "review">("pick");
   const [uploadYear, setUploadYear] = useState(String(new Date().getFullYear()));
+  const [uploadName, setUploadName] = useState("");
   const [uploadAgendaFile, setUploadAgendaFile] = useState<File | null>(null);
   const [uploadMinutesFile, setUploadMinutesFile] = useState<File | null>(null);
   const [agendaPreview, setAgendaPreview] = useState<PreviewMeta | null>(null);
@@ -182,6 +184,7 @@ export default function DocumentsPage({
     setUploadMinutesFile(null);
     setAgendaPreview(null);
     setMinutesPreview(null);
+    setUploadName("");
     setPreviewBusy(false);
     setUploadBusy(false);
   }
@@ -277,8 +280,15 @@ export default function DocumentsPage({
     setPreviewBusy(true);
     setError("");
     try {
-      if (uploadAgendaFile) setAgendaPreview(await previewFile(uploadAgendaFile));
-      if (uploadMinutesFile) setMinutesPreview(await previewFile(uploadMinutesFile));
+      const name = uploadName.trim();
+      if (uploadAgendaFile) {
+        const meta = await previewFile(uploadAgendaFile);
+        setAgendaPreview(name ? { ...meta, title: name } : meta);
+      }
+      if (uploadMinutesFile) {
+        const meta = await previewFile(uploadMinutesFile);
+        setMinutesPreview(name ? { ...meta, title: name } : meta);
+      }
       setUploadStep("review");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not extract metadata");
@@ -294,7 +304,7 @@ export default function DocumentsPage({
     try {
       const form = new FormData();
       form.append("year", uploadYear);
-      const title = minutesPreview?.title || agendaPreview?.title || "";
+      const title = uploadName.trim() || minutesPreview?.title || agendaPreview?.title || "";
       const meetingDate = minutesPreview?.meeting_date || agendaPreview?.meeting_date || "";
       form.append("title", title);
       form.append("meeting_date", meetingDate);
@@ -462,11 +472,23 @@ export default function DocumentsPage({
                     {turn.sources.length > 0 && (
                       <div>
                         <p className="font-medium text-slate-700">Sources</p>
-                        <ul className="list-disc pl-5 text-slate-600">
+                        <ul className="list-disc pl-5 text-slate-600 space-y-0.5">
                           {turn.sources.map((s) => (
                             <li key={s.document_id}>
-                              {s.title} ({s.year})
-                              {s.pages.length ? ` — pages ${s.pages.join(", ")}` : ""}
+                              <button
+                                type="button"
+                                className="text-left text-teal-700 hover:text-teal-900 hover:underline disabled:opacity-50"
+                                disabled={pdfBusyId === s.document_id}
+                                onClick={() => openViewer(s.document_id)}
+                                title="Open this document"
+                              >
+                                {s.title}
+                                {" ("}
+                                {s.meeting_date ? formatMeetingDate(s.meeting_date) : s.year}
+                                {")"}
+                                {s.pages.length ? ` — pages ${s.pages.join(", ")}` : ""}
+                                {pdfBusyId === s.document_id ? " …" : ""}
+                              </button>
                             </li>
                           ))}
                         </ul>
@@ -553,8 +575,21 @@ export default function DocumentsPage({
             {uploadStep === "pick" && (
               <>
                 <p className="text-sm text-slate-600">
-                  Choose the meeting year and at least one PDF (Agenda and/or Minutes).
+                  Give the document a name, choose the meeting year, and add at least one PDF (Agenda and/or Minutes).
                 </p>
+                <label className="text-sm block">
+                  <span className="text-slate-600 font-medium">Document name</span>
+                  <input
+                    type="text"
+                    className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
+                    value={uploadName}
+                    onChange={(e) => setUploadName(e.target.value)}
+                    placeholder="e.g. Moderation Meeting — 8 May 2026"
+                  />
+                  <span className="text-xs text-slate-400">
+                    Used as the meeting title. Leave blank to auto-extract it from the PDF.
+                  </span>
+                </label>
                 <label className="text-sm block">
                   <span className="text-slate-600 font-medium">Meeting year</span>
                   <input

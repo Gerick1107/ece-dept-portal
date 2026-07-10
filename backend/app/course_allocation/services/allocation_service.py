@@ -39,9 +39,12 @@ def list_allocations_view(
     ug_pg: str | None = None,
     core_elective: str | None = None,
     first_year_only: bool = False,
+    scope_faculty_id: int | None = None,
 ) -> dict:
     semesters = scope_semesters(scope)
     stmt = select(CourseAllocation)
+    if scope_faculty_id is not None:
+        stmt = stmt.where(CourseAllocation.faculty_id == scope_faculty_id)
     if semesters:
         stmt = stmt.where(CourseAllocation.semester.in_(semesters))
     if ug_pg and ug_pg.upper() != "ALL":
@@ -72,8 +75,11 @@ def list_allocations_view(
         else:
             unmatched.append(row)
 
+    faculty_pool = _active_faculty(db)
+    if scope_faculty_id is not None:
+        faculty_pool = [f for f in faculty_pool if f.id == scope_faculty_id]
     faculty_rows = []
-    for faculty in _active_faculty(db):
+    for faculty in faculty_pool:
         courses = sorted(
             by_faculty.get(faculty.id, []),
             key=lambda c: (semester_sort_key(c.semester), c.course_code),
@@ -275,9 +281,12 @@ def list_courses_view(
     ug_pg: str | None = None,
     core_elective: str | None = None,
     first_year_only: bool = False,
+    scope_faculty_id: int | None = None,
 ) -> dict:
     semesters = scope_semesters(scope)
     stmt = select(CourseAllocation).where(CourseAllocation.is_faculty_placeholder.is_(False))
+    if scope_faculty_id is not None:
+        stmt = stmt.where(CourseAllocation.faculty_id == scope_faculty_id)
     if semesters:
         stmt = stmt.where(CourseAllocation.semester.in_(semesters))
     if ug_pg and ug_pg.upper() != "ALL":

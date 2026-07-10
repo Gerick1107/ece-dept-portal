@@ -57,7 +57,7 @@ MySQL + filesystem storage
 | Budget | `backend/app/budget/` | Income, expenditure, inventory |
 | Notifications | `backend/app/notifications/` | Tracker, replies, reminders |
 | Analytics | `backend/app/analytics/` | Dashboards |
-| LLM Insights | `backend/app/llm/` | Groq or local (Ollama) narratives |
+| LLM Insights | `backend/app/llm/` | Local (Ollama) narratives |
 | Auth | `backend/app/auth/` | Users, JWT |
 
 Details: [MODULES.md](MODULES.md).

@@ -13,8 +13,10 @@ from app.database.session import SessionLocal
 from app.publications.constants.defaults import SCRAPE_STATUS_COMPLETED, SCRAPE_STATUS_FAILED
 from app.publications.models import BlockedPublication, Faculty, Publication, PublicationFaculty, ScrapeLog
 from app.publications.scraper.serpapi_scraper import SerpApiError, scrape_faculty_serpapi
+from app.publications.services.date_backfill_service import needs_exact_date, resolve_exact_date
 from app.publications.services.enrichment_service import enrich_publication
 from app.publications.services.serpapi_keys import SerpApiKeyManager, load_api_keys
+from app.publications.utils.dates import parse_precision
 from app.publications.utils.helpers import is_within_tenure, make_source_hash
 
 logger = logging.getLogger(__name__)
@@ -148,6 +150,28 @@ def gap_fill_faculty(
                 break
             if enrich_publication(publication, client=client, key_manager=key_manager):
                 result.enriched += 1
+
+        # Fill exact publication dates for any new pubs still missing full precision.
+        # This uses plain HTTP (publisher pages / Crossref) — no SerpAPI quota.
+        for publication in new_publications:
+            if not needs_exact_date(publication):
+                continue
+            _, current_precision = parse_precision(publication.publication_date)
+            iso, precision = resolve_exact_date(publication, client=client)
+            if iso and precision == "day" and current_precision != "day":
+                publication.publication_date = iso
+
+        # Fill any admin-defined custom columns (e.g. ISSN) for new pubs — plain
+        # HTTP from publisher pages / Crossref, no SerpAPI quota.
+        if new_publications:
+            try:
+                from app.publications.services.custom_columns_service import (
+                    fill_custom_columns_for_publications,
+                )
+
+                fill_custom_columns_for_publications(db, new_publications, client=client)
+            except Exception:
+                logger.warning("Custom column fill skipped for faculty_id=%s", faculty.id)
 
         log.status = SCRAPE_STATUS_COMPLETED
         log.new_publications_added = result.newly_inserted

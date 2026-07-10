@@ -9,16 +9,16 @@ const STORAGE_KEY = "llm_provider";
 
 function readStored(): LlmProviderId | null {
   const v = localStorage.getItem(STORAGE_KEY);
-  return v === "groq" || v === "local" ? v : null;
+  return v === "local" ? v : null;
 }
 
 /**
- * Shared state for the per-request LLM provider choice (Cloud Groq vs Local Ollama).
- * The selection persists across the session via localStorage, and provider
- * availability is fetched so the UI can warn before a request is sent.
+ * Shared state for the LLM provider. All generative features run on the local
+ * (offline) Ollama model; availability is fetched so the UI can warn before a
+ * request is sent.
  */
 export function useLlmProvider() {
-  const [provider, setProviderState] = useState<LlmProviderId>(() => readStored() ?? "groq");
+  const [provider, setProviderState] = useState<LlmProviderId>(() => readStored() ?? "local");
   const [providers, setProviders] = useState<LlmProviderInfo[]>([]);
   const [loading, setLoading] = useState(true);
 

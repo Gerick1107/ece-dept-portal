@@ -57,7 +57,7 @@ export default function LoginPage() {
         className="w-full max-w-md bg-white rounded-xl shadow-xl p-8 space-y-5"
       >
         <div className="flex flex-col items-center text-center gap-3">
-          <img src="/logo.png" alt="ECE Department" className="h-16 bg-white rounded-lg p-2 shadow" />
+          <img src="/logo.png?v=2" alt="ECE Department" className="h-16 bg-white rounded-lg p-2 shadow" />
           <div>
             <p className="text-xs text-teal-700 font-semibold uppercase tracking-wide">
               ECE Department

@@ -9,13 +9,13 @@ type Props = {
 };
 
 const FALLBACK: Record<LlmProviderId, string> = {
-  groq: "Cloud (Groq — fast, online)",
   local: "Local (Offline — free, runs on this machine)",
 };
 
 /**
- * Per-request LLM provider toggle shown before any LLM action runs.
- * Surfaces availability of each provider so the user is warned up front.
+ * Local LLM status indicator shown before any LLM action runs.
+ * The portal runs a single local (offline) model, so this surfaces whether the
+ * model is reachable rather than offering a provider choice.
  */
 export default function ProviderSelector({
   provider,
@@ -24,14 +24,13 @@ export default function ProviderSelector({
   disabled,
   className,
 }: Props) {
-  const options: LlmProviderId[] = ["groq", "local"];
+  const options: LlmProviderId[] = ["local"];
   const info = providers.find((p) => p.id === provider) ?? null;
-  const labelFor = (id: LlmProviderId) =>
-    id === "groq" ? "Cloud (Groq — fast, online)" : "Local (Offline — free, runs on this machine)";
+  const labelFor = (_id: LlmProviderId) => "Local (Offline — free, runs on this machine)";
 
   return (
     <div className={`text-sm ${className ?? ""}`}>
-      <span className="block text-xs font-medium text-slate-500 mb-1">AI provider</span>
+      <span className="block text-xs font-medium text-slate-500 mb-1">Local AI</span>
       <div className="flex flex-wrap gap-2">
         {options.map((id) => {
           const p = providers.find((x) => x.id === id);

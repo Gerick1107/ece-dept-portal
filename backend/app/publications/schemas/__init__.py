@@ -1,6 +1,10 @@
 from app.publications.schemas.publication import (
     BulkDeleteRequest,
     CsvImportSummary,
+    CustomColumnCreate,
+    CustomColumnResponse,
+    CustomColumnSuggestRequest,
+    CustomColumnUpdate,
     DeletionResponse,
     FacultyAffiliationResponse,
     FacultyAffiliationsResponse,
@@ -34,4 +38,8 @@ __all__ = [
     "SyncAllResponse",
     "BulkDeleteRequest",
     "DeletionResponse",
+    "CustomColumnCreate",
+    "CustomColumnUpdate",
+    "CustomColumnResponse",
+    "CustomColumnSuggestRequest",
 ]

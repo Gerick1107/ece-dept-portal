@@ -34,12 +34,16 @@ export default function PublicationsTable({
   publications,
   mode = "publications",
   showPatentOffice = true,
+  venueLabel = "Venue / Journal",
+  venueField,
   isAdmin,
   onDelete,
 }: {
   publications: Publication[];
   mode?: PublicationTableMode;
   showPatentOffice?: boolean;
+  venueLabel?: string;
+  venueField?: "journal" | "conference" | "book";
   isAdmin?: boolean;
   onDelete?: (id: number) => void;
 }) {
@@ -99,7 +103,7 @@ export default function PublicationsTable({
             ) : mode === "publications" ? (
               <>
                 <th className="py-2 px-3 font-medium w-[25%]">Authors</th>
-                <th className="py-2 px-3 font-medium w-[20%]">Venue / Journal</th>
+                <th className="py-2 px-3 font-medium w-[20%]">{venueLabel}</th>
               </>
             ) : (
               <th className="py-2 px-3 font-medium w-[30%]">Authors/Inventors</th>
@@ -151,7 +155,9 @@ export default function PublicationsTable({
                     <td className="py-3 px-3 align-top text-slate-700 max-w-xs truncate" title={people || undefined}>
                       {people || "—"}
                     </td>
-                    <td className="py-3 px-3 align-top text-slate-700">{publicationVenue(p) || "—"}</td>
+                    <td className="py-3 px-3 align-top text-slate-700">
+                      {(venueField ? p[venueField] : publicationVenue(p)) || "—"}
+                    </td>
                   </>
                 ) : (
                   <td className="py-3 px-3 align-top text-slate-700 max-w-xs truncate" title={people || undefined}>

@@ -21,7 +21,7 @@ from app.database.models.copo_analytics import CopoRunAnalyticsSnapshot
 from app.database.models.user import User
 from app.llm.models.entities import LlmInsightsCache
 from app.llm.services.assessment_summary import format_assessment_summary_block, summarize_assessment_ids
-from app.llm.services.groq_service import LlmError
+from app.llm.services.errors import LlmError
 from app.llm.services.llm_dispatch import generate_text
 from app.llm.services.mapping_descriptions import extract_co_descriptions_for_course, extract_po_descriptions
 
@@ -80,12 +80,31 @@ def _parse_run(row: CopoRunAnalyticsSnapshot) -> dict | None:
     }
 
 
-def _snapshot_query(db: Session, _user: User):
-    return list(
+def _snapshot_query(db: Session, user: User):
+    from app.database.models.user import UserRole
+
+    rows = list(
         db.scalars(
             select(CopoRunAnalyticsSnapshot).order_by(CopoRunAnalyticsSnapshot.run_created_at.asc())
         ).all()
     )
+    # Admins see every run. Faculty/HOD see runs they created OR runs for courses
+    # they taught (matched to their course allocations by course code + semester).
+    if user is None or user.role == UserRole.admin:
+        return rows
+
+    from app.analytics.utils.faculty_course_match import (
+        faculty_course_semester_keys,
+        snapshot_matches_faculty,
+    )
+
+    allowed = faculty_course_semester_keys(db, user.faculty_id) if user.faculty_id else set()
+    return [
+        r
+        for r in rows
+        if r.user_id == user.id
+        or snapshot_matches_faculty(r.course_title, r.semester_label, allowed)
+    ]
 
 
 def _section_matches(run_section: str | None, requested: str | None) -> bool:
@@ -630,7 +649,7 @@ async def generate_insights(
     current_section: str | None = None,
     previous_semester: str | None = None,
     previous_section: str | None = None,
-    provider: str = "groq",
+    provider: str = "local",
 ) -> dict:
     comparison = get_course_comparison(
         db,
@@ -688,11 +707,7 @@ async def generate_insights(
     )
 
     settings = get_settings()
-    insights_max_tokens = (
-        settings.local_llm_insights_max_tokens
-        if provider == "local"
-        else settings.llm_insights_max_tokens
-    )
+    insights_max_tokens = settings.local_llm_insights_max_tokens
     try:
         llm_response = await generate_text(prompt, provider=provider, max_tokens=insights_max_tokens)
     except LlmError:

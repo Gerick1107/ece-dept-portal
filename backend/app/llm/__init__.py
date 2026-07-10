@@ -1,1 +1,1 @@
-"""LLM-assisted workflows (Groq insights, SDG tagging)."""
+"""LLM-assisted workflows (local Ollama insights, SDG tagging)."""

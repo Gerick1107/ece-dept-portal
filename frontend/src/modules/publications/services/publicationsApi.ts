@@ -1,5 +1,24 @@
-import { apiDelete, apiGet, apiPostJson } from "../../../services/api";
+import { apiDelete, apiGet, apiPatchJson, apiPostJson } from "../../../services/api";
 import type { Faculty, PaginationMeta, Publication } from "../types/publications";
+
+export type CustomColumn = {
+  id: number;
+  key: string;
+  label: string;
+  description: string | null;
+  source_keys: string | null;
+  crossref_field: string | null;
+  use_llm: boolean;
+  enabled: boolean;
+};
+
+export type CustomColumnInput = {
+  label: string;
+  description?: string | null;
+  source_keys?: string | null;
+  crossref_field?: string | null;
+  use_llm?: boolean;
+};
 
 export type ScrapeLogEntry = {
   id: number;
@@ -84,6 +103,40 @@ export async function deletePublication(publicationId: number): Promise<void> {
 
 export async function syncAllPublications(): Promise<{ status: string; message: string }> {
   return apiPostJson("/publications/scrape/sync-all", {});
+}
+
+export async function backfillPublicationDates(): Promise<{ status: string; message: string }> {
+  return apiPostJson("/publications/scrape/backfill-dates", {});
+}
+
+export async function listCustomColumns(): Promise<CustomColumn[]> {
+  return apiGet("/publications/custom-columns");
+}
+
+export async function createCustomColumn(body: CustomColumnInput): Promise<CustomColumn> {
+  return apiPostJson("/publications/custom-columns", body);
+}
+
+export async function updateCustomColumn(
+  id: number,
+  body: Partial<CustomColumnInput> & { enabled?: boolean }
+): Promise<CustomColumn> {
+  return apiPatchJson(`/publications/custom-columns/${id}`, body);
+}
+
+export async function deleteCustomColumn(id: number): Promise<void> {
+  await apiDelete(`/publications/custom-columns/${id}`);
+}
+
+export async function suggestCustomColumnSources(
+  label: string,
+  description?: string
+): Promise<{ label: string; source_keys: string; crossref_field: string | null; note: string }> {
+  return apiPostJson("/publications/custom-columns/suggest", { label, description });
+}
+
+export async function backfillCustomColumns(): Promise<{ status: string; message: string }> {
+  return apiPostJson("/publications/custom-columns/backfill", {});
 }
 
 export async function getScrapeLogs(params?: {

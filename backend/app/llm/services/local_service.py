@@ -1,8 +1,7 @@
 """Local LLM client backed by Ollama (https://ollama.com).
 
-Ollama exposes an OpenAI-compatible API at ``/v1`` so we reuse the OpenAI SDK and
-only differ from the Groq client by ``base_url``, ``api_key`` and ``model``. Everything
-runs on the local machine — no API key, no cost, fully offline.
+Ollama exposes an OpenAI-compatible API at ``/v1`` so we reuse the OpenAI SDK.
+Everything runs on the local machine — no API key, no cost, fully offline.
 
 The model must be pulled first, e.g. ``ollama pull llama3.2:3b``. See README.
 """
@@ -14,7 +13,7 @@ import httpx
 from openai import APIConnectionError, APIError, AuthenticationError, NotFoundError, OpenAI
 
 from app.config import get_settings
-from app.llm.services.groq_service import LlmError
+from app.llm.services.errors import LlmError
 
 _SYSTEM_PROMPT = (
     "You are an academic course improvement advisor for an Electronics and "
@@ -40,7 +39,7 @@ def _unavailable(detail: str) -> LlmError:
     model = (settings.local_llm_model or "llama3.2:3b").strip()
     return LlmError(
         f"Local LLM (Ollama) isn't reachable. Start it with `ollama serve` and make sure "
-        f"`{model}` is pulled (`ollama pull {model}`). Or switch to Cloud (Groq). [{detail}]",
+        f"`{model}` is pulled (`ollama pull {model}`). [{detail}]",
         status_code=503,
         code="local_llm_unavailable",
     )
@@ -50,7 +49,7 @@ def _model_not_found() -> LlmError:
     settings = get_settings()
     model = (settings.local_llm_model or "llama3.2:3b").strip()
     return LlmError(
-        f"Local model `{model}` is not pulled. Run `ollama pull {model}`, or switch to Cloud (Groq).",
+        f"Local model `{model}` is not pulled. Run `ollama pull {model}`.",
         status_code=503,
         code="local_llm_unavailable",
     )

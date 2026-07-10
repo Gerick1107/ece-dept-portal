@@ -5,6 +5,7 @@ from app.publications.models.entities import (
     FacultyAffiliation,
     Publication,
     PublicationAuditLog,
+    PublicationCustomColumn,
     PublicationFaculty,
     ScrapeLog,
 )
@@ -18,4 +19,5 @@ __all__ = [
     "ScrapeLog",
     "BlockedPublication",
     "PublicationAuditLog",
+    "PublicationCustomColumn",
 ]

@@ -6,14 +6,13 @@ from pathlib import Path
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.config import get_settings
 from app.database.session import SessionLocal
 
 from app.documents.models.entities import DocumentChunk, Meeting, MeetingFile
 from app.documents.services.embedding_service import embed_texts, embedding_to_json
 from app.documents.services.file_manager import DOCUMENT_TYPE_DIRS, resolve_document_path
 from app.documents.services.pdf_service import extract_pdf_metadata
-from app.llm.services.groq_service import LlmError
+from app.llm.services.errors import LlmError
 from app.llm.services.llm_dispatch import generate_text
 
 _CHUNK_SIZE = 1200
@@ -96,7 +95,7 @@ async def generate_document_description(
     )
     return await generate_text(
         prompt,
-        provider=get_settings().default_llm_provider,
+        provider="local",
         system_prompt=system,
         temperature=0.3,
         max_tokens=180,

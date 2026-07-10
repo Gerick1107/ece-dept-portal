@@ -112,6 +112,8 @@ class Publication(Base):
     scholar_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     pdf_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     raw_metadata: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # JSON blob of admin-defined custom columns, keyed by column key (e.g. {"issn": "1234-5678"}).
+    custom_fields: Mapped[str | None] = mapped_column(Text, nullable=True)
     source_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
     is_iiitd_publication: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -175,6 +177,28 @@ class BlockedPublication(Base):
     title: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     reason: Mapped[str] = mapped_column(String(255), nullable=False, default="manual_deletion")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class PublicationCustomColumn(Base):
+    """Admin-defined extra column (e.g. ISSN) fetched from publisher links / Crossref
+    during syncs and backfills. Values are stored in ``publications.custom_fields``."""
+
+    __tablename__ = "publication_custom_columns"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    key: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    label: Mapped[str] = mapped_column(String(128), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Comma-separated HTML meta-tag names to try on publisher pages (e.g. "citation_issn,prism.issn").
+    source_keys: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Optional Crossref field to fall back to (e.g. "ISSN", "ISBN", "DOI", "volume").
+    crossref_field: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    use_llm: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 class PublicationAuditLog(Base):

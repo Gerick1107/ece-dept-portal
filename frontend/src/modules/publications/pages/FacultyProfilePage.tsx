@@ -5,7 +5,9 @@ import PublicationsTable from "../components/PublicationsTable";
 import { deletePublication, listAllPublications, listFaculty } from "../services/publicationsApi";
 import type { Faculty, Publication } from "../types/publications";
 
-type ProfileTab = "publications" | "patents";
+type ProfileTab = "publications" | "journals" | "conferences" | "books" | "patents";
+
+const hasText = (v?: string | null) => Boolean(v && v.trim());
 
 export default function FacultyProfilePage() {
   const { facultyId } = useParams();
@@ -40,18 +42,41 @@ export default function FacultyProfilePage() {
     loadPublications();
   }, [loadPublications]);
 
+  const matchesTab = useCallback((p: Publication, tab: ProfileTab) => {
+    switch (tab) {
+      case "patents":
+        return p.is_patent;
+      case "journals":
+        return !p.is_patent && hasText(p.journal);
+      case "conferences":
+        return !p.is_patent && hasText(p.conference);
+      case "books":
+        return !p.is_patent && hasText(p.book);
+      case "publications":
+      default:
+        return !p.is_patent;
+    }
+  }, []);
+
   const tabItems = useMemo(() => {
     const q = titleQuery.trim().toLowerCase();
-    const byPatent = activeTab === "patents";
     return publications.filter((p) => {
-      if (p.is_patent !== byPatent) return false;
+      if (!matchesTab(p, activeTab)) return false;
       if (!q) return true;
       return p.title.toLowerCase().includes(q);
     });
-  }, [publications, titleQuery, activeTab]);
+  }, [publications, titleQuery, activeTab, matchesTab]);
 
-  const pubCount = useMemo(() => publications.filter((p) => !p.is_patent).length, [publications]);
-  const patentCount = useMemo(() => publications.filter((p) => p.is_patent).length, [publications]);
+  const counts = useMemo(
+    () => ({
+      publications: publications.filter((p) => matchesTab(p, "publications")).length,
+      journals: publications.filter((p) => matchesTab(p, "journals")).length,
+      conferences: publications.filter((p) => matchesTab(p, "conferences")).length,
+      books: publications.filter((p) => matchesTab(p, "books")).length,
+      patents: publications.filter((p) => matchesTab(p, "patents")).length,
+    }),
+    [publications, matchesTab]
+  );
 
   const scholarUrl = useMemo(
     () => (faculty ? `https://scholar.google.com/citations?user=${faculty.scholar_id}` : "#"),
@@ -70,7 +95,7 @@ export default function FacultyProfilePage() {
     <div className="space-y-6 min-h-0">
       <section className="bg-white border rounded-xl p-5">
         <div className="flex items-start gap-4">
-          <img src={faculty.photo_url || "/logo.png"} alt={faculty.name} className="w-20 h-20 rounded-full border" />
+          <img src={faculty.photo_url || "/logo.png?v=2"} alt={faculty.name} className="w-20 h-20 rounded-full border" />
           <div>
             <h2 className="text-xl font-semibold">{faculty.name}</h2>
             <p className="text-sm text-slate-700">
@@ -113,25 +138,27 @@ export default function FacultyProfilePage() {
           <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{loadError}</p>
         )}
         <div className="flex justify-between items-center gap-2 flex-wrap">
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setActiveTab("publications")}
-              className={`rounded-lg px-3 py-1.5 text-sm ${
-                activeTab === "publications" ? "bg-teal-700 text-white" : "border border-slate-300"
-              }`}
-            >
-              Publications ({pubCount})
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("patents")}
-              className={`rounded-lg px-3 py-1.5 text-sm ${
-                activeTab === "patents" ? "bg-teal-700 text-white" : "border border-slate-300"
-              }`}
-            >
-              Patents ({patentCount})
-            </button>
+          <div className="flex gap-2 flex-wrap">
+            {(
+              [
+                ["publications", "Publications"],
+                ["journals", "Journals"],
+                ["conferences", "Conferences"],
+                ["books", "Books"],
+                ["patents", "Patents"],
+              ] as const
+            ).map(([tab, label]) => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setActiveTab(tab)}
+                className={`rounded-lg px-3 py-1.5 text-sm ${
+                  activeTab === tab ? "bg-teal-700 text-white" : "border border-slate-300"
+                }`}
+              >
+                {label} ({counts[tab]})
+              </button>
+            ))}
           </div>
           <input
             className="border rounded px-2 py-1 text-sm w-64"
@@ -143,6 +170,24 @@ export default function FacultyProfilePage() {
         <PublicationsTable
           publications={tabItems}
           mode={activeTab === "patents" ? "patents" : "publications"}
+          venueLabel={
+            activeTab === "journals"
+              ? "Journal"
+              : activeTab === "conferences"
+                ? "Conference"
+                : activeTab === "books"
+                  ? "Book"
+                  : "Venue / Journal"
+          }
+          venueField={
+            activeTab === "journals"
+              ? "journal"
+              : activeTab === "conferences"
+                ? "conference"
+                : activeTab === "books"
+                  ? "book"
+                  : undefined
+          }
           showPatentOffice
           isAdmin={isAdmin}
           onDelete={isAdmin ? handleDelete : undefined}

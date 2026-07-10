@@ -7,7 +7,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user, require_roles
+from app.auth.dependencies import FacultyScope, get_current_user, get_faculty_scope, require_roles
 from app.contributions.models.entities import CONTRIBUTION_MODELS
 from app.contributions.services.contribution_service import (
     create_contribution,
@@ -60,7 +60,7 @@ def _row_to_dict(row) -> dict[str, Any]:
 def export_contributions(
     resource: str,
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[User, Depends(get_current_user)],
+    scope: Annotated[FacultyScope, Depends(get_faculty_scope)],
     query: str | None = None,
     year: str | None = None,
     exact_year: int | None = None,
@@ -72,6 +72,8 @@ def export_contributions(
     extra_filter: str | None = Query(default=None),
 ):
     resource = _check_resource(resource)
+    if not scope.see_all:
+        faculty_id = scope.faculty_id if scope.faculty_id is not None else -1
     payload = export_contributions_xlsx(
         db,
         resource,
@@ -96,7 +98,7 @@ def export_contributions(
 def list_all(
     resource: str,
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[User, Depends(get_current_user)],
+    scope: Annotated[FacultyScope, Depends(get_faculty_scope)],
     query: str | None = None,
     year: str | None = None,
     exact_year: int | None = None,
@@ -109,6 +111,10 @@ def list_all(
         sync_contribution_csv(db, resource)
     except Exception:
         pass
+    # Non-admins only see their own contribution records.
+    if not scope.see_all:
+        faculty_id = scope.faculty_id if scope.faculty_id is not None else -1
+        unmatched_only = False
     items = list_contributions(
         db,
         resource,
@@ -119,12 +125,19 @@ def list_all(
         extra_filter=extra_filter,
         unmatched_only=unmatched_only,
     )
-    unmatched = list_contributions(db, resource, unmatched_only=True)
+    if scope.see_all:
+        unmatched = list_contributions(db, resource, unmatched_only=True)
+        faculty_list = list_faculty_with_records(db, resource)
+    else:
+        unmatched = []
+        faculty_list = [
+            f for f in list_faculty_with_records(db, resource) if f.get("id") == scope.faculty_id
+        ]
     return ContributionListResponse(
         items=[_row_to_dict(r) for r in items],
         years=list_distinct_years(db, resource),
         exact_years=list_distinct_exact_years(db, resource),
-        faculty=list_faculty_with_records(db, resource),
+        faculty=faculty_list,
         extra_filter_values=list_distinct_extra_values(db, resource),
         unmatched_count=len(unmatched),
     )

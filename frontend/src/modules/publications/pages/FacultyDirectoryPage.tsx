@@ -13,7 +13,7 @@ function FacultyCard({ faculty }: { faculty: Faculty }) {
     >
       <div className="flex items-start gap-3">
         <img
-          src={faculty.photo_url || "/logo.png"}
+          src={faculty.photo_url || "/logo.png?v=2"}
           className="w-14 h-14 object-cover rounded-full border shrink-0"
           alt={faculty.name}
         />

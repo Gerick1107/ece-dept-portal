@@ -13,7 +13,7 @@ class GenerateInsightsRequest(BaseModel):
     current_section: str | None = None
     previous_semester: str | None = None
     previous_section: str | None = None
-    provider: Literal["groq", "local"] = "groq"
+    provider: Literal["local"] = "local"
 
 
 class AssessmentSummaryItem(BaseModel):

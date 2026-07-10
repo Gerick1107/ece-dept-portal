@@ -26,7 +26,7 @@ from app.documents.services.embedding_service import (
     embedding_from_json,
 )
 from app.documents.services.meeting_matcher import parse_meeting_number
-from app.llm.services.groq_service import LlmError
+from app.llm.services.errors import LlmError
 from app.llm.services.llm_dispatch import generate_text
 
 _MIN_RELEVANCE_SCORE = 0.32
@@ -82,6 +82,7 @@ class RetrievedChunk:
     section_label: str | None
     chunk_text: str
     score: float
+    meeting_date: str | None = None
 
 
 def _tokenize(text: str) -> set[str]:
@@ -149,6 +150,7 @@ def retrieve_chunks(
                 section_label=row.section_label,
                 chunk_text=row.chunk_text,
                 score=score,
+                meeting_date=meeting.meeting_date,
             )
         )
     scored.sort(key=lambda item: (-item.score, -item.year, item.meeting_file_id))
@@ -323,6 +325,7 @@ def _meeting_description_context(meetings: list[Meeting]) -> tuple[str, list[dic
                     "title": meeting.meeting_title,
                     "file_role": "agenda",
                     "year": meeting.year,
+                    "meeting_date": meeting.meeting_date,
                     "page_number": None,
                     "section_label": "AI summary",
                     "text": agenda.description,
@@ -336,6 +339,7 @@ def _meeting_description_context(meetings: list[Meeting]) -> tuple[str, list[dic
                     "title": meeting.meeting_title,
                     "file_role": "minutes",
                     "year": meeting.year,
+                    "meeting_date": meeting.meeting_date,
                     "page_number": None,
                     "section_label": "AI summary",
                     "text": minutes.description,
@@ -344,6 +348,21 @@ def _meeting_description_context(meetings: list[Meeting]) -> tuple[str, list[dic
         if len(block) > 1:
             parts.append("\n".join(block))
     return "\n\n".join(parts), pseudo_chunks
+
+
+def _source_sort_key(source: dict) -> tuple[int, int, int, str]:
+    """Chronological sort key for a RAG source (oldest first).
+
+    Prefers the parsed meeting_date, then the title (ECE meets encode the date in
+    the title), then the year column. Missing parts sort before more specific ones.
+    """
+    for text in (source.get("meeting_date"), source.get("title")):
+        if not text:
+            continue
+        hint = detect_date_hint(str(text))
+        if hint and hint.get("year"):
+            return (hint["year"], hint.get("month") or 0, hint.get("day") or 0, str(source.get("title") or ""))
+    return (int(source.get("year") or 0), 0, 0, str(source.get("title") or ""))
 
 
 def _ordinal(n: int) -> str:
@@ -407,16 +426,26 @@ async def _generate_and_pack(
                 "document_id": chunk.meeting_file_id,
                 "title": chunk.document_title,
                 "year": chunk.year,
+                "meeting_date": chunk.meeting_date,
                 "pages": set(),
             },
         )
+        entry.setdefault("meeting_date", chunk.meeting_date)
         if chunk.page_number:
             entry["pages"].add(chunk.page_number)
 
     sources = [
-        {"document_id": item["document_id"], "title": item["title"], "year": item["year"], "pages": sorted(item["pages"])}
+        {
+            "document_id": item["document_id"],
+            "title": item["title"],
+            "year": item["year"],
+            "meeting_date": item.get("meeting_date"),
+            "pages": sorted(item["pages"]),
+        }
         for item in source_map.values()
     ]
+    # Chronological order (oldest first) by best-available date, then title.
+    sources.sort(key=_source_sort_key)
 
     log = DocumentQueryLog(
         document_type=document_type,
@@ -476,7 +505,7 @@ async def answer_document_question(
     document_type: str,
     question: str,
     user_id: int | None,
-    provider: str = "groq",
+    provider: str = "local",
     history: list[dict] | None = None,
 ) -> dict:
     history = history or []

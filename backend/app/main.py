@@ -9,7 +9,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.auth.router import router as auth_router
 from app.auth.service import bootstrap_admin_if_needed
 from app.config import get_settings
-from app.middleware.security import LoginRateLimitMiddleware, SecurityHeadersMiddleware
+from app.middleware.security import (
+    BlockedUserAgentMiddleware,
+    LoginRateLimitMiddleware,
+    RateLimitMiddleware,
+    SecurityHeadersMiddleware,
+)
 from app.copo.download_tokens import cleanup_stale_tokens
 from app.analytics.router import router as analytics_router
 from app.notifications.routes.router import router as notifications_router
@@ -79,8 +84,6 @@ async def lifespan(_app: FastAPI):
         ensure_requirement_reminder_scheduler_started()
     if settings.enable_scheduler:
         ensure_scheduler_started()
-    if not settings.groq_api_key:
-        logger.warning("GROQ_API_KEY is not set — LLM insights generation will be unavailable.")
     thread = threading.Thread(target=_periodic_cleanup_loop, daemon=True)
     thread.start()
     yield
@@ -97,6 +100,8 @@ app = FastAPI(
 
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(LoginRateLimitMiddleware)
+app.add_middleware(RateLimitMiddleware)
+app.add_middleware(BlockedUserAgentMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
@@ -105,7 +110,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-api = FastAPI()
+# The routers live on a mounted sub-app; disable its interactive docs in
+# production too (the parent app already hides its own docs there).
+_docs_enabled = settings.app_env != "production"
+api = FastAPI(
+    docs_url="/docs" if _docs_enabled else None,
+    redoc_url="/redoc" if _docs_enabled else None,
+    openapi_url="/openapi.json" if _docs_enabled else None,
+)
 api.include_router(auth_router)
 api.include_router(copo_router)
 api.include_router(courses_router)

@@ -164,7 +164,7 @@ See [MAINTENANCE.md](MAINTENANCE.md) for CSV sync behaviour.
 | API | `/api/v1/documents/{type}` |
 | Storage | `backend/documents/` or `DOCUMENTS_DIR` |
 
-**Features:** year-grouped PDF lists, admin upload (PDF), dual agenda/minutes files per meeting where applicable, multi-turn RAG Q&A scoped per document set (Groq or local Ollama).
+**Features:** year-grouped PDF lists, admin upload (PDF), dual agenda/minutes files per meeting where applicable, multi-turn RAG Q&A scoped per document set (local Ollama).
 
 ---
 
@@ -237,7 +237,7 @@ Controlled separately from publication scraping:
 |------|--------|
 | UI | `/llm-insights` |
 | API | `/api/v1/llm-insights` |
-| Providers | Cloud (Groq) or local (Ollama) — per-request toggle; see root README |
+| Provider | Local (Ollama), offline only; see root README |
 
 ---
 

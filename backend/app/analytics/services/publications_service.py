@@ -5,7 +5,7 @@ from collections import Counter
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.publications.models.entities import Publication
+from app.publications.models.entities import Publication, PublicationFaculty
 
 
 def _pub_type(row: Publication) -> str:
@@ -26,8 +26,18 @@ def get_publications_analytics(
     year: int | None = None,
     pub_type: str | None = None,
     is_patent: bool | None = None,
+    faculty_id: int | None = None,
 ) -> dict:
-    rows = list(db.scalars(select(Publication).order_by(Publication.publication_year.desc())).all())
+    stmt = select(Publication).order_by(Publication.publication_year.desc())
+    if faculty_id is not None:
+        stmt = stmt.where(
+            Publication.id.in_(
+                select(PublicationFaculty.publication_id).where(
+                    PublicationFaculty.faculty_id == faculty_id
+                )
+            )
+        )
+    rows = list(db.scalars(stmt).all())
 
     filtered: list[Publication] = []
     for row in rows:

@@ -182,7 +182,7 @@ export default function AppLayout() {
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <img
-              src="/logo.png"
+              src="/logo.png?v=2"
               alt="ECE Department"
               className="h-12 w-auto bg-white rounded-md p-1 shrink-0"
             />

@@ -10,7 +10,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user, require_roles
+from app.auth.dependencies import FacultyScope, get_current_user, get_faculty_scope, require_roles
 from app.course_allocation.services.allocation_service import (
     course_history,
     courses_dashboard_summary,
@@ -58,7 +58,7 @@ def summary(
 @router.get("")
 def list_view(
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[User, Depends(get_current_user)],
+    faculty_scope: Annotated[FacultyScope, Depends(get_faculty_scope)],
     scope: str | None = None,
     query: str | None = None,
     ug_pg: str | None = None,
@@ -71,7 +71,7 @@ def list_view(
         pass
     if not scope:
         scope = effective_current_semester()
-    return list_allocations_view(
+    data = list_allocations_view(
         db,
         scope=scope,
         query=query,
@@ -79,12 +79,20 @@ def list_view(
         core_elective=core_elective,
         first_year_only=first_year_only,
     )
+    # Non-admins only see their own teaching rows.
+    if not faculty_scope.see_all:
+        data["faculty_rows"] = [
+            r for r in data.get("faculty_rows", []) if r.get("faculty_id") == faculty_scope.faculty_id
+        ]
+        data["unassigned"] = []
+        data["unmatched"] = []
+    return data
 
 
 @router.get("/export")
 def export_view(
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[User, Depends(get_current_user)],
+    faculty_scope: Annotated[FacultyScope, Depends(get_faculty_scope)],
     scope: str | None = None,
     query: str | None = None,
     ug_pg: str | None = None,
@@ -93,6 +101,9 @@ def export_view(
 ):
     if not scope:
         scope = effective_current_semester()
+    scope_faculty_id = None
+    if not faculty_scope.see_all:
+        scope_faculty_id = faculty_scope.faculty_id if faculty_scope.faculty_id is not None else -1
     payload = export_allocations_xlsx(
         db,
         scope=scope,
@@ -100,6 +111,7 @@ def export_view(
         ug_pg=ug_pg,
         core_elective=core_elective,
         first_year_only=first_year_only,
+        scope_faculty_id=scope_faculty_id,
     )
     return Response(
         content=payload,
@@ -112,8 +124,11 @@ def export_view(
 def faculty_detail(
     faculty_id: int,
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[User, Depends(get_current_user)],
+    scope: Annotated[FacultyScope, Depends(get_faculty_scope)],
 ):
+    # Non-admins may only view their own teaching history.
+    if not scope.see_all and faculty_id != scope.faculty_id:
+        raise HTTPException(status_code=403, detail="You can only view your own courses")
     data = faculty_history(db, faculty_id)
     if not data:
         raise HTTPException(status_code=404, detail="Faculty not found")
@@ -133,7 +148,7 @@ def courses_summary(
 @router.get("/courses")
 def courses_list_view(
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[User, Depends(get_current_user)],
+    faculty_scope: Annotated[FacultyScope, Depends(get_faculty_scope)],
     scope: str | None = None,
     query: str | None = None,
     ug_pg: str | None = None,
@@ -146,6 +161,9 @@ def courses_list_view(
         pass
     if not scope:
         scope = effective_current_semester()
+    scope_faculty_id = None
+    if not faculty_scope.see_all:
+        scope_faculty_id = faculty_scope.faculty_id if faculty_scope.faculty_id is not None else -1
     return list_courses_view(
         db,
         scope=scope,
@@ -153,13 +171,14 @@ def courses_list_view(
         ug_pg=ug_pg,
         core_elective=core_elective,
         first_year_only=first_year_only,
+        scope_faculty_id=scope_faculty_id,
     )
 
 
 @router.get("/courses/export")
 def courses_export_view(
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[User, Depends(get_current_user)],
+    faculty_scope: Annotated[FacultyScope, Depends(get_faculty_scope)],
     scope: str | None = None,
     query: str | None = None,
     ug_pg: str | None = None,
@@ -168,6 +187,9 @@ def courses_export_view(
 ):
     if not scope:
         scope = effective_current_semester()
+    scope_faculty_id = None
+    if not faculty_scope.see_all:
+        scope_faculty_id = faculty_scope.faculty_id if faculty_scope.faculty_id is not None else -1
     payload = export_courses_xlsx(
         db,
         scope=scope,
@@ -175,6 +197,7 @@ def courses_export_view(
         ug_pg=ug_pg,
         core_elective=core_elective,
         first_year_only=first_year_only,
+        scope_faculty_id=scope_faculty_id,
     )
     return Response(
         content=payload,

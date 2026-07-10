@@ -78,7 +78,7 @@ This document summarizes how the ECE Automation Portal addresses common OWASP To
 
 | Control | Implementation |
 |---------|----------------|
-| External fetches | Limited to configured APIs (Groq, SMTP, publication scraping); no user-controlled URLs in server-side fetch |
+| External fetches | Limited to configured APIs (SMTP, publication scraping); LLM runs locally (Ollama); no user-controlled URLs in server-side fetch |
 
 ## Pre-IT review checklist
 

@@ -1,6 +1,6 @@
 import { apiGet, apiPostJson } from "../../../services/api";
 
-export type LlmProviderId = "groq" | "local";
+export type LlmProviderId = "local";
 
 export type LlmProviderInfo = {
   id: LlmProviderId;

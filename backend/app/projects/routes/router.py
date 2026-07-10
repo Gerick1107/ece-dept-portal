@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
-from app.auth.dependencies import get_current_user, require_roles
+from app.auth.dependencies import FacultyScope, get_current_user, get_faculty_scope, require_roles
 from app.database.models.user import User, UserRole
 from app.database.session import get_db
 from app.utils.storage_paths import resolve_storage_path
@@ -78,6 +78,7 @@ def _filters_from_query(
     sdg: int | None = None,
     credit: str | None = None,
     confirmed_sdg_only: bool = True,
+    scope: FacultyScope | None = None,
 ) -> ProjectSearchFilters:
     semester_tags = _parse_csv_list(semesters)
     if not semester_tags and semester:
@@ -85,6 +86,13 @@ def _filters_from_query(
     code_list = _parse_csv_list(course_codes)
     if not code_list and course_code:
         code_list = [course_code.strip()]
+    scope_faculty_id: int | None = None
+    scope_faculty_name: str | None = None
+    if scope is not None and not scope.see_all:
+        # Restrict to the faculty's own projects (guide or co-guide). Use a
+        # non-existent id when the account has no linked faculty → no rows.
+        scope_faculty_id = scope.faculty_id if scope.faculty_id is not None else -1
+        scope_faculty_name = scope.faculty_name
     return ProjectSearchFilters(
         query=query,
         faculty_id=faculty_id,
@@ -98,6 +106,8 @@ def _filters_from_query(
         sdg_number=sdg,
         credit=credit,
         confirmed_sdg_only=confirmed_sdg_only,
+        scope_faculty_id=scope_faculty_id,
+        scope_faculty_name=scope_faculty_name,
     )
 
 
@@ -138,7 +148,7 @@ def project_filter_options(
 @router.get("/search", response_model=ProjectListResponse)
 def list_or_search_projects(
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[User, Depends(get_current_user)],
+    scope: Annotated[FacultyScope, Depends(get_faculty_scope)],
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=500),
     query: str | None = None,
@@ -171,6 +181,7 @@ def list_or_search_projects(
         sdg,
         credit,
         confirmed_sdg_only,
+        scope=scope,
     )
     rows, total = search_projects(db, filters, page, page_size)
     return ProjectListResponse(
@@ -364,7 +375,7 @@ def commit_bulk_sdgs(
 @router.get("/export")
 def export_projects(
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[User, Depends(get_current_user)],
+    scope: Annotated[FacultyScope, Depends(get_faculty_scope)],
     format: str = Query(default="xlsx", pattern="^(csv|xlsx|pdf)$"),
     query: str | None = None,
     faculty_id: int | None = None,
@@ -396,6 +407,7 @@ def export_projects(
         sdg,
         credit,
         confirmed_sdg_only,
+        scope=scope,
     )
     if format == "csv":
         payload = export_projects_csv(db, filters)

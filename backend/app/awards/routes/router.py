@@ -7,7 +7,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user, require_roles
+from app.auth.dependencies import FacultyScope, get_current_user, get_faculty_scope, require_roles
 from app.awards.services.award_service import (
     create_award,
     delete_award,
@@ -68,7 +68,7 @@ class AwardListResponse(BaseModel):
 @router.get("/export")
 def export_awards(
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[User, Depends(get_current_user)],
+    scope: Annotated[FacultyScope, Depends(get_faculty_scope)],
     query: str | None = None,
     year: str | None = None,
     exact_year: int | None = None,
@@ -82,6 +82,9 @@ def export_awards(
     ),
 ):
     names = [n.strip() for n in (faculty_names or "").split(",") if n.strip()] or None
+    # Non-admins can only export their own awards.
+    if not scope.see_all:
+        names = [scope.faculty_name] if scope.faculty_name else ["\x00__none__"]
     payload = export_awards_xlsx(
         db,
         query=query,
@@ -103,7 +106,7 @@ def export_awards(
 @router.get("", response_model=AwardListResponse)
 def list_all_awards(
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[User, Depends(get_current_user)],
+    scope: Annotated[FacultyScope, Depends(get_faculty_scope)],
     query: str | None = None,
     year: str | None = None,
     exact_year: int | None = None,
@@ -118,11 +121,19 @@ def list_all_awards(
         year=year,
         exact_year=exact_year,
     )
+    faculty_names = list_faculty_with_awards(db)
+    # Non-admins only see their own awards.
+    if not scope.see_all:
+        from app.utils.name_utils import strip_name_prefix
+
+        target = strip_name_prefix((scope.faculty_name or "").strip()).lower()
+        items = [a for a in items if strip_name_prefix((a.faculty_name or "").strip()).lower() == target]
+        faculty_names = [scope.faculty_name] if scope.faculty_name else []
     return AwardListResponse(
         items=[AwardResponse.from_row(a) for a in items],
         years=list_distinct_years(db),
         exact_years=list_distinct_exact_years(db),
-        faculty_names=list_faculty_with_awards(db),
+        faculty_names=faculty_names,
     )
 
 

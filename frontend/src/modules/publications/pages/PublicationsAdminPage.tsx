@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../../auth/AuthContext";
+import CustomColumnsPanel from "../components/CustomColumnsPanel";
 import PublicationsModuleIntro from "../components/PublicationsModuleIntro";
 import {
+  backfillPublicationDates,
   getScrapeLogs,
   syncAllPublications,
   type ScrapeLogEntry,
@@ -15,6 +17,7 @@ export default function PublicationsAdminPage() {
   const [logsError, setLogsError] = useState("");
   const [syncMessage, setSyncMessage] = useState("");
   const [syncing, setSyncing] = useState(false);
+  const [backfilling, setBackfilling] = useState(false);
 
   const refreshLogs = useCallback(() => {
     if (!isAdmin) return;
@@ -68,6 +71,26 @@ export default function PublicationsAdminPage() {
     }
   }
 
+  async function handleBackfillDates() {
+    if (
+      !window.confirm(
+        "Fill in exact publication dates for publications that only have a year or year-month. This reads publisher pages and Crossref (no SerpAPI usage) and runs in the background. Continue?"
+      )
+    ) {
+      return;
+    }
+    setBackfilling(true);
+    setSyncMessage("");
+    try {
+      const res = await backfillPublicationDates();
+      setSyncMessage(res.message || "Date backfill started.");
+    } catch (e) {
+      setSyncMessage(e instanceof Error ? e.message : "Backfill failed to start");
+    } finally {
+      setBackfilling(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <PublicationsModuleIntro />
@@ -77,21 +100,34 @@ export default function PublicationsAdminPage() {
           Fetches new publications and patents from each active faculty Scholar profile, stores full
           metadata (including patents), and links them to faculty. Uses SerpAPI key rotation from{" "}
           <code className="text-xs bg-slate-100 px-1 rounded">SERP_API_KEYS</code> in backend .env.
+          The sync also fills exact publication dates for new entries (via publisher pages/Crossref,
+          no SerpAPI cost).
         </p>
-        <button
-          type="button"
-          onClick={handleSyncAll}
-          disabled={syncing}
-          className="rounded-lg bg-teal-700 text-white px-4 py-2 text-sm hover:bg-teal-800 disabled:opacity-60"
-        >
-          {syncing ? "Starting…" : "Sync All Publications"}
-        </button>
+        <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={handleSyncAll}
+            disabled={syncing || backfilling}
+            className="rounded-lg bg-teal-700 text-white px-4 py-2 text-sm hover:bg-teal-800 disabled:opacity-60"
+          >
+            {syncing ? "Starting…" : "Sync All Publications"}
+          </button>
+          <button
+            type="button"
+            onClick={handleBackfillDates}
+            disabled={syncing || backfilling}
+            className="rounded-lg border border-slate-300 px-4 py-2 text-sm hover:bg-slate-50 disabled:opacity-60"
+          >
+            {backfilling ? "Starting…" : "Backfill Missing Dates"}
+          </button>
+        </div>
         {syncMessage && (
           <p className="text-sm text-teal-800 bg-teal-50 border border-teal-200 rounded-lg px-3 py-2">
             {syncMessage}
           </p>
         )}
       </section>
+      <CustomColumnsPanel />
       <section className="bg-white border rounded-xl p-5 space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="font-semibold">Scrape Logs</h3>

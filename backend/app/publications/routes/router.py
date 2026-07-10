@@ -4,19 +4,26 @@ import threading
 import tempfile
 from pathlib import Path
 from typing import Annotated
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user, require_roles
+from app.auth.dependencies import (
+    FacultyScope,
+    FacultyScopeDep,
+    get_current_user,
+    get_faculty_scope,
+    require_roles,
+)
 from app.database.models.user import User, UserRole
 from app.database.session import get_db
 from app.publications.exports.export_service import (
     export_publications_grouped_archive,
     export_publications_csv,
+    export_publications_docx,
     export_publications_excel,
     export_publications_pdf,
 )
@@ -24,6 +31,10 @@ from app.publications.models import Faculty, Publication, ScrapeLog
 from app.publications.schemas import (
     BulkDeleteRequest,
     CsvImportSummary,
+    CustomColumnCreate,
+    CustomColumnResponse,
+    CustomColumnSuggestRequest,
+    CustomColumnUpdate,
     DeletionResponse,
     FacultyAffiliationsResponse,
     FacultyCreate,
@@ -85,21 +96,27 @@ def _to_faculty_response(item: Faculty, total_publications: int) -> FacultyRespo
 
 
 def _to_publication_response(db: Session, item: Publication) -> PublicationResponse:
+    from app.publications.services.custom_columns_service import get_custom_fields
+
     return PublicationResponse.model_validate(
         {
             **item.__dict__,
             "faculty_ids": publication_faculty_ids(db, item.id),
+            "custom_fields": get_custom_fields(item),
         }
     )
 
 
 def _to_publication_responses(db: Session, items: list[Publication]) -> list[PublicationResponse]:
+    from app.publications.services.custom_columns_service import get_custom_fields
+
     faculty_map = publication_faculty_ids_map(db, [item.id for item in items])
     return [
         PublicationResponse.model_validate(
             {
                 **item.__dict__,
                 "faculty_ids": faculty_map.get(item.id, []),
+                "custom_fields": get_custom_fields(item),
             }
         )
         for item in items
@@ -126,6 +143,7 @@ def _mark_stale_scrapes_as_failed(db: Session, max_age_minutes: int = 3) -> int:
 @router.get("/faculty", response_model=FacultyListResponse)
 def get_faculty(
     db: Annotated[Session, Depends(get_db)],
+    scope: FacultyScopeDep,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=200),
     search: str | None = None,
@@ -133,6 +151,10 @@ def get_faculty(
     include_inactive: bool = False,
 ):
     rows, total = list_faculty(db, page, page_size, search, department, include_inactive)
+    # Non-admins only ever see their own directory entry.
+    if not scope.see_all:
+        rows = [pair for pair in rows if pair[0].id == scope.faculty_id]
+        total = len(rows)
     items = [_to_faculty_response(item, total_publications) for item, total_publications in rows]
     return FacultyListResponse(
         items=items,
@@ -219,6 +241,7 @@ async def upload_faculty_csv(
 @router.get("/publications", response_model=PublicationListResponse)
 def get_publications(
     db: Annotated[Session, Depends(get_db)],
+    scope: FacultyScopeDep,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=200),
     query: str | None = None,
@@ -226,6 +249,13 @@ def get_publications(
     publication_year: int | None = None,
     is_patent: bool | None = None,
 ):
+    # Non-admins are locked to their own publications regardless of the param.
+    if not scope.see_all:
+        if scope.is_empty:
+            return PublicationListResponse(
+                items=[], pagination={"page": page, "page_size": page_size, "total": 0}
+            )
+        faculty_id = scope.faculty_id
     items, total = list_publications(
         db,
         page,
@@ -306,6 +336,113 @@ def sync_all_publications(
     )
 
 
+@router.post("/scrape/backfill-dates", response_model=SyncAllResponse)
+def backfill_dates(
+    _: Annotated[User, Depends(require_roles(UserRole.admin))],
+):
+    from app.publications.services.date_backfill_service import run_date_backfill_background
+
+    worker = threading.Thread(target=run_date_backfill_background, daemon=True)
+    worker.start()
+    return SyncAllResponse(
+        status="started",
+        message=(
+            "Backfilling exact publication dates in the background. This reads publisher "
+            "pages and Crossref (no SerpAPI usage) for publications missing a full date. "
+            "Refresh in a while to see updated dates."
+        ),
+    )
+
+
+@router.get("/custom-columns", response_model=list[CustomColumnResponse])
+def list_custom_columns(
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[User, Depends(require_roles(UserRole.admin))],
+):
+    from app.publications.services.custom_columns_service import list_columns
+
+    return list_columns(db)
+
+
+@router.post("/custom-columns", response_model=CustomColumnResponse, status_code=status.HTTP_201_CREATED)
+def add_custom_column(
+    body: CustomColumnCreate,
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[User, Depends(require_roles(UserRole.admin))],
+):
+    from app.publications.services.custom_columns_service import create_column
+
+    try:
+        return create_column(
+            db,
+            label=body.label,
+            description=body.description,
+            source_keys=body.source_keys,
+            crossref_field=body.crossref_field,
+            use_llm=body.use_llm,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.patch("/custom-columns/{column_id}", response_model=CustomColumnResponse)
+def edit_custom_column(
+    column_id: int,
+    body: CustomColumnUpdate,
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[User, Depends(require_roles(UserRole.admin))],
+):
+    from app.publications.services.custom_columns_service import update_column
+
+    col = update_column(db, column_id, **body.model_dump(exclude_unset=True))
+    if col is None:
+        raise HTTPException(status_code=404, detail="Custom column not found")
+    return col
+
+
+@router.delete("/custom-columns/{column_id}", status_code=status.HTTP_204_NO_CONTENT)
+def remove_custom_column(
+    column_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[User, Depends(require_roles(UserRole.admin))],
+):
+    from app.publications.services.custom_columns_service import delete_column
+
+    if not delete_column(db, column_id):
+        raise HTTPException(status_code=404, detail="Custom column not found")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/custom-columns/suggest")
+async def suggest_custom_column(
+    body: CustomColumnSuggestRequest,
+    _: Annotated[User, Depends(require_roles(UserRole.admin))],
+):
+    """Use the local LLM to suggest publisher meta-tag names / Crossref field for
+    a desired column. The admin reviews and edits before saving the column."""
+    from app.publications.services.custom_columns_service import suggest_column_sources
+
+    return await suggest_column_sources(body.label, body.description)
+
+
+@router.post("/custom-columns/backfill", response_model=SyncAllResponse)
+def backfill_custom_columns_endpoint(
+    _: Annotated[User, Depends(require_roles(UserRole.admin))],
+):
+    from app.publications.services.custom_columns_service import run_custom_backfill_background
+
+    worker = threading.Thread(target=run_custom_backfill_background, daemon=True)
+    worker.start()
+    return SyncAllResponse(
+        status="started",
+        message=(
+            "Backfilling custom columns in the background. This reads publisher pages and "
+            "Crossref (no SerpAPI usage) for publications missing these values. Refresh the "
+            "publications table in a while to see the filled columns."
+        ),
+    )
+
+
 @router.post("/scrape/trigger", response_model=ScrapeTriggerResponse)
 def trigger_scrape(
     body: ScrapeTriggerRequest,
@@ -377,9 +514,18 @@ def get_scheduler_status():
     return scheduler_status()
 
 
+def _parse_export_date(value: str | None, field: str) -> "date | None":
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value.strip(), "%Y-%m-%d").date()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"{field} must be in YYYY-MM-DD format") from exc
+
+
 @router.get("/exports")
 def export_publications(
-    format: str = Query(default="csv", pattern="^(csv|xlsx|pdf)$"),
+    format: str = Query(default="csv", pattern="^(csv|xlsx|pdf|docx)$"),
     scope: str = Query(default="all", pattern="^(all|faculty|year)$"),
     export_type: str = Query(default="both", pattern="^(publications|patents|both)$"),
     faculty_id: int | None = None,
@@ -387,13 +533,20 @@ def export_publications(
     publication_year: int | None = None,
     year_start: int | None = None,
     year_end: int | None = None,
+    date_start: str | None = None,
+    date_end: str | None = None,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    faculty_scope: FacultyScope = Depends(get_faculty_scope),
 ):
     if user.role not in (UserRole.admin, UserRole.faculty, UserRole.hod):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     if year_start is not None and year_end is not None and year_start > year_end:
         raise HTTPException(status_code=400, detail="year_start cannot be greater than year_end")
+    parsed_date_start = _parse_export_date(date_start, "date_start")
+    parsed_date_end = _parse_export_date(date_end, "date_end")
+    if parsed_date_start and parsed_date_end and parsed_date_start > parsed_date_end:
+        raise HTTPException(status_code=400, detail="date_start cannot be after date_end")
 
     parsed_faculty_ids: list[int] = []
     if faculty_ids:
@@ -411,6 +564,10 @@ def export_publications(
         parsed_faculty_ids.append(faculty_id)
     parsed_faculty_ids = sorted(set(parsed_faculty_ids))
 
+    # Non-admins can only export their own publications, regardless of params.
+    if not faculty_scope.see_all:
+        parsed_faculty_ids = [faculty_scope.faculty_id] if faculty_scope.faculty_id is not None else [-1]
+
     base_name = "publications"
     if parsed_faculty_ids:
         joined = "-".join(str(fid) for fid in parsed_faculty_ids)
@@ -419,6 +576,8 @@ def export_publications(
         base_name += f"_year_{publication_year}"
     if year_start is not None or year_end is not None:
         base_name += f"_range_{year_start or 'min'}_{year_end or 'max'}"
+    if parsed_date_start is not None or parsed_date_end is not None:
+        base_name += f"_dates_{date_start or 'min'}_{date_end or 'max'}"
 
     if scope in {"faculty", "year"} and format in {"csv", "pdf"}:
         payload = export_publications_grouped_archive(
@@ -429,6 +588,8 @@ def export_publications(
             publication_year=publication_year,
             year_start=year_start,
             year_end=year_end,
+            date_start=parsed_date_start,
+            date_end=parsed_date_end,
             export_type=export_type,
         )
         return Response(
@@ -447,6 +608,8 @@ def export_publications(
             publication_year=publication_year,
             year_start=year_start,
             year_end=year_end,
+            date_start=parsed_date_start,
+            date_end=parsed_date_end,
             title=title,
             export_type=export_type,
         )
@@ -455,6 +618,26 @@ def export_publications(
             media_type="application/pdf",
             headers={"Content-Disposition": f"attachment; filename={base_name}.pdf"},
         )
+    if format == "docx":
+        title = f"Publications — {scope}"
+        if publication_year:
+            title += f" ({publication_year})"
+        payload = export_publications_docx(
+            db,
+            faculty_ids=parsed_faculty_ids or None,
+            publication_year=publication_year,
+            year_start=year_start,
+            year_end=year_end,
+            date_start=parsed_date_start,
+            date_end=parsed_date_end,
+            title=title,
+            export_type=export_type,
+        )
+        return Response(
+            content=payload,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={"Content-Disposition": f"attachment; filename={base_name}.docx"},
+        )
     if format == "xlsx":
         payload = export_publications_excel(
             db,
@@ -462,6 +645,8 @@ def export_publications(
             publication_year=publication_year,
             year_start=year_start,
             year_end=year_end,
+            date_start=parsed_date_start,
+            date_end=parsed_date_end,
             scope=scope,
             export_type=export_type,
         )
@@ -476,10 +661,142 @@ def export_publications(
         publication_year=publication_year,
         year_start=year_start,
         year_end=year_end,
+        date_start=parsed_date_start,
+        date_end=parsed_date_end,
         export_type=export_type,
     )
     return Response(
         content=payload,
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename={base_name}.csv"},
+    )
+
+
+_TEMPLATE_MAX_BYTES = 5 * 1024 * 1024
+_TEMPLATE_MEDIA = {
+    "csv": "text/csv",
+    "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+}
+
+
+@router.post("/exports/template/analyze")
+async def analyze_export_template(
+    template: UploadFile = File(...),
+    use_llm: bool = Query(default=False),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Inspect an uploaded template's columns and propose a field mapping for review."""
+    if user.role not in (UserRole.admin, UserRole.faculty, UserRole.hod):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    from app.publications.exports.custom_export_service import (
+        CANONICAL_FIELDS,
+        TemplateError,
+        extract_headers,
+        llm_guess_fields,
+        match_headers,
+    )
+    from app.publications.services.custom_columns_service import list_columns
+
+    content = await template.read()
+    if len(content) > _TEMPLATE_MAX_BYTES:
+        raise HTTPException(status_code=400, detail="Template too large (max 5 MB)")
+    try:
+        headers, fmt = extract_headers(template.filename or "", content)
+        result = match_headers(headers, db)
+    except TemplateError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    llm_guesses: dict[str, str] = {}
+    if use_llm and result.unknown:
+        llm_guesses = await llm_guess_fields(result.unknown)
+
+    available = list(CANONICAL_FIELDS.keys()) + [f"custom:{c.key}" for c in list_columns(db, enabled_only=True)]
+    return {
+        "format": fmt,
+        "headers": headers,
+        "matched": result.matched,
+        "suggestions": result.suggestions,
+        "unknown": [h for h in result.unknown if h not in llm_guesses],
+        "llm_guesses": llm_guesses,
+        "available_fields": available,
+    }
+
+
+@router.post("/exports/template/compile")
+async def compile_export_template(
+    template: UploadFile = File(...),
+    mapping: str = Form(...),
+    export_type: str = Form(default="both"),
+    faculty_ids: str | None = Form(default=None),
+    publication_year: int | None = Form(default=None),
+    year_start: int | None = Form(default=None),
+    year_end: int | None = Form(default=None),
+    date_start: str | None = Form(default=None),
+    date_end: str | None = Form(default=None),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    scope: FacultyScope = Depends(get_faculty_scope),
+):
+    """Compile publication data into the uploaded template's columns/format."""
+    if user.role not in (UserRole.admin, UserRole.faculty, UserRole.hod):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    if export_type not in ("publications", "patents", "both"):
+        raise HTTPException(status_code=400, detail="Invalid export_type")
+
+    import json
+
+    from app.publications.exports.custom_export_service import (
+        TemplateError,
+        compile_export,
+        extract_headers,
+    )
+
+    try:
+        mapping_dict = json.loads(mapping)
+        if not isinstance(mapping_dict, dict):
+            raise ValueError
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="mapping must be a JSON object") from exc
+
+    parsed_faculty_ids: list[int] = []
+    if faculty_ids:
+        try:
+            parsed_faculty_ids = sorted({int(p.strip()) for p in faculty_ids.split(",") if p.strip()})
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="faculty_ids must be comma-separated integers") from exc
+
+    # Non-admins can only compile their own publications.
+    if not scope.see_all:
+        parsed_faculty_ids = [scope.faculty_id] if scope.faculty_id is not None else [-1]
+
+    parsed_date_start = _parse_export_date(date_start, "date_start")
+    parsed_date_end = _parse_export_date(date_end, "date_end")
+
+    content = await template.read()
+    if len(content) > _TEMPLATE_MAX_BYTES:
+        raise HTTPException(status_code=400, detail="Template too large (max 5 MB)")
+    try:
+        headers, fmt = extract_headers(template.filename or "", content)
+        payload = compile_export(
+            db,
+            headers=headers,
+            mapping={h: mapping_dict[h] for h in headers if h in mapping_dict},
+            fmt=fmt,
+            faculty_ids=parsed_faculty_ids or None,
+            publication_year=publication_year,
+            year_start=year_start,
+            year_end=year_end,
+            date_start=parsed_date_start,
+            date_end=parsed_date_end,
+            export_type=export_type,
+        )
+    except TemplateError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return Response(
+        content=payload,
+        media_type=_TEMPLATE_MEDIA.get(fmt, "application/octet-stream"),
+        headers={"Content-Disposition": f"attachment; filename=publications_custom.{fmt}"},
     )

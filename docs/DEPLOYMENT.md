@@ -91,11 +91,13 @@ Copy `backend/.env.example` → `backend/.env`. **Never commit `.env`.**
 
 Independent of `ENABLE_SCHEDULER`.
 
-### LLM insights
+### LLM insights (local, offline)
 
 | Variable | Description |
 |----------|-------------|
-| `GROQ_API_KEY` | Groq API key |
+| `LOCAL_LLM_BASE_URL` | Ollama OpenAI-compatible endpoint (default `http://localhost:11434/v1`) |
+| `LOCAL_LLM_MODEL` | Local model tag (default `llama3.2:3b`) |
+| `LOCAL_LLM_INSIGHTS_MAX_TOKENS` | Completion budget for CO-PO insights (default `2000`) |
 
 ### CO-PO assets (auto-resolved if unset)
 

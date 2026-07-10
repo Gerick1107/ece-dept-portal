@@ -139,6 +139,16 @@ export async function apiPutJson<T>(path: string, body: unknown): Promise<T> {
   return res.json();
 }
 
+export async function apiPatchJson<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "PATCH",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(await parseErrorResponse(res, "Request failed"));
+  return res.json();
+}
+
 export async function apiPostForm<T>(path: string, form: FormData): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",

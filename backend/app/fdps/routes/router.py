@@ -7,7 +7,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user, require_roles
+from app.auth.dependencies import FacultyScope, get_current_user, get_faculty_scope, require_roles
 from app.database.models.user import User, UserRole
 from app.database.session import get_db
 from app.fdps.models.entities import FacultyFdp
@@ -75,7 +75,7 @@ class FdpListResponse(BaseModel):
 @router.get("/export")
 def export_fdps(
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[User, Depends(get_current_user)],
+    scope: Annotated[FacultyScope, Depends(get_faculty_scope)],
     query: str | None = None,
     year: str | None = None,
     exact_year: int | None = None,
@@ -83,9 +83,15 @@ def export_fdps(
     exact_year_to: int | None = None,
     year_from: str | None = None,
     year_to: str | None = None,
+    faculty_names: str | None = Query(
+        default=None, description="Comma-separated faculty names to include"
+    ),
     program_filter: str | None = Query(default=None, description="NPTEL or MOOC — matches program text"),
 ):
     names = [n.strip() for n in (faculty_names or "").split(",") if n.strip()] or None
+    # Non-admins can only export their own FDPs.
+    if not scope.see_all:
+        names = [scope.faculty_name] if scope.faculty_name else ["\x00__none__"]
     payload = export_fdps_xlsx(
         db,
         query=query,
@@ -108,7 +114,7 @@ def export_fdps(
 @router.get("", response_model=FdpListResponse)
 def list_all_fdps(
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[User, Depends(get_current_user)],
+    scope: Annotated[FacultyScope, Depends(get_faculty_scope)],
     query: str | None = None,
     year: str | None = None,
     exact_year: int | None = None,
@@ -125,11 +131,19 @@ def list_all_fdps(
         exact_year=exact_year,
         program_filter=program_filter,
     )
+    faculty_names = list_faculty_with_fdps(db)
+    # Non-admins only see their own FDPs.
+    if not scope.see_all:
+        from app.utils.name_utils import strip_name_prefix
+
+        target = strip_name_prefix((scope.faculty_name or "").strip()).lower()
+        items = [a for a in items if strip_name_prefix((a.faculty_name or "").strip()).lower() == target]
+        faculty_names = [scope.faculty_name] if scope.faculty_name else []
     return FdpListResponse(
         items=[FdpResponse.from_row(a) for a in items],
         years=list_distinct_years(db),
         exact_years=list_distinct_exact_years(db),
-        faculty_names=list_faculty_with_fdps(db),
+        faculty_names=faculty_names,
     )
 
 

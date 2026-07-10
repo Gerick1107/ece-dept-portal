@@ -127,6 +127,7 @@ class PublicationResponse(PublicationBase):
     created_at: datetime
     updated_at: datetime
     faculty_ids: list[int] = Field(default_factory=list)
+    custom_fields: dict[str, str] = Field(default_factory=dict)
 
     model_config = {"from_attributes": True}
 
@@ -161,6 +162,41 @@ class SyncAllResponse(BaseModel):
 
 class BulkDeleteRequest(BaseModel):
     publication_ids: list[int] = Field(default_factory=list)
+
+
+class CustomColumnCreate(BaseModel):
+    label: str = Field(min_length=1, max_length=128)
+    description: str | None = None
+    source_keys: str | None = None
+    crossref_field: str | None = None
+    use_llm: bool = False
+
+
+class CustomColumnUpdate(BaseModel):
+    label: str | None = None
+    description: str | None = None
+    source_keys: str | None = None
+    crossref_field: str | None = None
+    use_llm: bool | None = None
+    enabled: bool | None = None
+
+
+class CustomColumnResponse(BaseModel):
+    id: int
+    key: str
+    label: str
+    description: str | None = None
+    source_keys: str | None = None
+    crossref_field: str | None = None
+    use_llm: bool
+    enabled: bool
+
+    model_config = {"from_attributes": True}
+
+
+class CustomColumnSuggestRequest(BaseModel):
+    label: str = Field(min_length=1, max_length=128)
+    description: str | None = None
 
 
 class DeletionResponse(BaseModel):

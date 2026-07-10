@@ -110,9 +110,29 @@ def get_copo_analytics(
     course_title: str | None = None,
     from_date: str | None = None,
     to_date: str | None = None,
+    user_id: int | None = None,
+    faculty_id: int | None = None,
+    restrict: bool = False,
 ) -> dict:
+    """When ``restrict`` is True (non-admin), only runs the user personally
+    created OR runs for courses the faculty taught (matched via course
+    allocations) are included."""
     stmt = select(CopoRunAnalyticsSnapshot).order_by(CopoRunAnalyticsSnapshot.run_created_at.asc())
     rows = list(db.scalars(stmt).all())
+
+    if restrict:
+        from app.analytics.utils.faculty_course_match import (
+            faculty_course_semester_keys,
+            snapshot_matches_faculty,
+        )
+
+        allowed = faculty_course_semester_keys(db, faculty_id) if faculty_id else set()
+        rows = [
+            r
+            for r in rows
+            if (user_id is not None and r.user_id == user_id)
+            or snapshot_matches_faculty(r.course_title, r.semester_label, allowed)
+        ]
 
     from_dt = _parse_dt(from_date)
     to_dt = _parse_dt(to_date)
@@ -193,13 +213,32 @@ def get_copo_analytics(
     }
 
 
-def get_copo_run_analytics(db: Session, public_id: str) -> dict | None:
+def get_copo_run_analytics(
+    db: Session,
+    public_id: str,
+    *,
+    user_id: int | None = None,
+    faculty_id: int | None = None,
+    restrict: bool = False,
+) -> dict | None:
     """Parsed snapshot for a single evaluation run (used by Generator dashboard charts)."""
     row = db.scalar(
         select(CopoRunAnalyticsSnapshot).where(CopoRunAnalyticsSnapshot.public_id == public_id)
     )
     if not row:
         return None
+    # Non-admins may only view runs they created or runs for courses they taught.
+    if restrict:
+        from app.analytics.utils.faculty_course_match import (
+            faculty_course_semester_keys,
+            snapshot_matches_faculty,
+        )
+
+        owned = user_id is not None and row.user_id == user_id
+        allowed = faculty_course_semester_keys(db, faculty_id) if faculty_id else set()
+        taught = snapshot_matches_faculty(row.course_title, row.semester_label, allowed)
+        if not owned and not taught:
+            return None
     parsed = parse_copo_result_summary(row.result_summary)
     if not parsed:
         return None

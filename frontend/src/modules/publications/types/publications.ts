@@ -51,6 +51,7 @@ export type Publication = {
   scholar_url?: string | null;
   source_hash: string;
   faculty_ids: number[];
+  custom_fields?: Record<string, string>;
 };
 
 export type PublicationTableMode = "publications" | "patents" | "all";
