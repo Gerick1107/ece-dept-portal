@@ -84,6 +84,10 @@ async def lifespan(_app: FastAPI):
         ensure_requirement_reminder_scheduler_started()
     if settings.enable_scheduler:
         ensure_scheduler_started()
+    if settings.local_llm_warmup_on_startup:
+        from app.llm.services.local_service import warm_up_model
+
+        threading.Thread(target=warm_up_model, daemon=True).start()
     thread = threading.Thread(target=_periodic_cleanup_loop, daemon=True)
     thread.start()
     yield

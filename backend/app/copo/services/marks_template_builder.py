@@ -207,3 +207,118 @@ def constraint_template_filename(course_code: str, semester: str) -> str:
     code = _safe_filename_part(course_code)
     sem = _safe_filename_part(semester)
     return f"{code}_{sem}_marks_template.xlsx"
+
+
+@dataclass(frozen=True)
+class AnalyzedQuestionSpec:
+    label: str
+    co_label: str
+    max_marks: float
+    is_bonus: bool = False
+
+
+def build_analyzed_component_workbook(
+    *,
+    component_name: str,
+    questions: list[AnalyzedQuestionSpec],
+) -> bytes:
+    """Single-component template with CO and Max_Marks pre-filled from question-paper analysis."""
+    if not questions:
+        raise ValueError("No questions to export.")
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Marks"
+
+    group_name = component_name.strip() or "Component"
+    first_data_col = 3
+    columns: list[_ColumnSpec] = []
+    for q in questions:
+        sub = q.label if q.label else f"Q{len(columns) + 1}"
+        if q.is_bonus:
+            columns.append(_ColumnSpec(group_name, sub, co_cell=None, is_bonus_question=True))
+        else:
+            co = q.co_label if q.co_label else ""
+            columns.append(_ColumnSpec(group_name, sub, co_cell=co))
+    columns.append(_ColumnSpec(group_name, "Total", co_cell=None, is_total=True))
+    columns.append(_ColumnSpec("", "Result", co_cell=""))
+    columns.append(_ColumnSpec("", "Grade_Point", co_cell=""))
+
+    last_col = first_data_col + len(columns) - 1
+
+    ws.cell(1, 1, "Branch")
+    ws.cell(1, 2, "Roll No.")
+    ws.merge_cells(start_row=1, start_column=first_data_col, end_row=1, end_column=last_col - 2)
+    ws.cell(1, first_data_col, group_name)
+    ws.cell(1, last_col - 1, "Result")
+    ws.cell(1, last_col, "Grade_Point")
+
+    for c in range(1, last_col + 1):
+        cell = ws.cell(1, c)
+        cell.font = Font(bold=True)
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.fill = _HEADER_FILL
+
+    ws.cell(2, 1, "Branch")
+    ws.cell(2, 2, "Roll No.")
+    for offset, spec in enumerate(columns):
+        ws.cell(2, first_data_col + offset, spec.subheader)
+        cell = ws.cell(2, first_data_col + offset)
+        cell.font = Font(bold=True)
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.fill = _HEADER_FILL
+
+    ws.cell(3, 1, "")
+    ws.cell(3, 2, "CO")
+    q_idx = 0
+    for offset, spec in enumerate(columns):
+        col = first_data_col + offset
+        if spec.is_total or spec.subheader in ("Result", "Grade_Point"):
+            ws.cell(3, col, None)
+        else:
+            q = questions[q_idx]
+            ws.cell(3, col, None if q.is_bonus else (q.co_label or None))
+            q_idx += 1
+        cell = ws.cell(3, col)
+        cell.font = Font(italic=True)
+        cell.fill = _CO_FILL
+
+    ws.cell(4, 1, "")
+    ws.cell(4, 2, "Max_Marks")
+    q_idx = 0
+    for offset, spec in enumerate(columns):
+        col = first_data_col + offset
+        if spec.is_total:
+            total = sum(q.max_marks for q in questions if not q.is_bonus)
+            ws.cell(4, col, round(total, 2))
+        elif spec.subheader in ("Result", "Grade_Point"):
+            ws.cell(4, col, None)
+        else:
+            q = questions[q_idx]
+            ws.cell(4, col, q.max_marks)
+            q_idx += 1
+    ws.cell(4, 2).font = Font(bold=True)
+
+    for i, label in enumerate(("Student_1", "Student_2", "Student_3"), start=5):
+        ws.cell(i, 1, "")
+        ws.cell(i, 2, label)
+
+    note_row = 8
+    ws.cell(
+        note_row,
+        1,
+        "Delete sample rows before uploading. Fill Branch, Roll No., and student marks per question.",
+    )
+    ws.merge_cells(start_row=note_row, start_column=1, end_row=note_row, end_column=min(8, last_col))
+
+    ws.column_dimensions["A"].width = 15
+    ws.column_dimensions["B"].width = 12
+    for offset in range(len(columns)):
+        letter = get_column_letter(first_data_col + offset)
+        ws.column_dimensions[letter].width = 9
+
+    ws.freeze_panes = "C5"
+
+    output = BytesIO()
+    wb.save(output)
+    return output.getvalue()

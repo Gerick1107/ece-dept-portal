@@ -30,6 +30,9 @@ export default function AdminNotificationsPage() {
   const [customReminderValue, setCustomReminderValue] = useState("");
   const [customReminderUnit, setCustomReminderUnit] = useState<(typeof REMINDER_UNITS)[number]["value"]>("days");
   const [selectAllFaculty, setSelectAllFaculty] = useState(false);
+  const [extraEmails, setExtraEmails] = useState("");
+  const [recipientExcel, setRecipientExcel] = useState<File | null>(null);
+  const [skipPortalRecipients, setSkipPortalRecipients] = useState(false);
 
   const resolvedReminderMinutes = useMemo(() => {
     if (reminderMode === "custom") {
@@ -74,12 +77,24 @@ export default function AdminNotificationsPage() {
         files,
         requirementType: requirementType || undefined,
         reminderIntervalMinutes: resolvedReminderMinutes > 0 ? resolvedReminderMinutes : undefined,
+        extraEmails,
+        recipientExcel: recipientExcel ?? undefined,
+        skipPortalRecipients,
       });
-      setMessageOk(`Sent to ${r.recipient_count} faculty member(s).`);
+      const externalSent = r.external_email_sent ?? 0;
+      setMessageOk(
+        `Sent to ${r.recipient_count} recipient(s)` +
+          (r.portal_recipient_count != null
+            ? ` (${r.portal_recipient_count} portal, ${externalSent} external email-only).`
+            : ".")
+      );
       setTitle("");
       setMessage("");
       setFiles([]);
       setSelectedUsers([]);
+      setExtraEmails("");
+      setRecipientExcel(null);
+      setSkipPortalRecipients(false);
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Send failed");
@@ -207,12 +222,21 @@ export default function AdminNotificationsPage() {
             />
             Select all faculty
           </label>
-          <label className="text-xs text-slate-500">Recipients (empty = all faculty &amp; HOD)</label>
+          <label className="flex items-center gap-2 text-sm mb-2">
+            <input
+              type="checkbox"
+              checked={skipPortalRecipients}
+              onChange={(e) => setSkipPortalRecipients(e.target.checked)}
+            />
+            Email-only mode (skip portal notifications — use external recipients below)
+          </label>
+          <label className="text-xs text-slate-500">Portal recipients (empty = all faculty &amp; HOD)</label>
           <select
             multiple
             className="w-full border rounded-lg px-3 py-2 text-sm mt-1 min-h-[120px]"
             value={selectedUsers.map(String)}
             onChange={(e) => setSelectedUsers(Array.from(e.target.selectedOptions).map((o) => Number(o.value)))}
+            disabled={skipPortalRecipients}
           >
             {users.map((u) => (
               <option key={u.id} value={u.id}>
@@ -220,6 +244,27 @@ export default function AdminNotificationsPage() {
               </option>
             ))}
           </select>
+        </div>
+        <div className="space-y-2 border border-slate-100 rounded-lg p-3 bg-slate-50/50">
+          <p className="text-sm font-medium text-slate-700">External recipients (one-time email only)</p>
+          <p className="text-xs text-slate-500">
+            These addresses receive email only — no portal profile, no requirement-tracker entry, nothing stored.
+          </p>
+          <textarea
+            className="w-full border rounded-lg px-3 py-2 text-sm min-h-[72px] font-mono"
+            placeholder="Add emails separated by commas or new lines"
+            value={extraEmails}
+            onChange={(e) => setExtraEmails(e.target.value)}
+          />
+          <label className="text-xs text-slate-600 block">
+            Or import Excel (.xlsx) — any column named email / mail / mail id is used
+            <input
+              type="file"
+              accept=".xlsx,.xls"
+              className="block mt-1 text-sm"
+              onChange={(e) => setRecipientExcel(e.target.files?.[0] ?? null)}
+            />
+          </label>
         </div>
         <input
           type="file"
@@ -229,7 +274,13 @@ export default function AdminNotificationsPage() {
         />
         <button
           type="button"
-          disabled={busy || !title.trim() || !message.trim() || reminderInvalid}
+          disabled={
+            busy ||
+            !title.trim() ||
+            !message.trim() ||
+            reminderInvalid ||
+            (skipPortalRecipients && !extraEmails.trim() && !recipientExcel)
+          }
           onClick={onSend}
           className="rounded-lg bg-teal-700 text-white px-4 py-2 text-sm disabled:opacity-50"
         >

@@ -35,6 +35,7 @@ def provider_status() -> dict:
     """Availability of the local provider for the frontend selector."""
     local_ok, local_msg = local_service.local_available()
     settings = get_settings()
+    gpu_layers = settings.local_llm_num_gpu
     return {
         "default": "local",
         "providers": [
@@ -44,6 +45,7 @@ def provider_status() -> dict:
                 "available": local_ok,
                 "message": local_msg,
                 "model": (settings.local_llm_model or "").strip(),
+                "num_gpu": gpu_layers,
             },
         ],
     }

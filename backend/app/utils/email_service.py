@@ -1,15 +1,23 @@
 import logging
 import secrets
 import smtplib
+from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from pathlib import Path
 
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
 
-def send_email(to_email: str, subject: str, body_text: str, body_html: str | None = None) -> bool:
+def send_email(
+    to_email: str,
+    subject: str,
+    body_text: str,
+    body_html: str | None = None,
+    attachments: list[tuple[str, bytes, str | None]] | None = None,
+) -> bool:
     settings = get_settings()
     if not settings.smtp_enabled:
         logger.warning("SMTP disabled — email not sent to %s (subject: %s)", to_email, subject)
@@ -18,13 +26,27 @@ def send_email(to_email: str, subject: str, body_text: str, body_html: str | Non
         logger.warning("SMTP not configured — email not sent")
         return False
 
-    msg = MIMEMultipart("alternative")
+    msg = MIMEMultipart("mixed" if attachments else "alternative")
     msg["Subject"] = subject
     msg["From"] = settings.smtp_from_email
     msg["To"] = to_email
-    msg.attach(MIMEText(body_text, "plain", "utf-8"))
-    if body_html:
-        msg.attach(MIMEText(body_html, "html", "utf-8"))
+
+    if attachments:
+        alt = MIMEMultipart("alternative")
+        alt.attach(MIMEText(body_text, "plain", "utf-8"))
+        if body_html:
+            alt.attach(MIMEText(body_html, "html", "utf-8"))
+        msg.attach(alt)
+        for filename, content, mime in attachments:
+            part = MIMEApplication(content, Name=filename)
+            part.add_header("Content-Disposition", "attachment", filename=Path(filename).name)
+            if mime:
+                part.set_type(mime)
+            msg.attach(part)
+    else:
+        msg.attach(MIMEText(body_text, "plain", "utf-8"))
+        if body_html:
+            msg.attach(MIMEText(body_html, "html", "utf-8"))
 
     try:
         if settings.smtp_use_tls:

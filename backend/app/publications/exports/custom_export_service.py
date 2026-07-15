@@ -93,6 +93,47 @@ def _detect_format(filename: str) -> str:
     raise TemplateError("Unsupported template type. Use a .csv, .xlsx, or .docx file.")
 
 
+def parse_fields_from_text(text: str) -> list[str]:
+    """Extract column names from free-form text (lists, tables, comma-separated, etc.)."""
+    import re
+
+    raw = (text or "").strip()
+    if not raw:
+        return []
+
+    headers: list[str] = []
+    seen_norm: set[str] = set()
+
+    def _add(candidate: str) -> None:
+        cleaned = re.sub(r"^[\d]+[\.\)\]:]\s*", "", candidate.strip())
+        cleaned = re.sub(r"^[-•*]\s*", "", cleaned).strip()
+        cleaned = cleaned.strip("\"'`")
+        if not cleaned or len(cleaned) > 120:
+            return
+        norm = _normalize(cleaned)
+        if norm and norm not in seen_norm:
+            seen_norm.add(norm)
+            headers.append(cleaned)
+
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if re.search(r"[,;\t|]", line):
+            for part in re.split(r"[,;\t|]+", line):
+                _add(part)
+        else:
+            _add(line)
+
+    if not headers and raw:
+        if re.search(r"[,;\t|]", raw):
+            for part in re.split(r"[,;\t|]+", raw):
+                _add(part)
+        else:
+            _add(raw)
+    return headers
+
+
 def extract_headers(filename: str, content: bytes) -> tuple[list[str], str]:
     fmt = _detect_format(filename)
     if fmt == "csv":
@@ -259,4 +300,45 @@ def compile_export(
         return output.getvalue()
     if fmt == "docx":
         return records_to_table_docx_bytes(title, headers, records)
+    if fmt == "pdf":
+        from app.utils.pdf_tables import records_to_list_pdf_bytes
+
+        pdf_records = [{h: rec.get(h, "") for h in headers} for rec in records]
+        return records_to_list_pdf_bytes(title, pdf_records)
     raise TemplateError(f"Unsupported output format: {fmt}")
+
+
+def compile_fields_export(
+    db: Session,
+    *,
+    headers: list[str],
+    mapping: dict[str, str],
+    fmt: str,
+    faculty_ids: list[int] | None = None,
+    publication_year: int | None = None,
+    year_start: int | None = None,
+    year_end: int | None = None,
+    date_start: date | None = None,
+    date_end: date | None = None,
+    export_type: str = "both",
+    title: str = "Publications Export",
+) -> bytes:
+    """Build export in the chosen format from a user-defined column list (no template file)."""
+    if fmt not in ("csv", "xlsx", "pdf", "docx"):
+        raise TemplateError("Unsupported format. Choose csv, xlsx, pdf, or docx.")
+    if not headers:
+        raise TemplateError("Add at least one column name.")
+    return compile_export(
+        db,
+        headers=headers,
+        mapping=mapping,
+        fmt=fmt,
+        faculty_ids=faculty_ids,
+        publication_year=publication_year,
+        year_start=year_start,
+        year_end=year_end,
+        date_start=date_start,
+        date_end=date_end,
+        export_type=export_type,
+        title=title,
+    )

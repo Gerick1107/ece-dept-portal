@@ -35,6 +35,19 @@ class MarksTemplateComponentsResponse(BaseModel):
     presets: list[str]
 
 
+class QuestionPaperAnalyzeResponse(BaseModel):
+    component_name: str
+    paper_total_marks: float
+    questions: list[dict]
+
+
+class QuestionPaperGenerateRequest(BaseModel):
+    component_name: str = Field(min_length=1, max_length=64)
+    paper_total_marks: float = Field(gt=0)
+    weightage: float = Field(gt=0, le=100)
+    questions: list[dict] = Field(min_length=1)
+
+
 class ParseStudentsResponse(BaseModel):
     cos: list[str]
     programmes: dict

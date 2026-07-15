@@ -9,6 +9,7 @@ import numpy as np
 from sentence_transformers import SentenceTransformer
 
 from app.config import get_settings
+from app.utils.embedding_device import resolve_embedding_device
 
 _DEFAULT_RAG_MODEL = "all-MiniLM-L6-v2"
 
@@ -17,7 +18,8 @@ _DEFAULT_RAG_MODEL = "all-MiniLM-L6-v2"
 def _embedder() -> SentenceTransformer:
     settings = get_settings()
     model_name = getattr(settings, "rag_embedding_model", None) or _DEFAULT_RAG_MODEL
-    return SentenceTransformer(model_name)
+    device = resolve_embedding_device(getattr(settings, "embedding_device", "auto"))
+    return SentenceTransformer(model_name, device=device)
 
 
 def embed_texts(texts: list[str]) -> list[list[float]]:

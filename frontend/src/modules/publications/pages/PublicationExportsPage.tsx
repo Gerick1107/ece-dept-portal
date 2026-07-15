@@ -234,6 +234,209 @@ function CustomTemplateExport(props: {
   );
 }
 
+function CustomFieldEditorExport(props: {
+  selectedFacultyIds: string[];
+  exportType: "publications" | "patents" | "both";
+  year: string;
+  yearStart: string;
+  yearEnd: string;
+  dateStart: string;
+  dateEnd: string;
+}) {
+  const [fieldsText, setFieldsText] = useState("");
+  const [outputFormat, setOutputFormat] = useState<"csv" | "xlsx" | "pdf" | "docx">("xlsx");
+  const [useLlm, setUseLlm] = useState(false);
+  const [analysis, setAnalysis] = useState<TemplateAnalysis | null>(null);
+  const [mapping, setMapping] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  async function analyze() {
+    if (!fieldsText.trim()) return;
+    setBusy(true);
+    setError("");
+    setNotice("");
+    setAnalysis(null);
+    try {
+      const form = new FormData();
+      form.append("fields_text", fieldsText);
+      const res = await fetch(
+        `${API_BASE}/publications/exports/fields/analyze?use_llm=${useLlm}`,
+        { method: "POST", headers: authHeader(), body: form }
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail ?? "Could not analyze columns");
+      const a = data as TemplateAnalysis;
+      setAnalysis(a);
+      const initial: Record<string, string> = { ...a.matched, ...a.llm_guesses };
+      for (const [h, s] of Object.entries(a.suggestions)) initial[h] = s.field;
+      for (const h of a.unknown) if (!(h in initial)) initial[h] = "";
+      setMapping(initial);
+      setNotice("Review column mappings below, then export in your chosen format.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Analysis failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function compile() {
+    if (!analysis) return;
+    const missing = analysis.headers.filter((h) => !mapping[h]);
+    if (missing.length) {
+      setError(`Please choose a data field for: ${missing.join(", ")}`);
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const form = new FormData();
+      form.append("fields_text", fieldsText);
+      form.append("mapping", JSON.stringify(mapping));
+      form.append("format", outputFormat);
+      form.append("export_type", props.exportType);
+      if (props.selectedFacultyIds.length) form.append("faculty_ids", props.selectedFacultyIds.join(","));
+      if (props.year) form.append("publication_year", props.year);
+      if (props.yearStart) form.append("year_start", props.yearStart);
+      if (props.yearEnd) form.append("year_end", props.yearEnd);
+      if (props.dateStart) form.append("date_start", props.dateStart);
+      if (props.dateEnd) form.append("date_end", props.dateEnd);
+      const res = await fetch(`${API_BASE}/publications/exports/fields/compile`, {
+        method: "POST",
+        headers: authHeader(),
+        body: form,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail ?? "Export failed");
+      }
+      const blob = await res.blob();
+      downloadBlob(blob, res.headers.get("content-disposition") ?? "", `publications_custom.${outputFormat}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Export failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function rowClass(header: string): string {
+    if (!analysis) return "";
+    if (analysis.unknown.includes(header) && !mapping[header]) return "bg-red-50";
+    if (header in analysis.suggestions || header in analysis.llm_guesses) return "bg-amber-50";
+    return "";
+  }
+
+  return (
+    <section className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-3">
+      <div>
+        <h3 className="text-sm font-semibold text-slate-700">Custom column editor</h3>
+        <p className="text-xs text-slate-500 mt-1">
+          Type the columns you need in any structure — one per line, comma-separated, or bulleted.
+          We match each name to publication data (including spelling variants), ask you to confirm
+          uncertain matches, then export as CSV, Excel, PDF, or Word.
+        </p>
+      </div>
+      <textarea
+        className="w-full border rounded-lg px-3 py-2 text-sm min-h-[120px] font-mono"
+        placeholder={"Title\nAuthors\nJournal\nPublication Year\nCitations"}
+        value={fieldsText}
+        onChange={(e) => {
+          setFieldsText(e.target.value);
+          setAnalysis(null);
+          setNotice("");
+        }}
+      />
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="text-sm text-slate-600">
+          Output format{" "}
+          <select
+            className="border rounded px-2 py-1 ml-1"
+            value={outputFormat}
+            onChange={(e) => setOutputFormat(e.target.value as "csv" | "xlsx" | "pdf" | "docx")}
+          >
+            <option value="xlsx">Excel</option>
+            <option value="csv">CSV</option>
+            <option value="pdf">PDF</option>
+            <option value="docx">Word</option>
+          </select>
+        </label>
+        <label className="text-xs text-slate-600 flex items-center gap-1">
+          <input type="checkbox" checked={useLlm} onChange={(e) => setUseLlm(e.target.checked)} />
+          Use local AI for unmatched columns
+        </label>
+        <button
+          type="button"
+          disabled={!fieldsText.trim() || busy}
+          onClick={analyze}
+          className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm disabled:opacity-50"
+        >
+          {busy ? "Working…" : "Analyze columns"}
+        </button>
+      </div>
+
+      {notice && <p className="text-xs text-slate-600 bg-slate-50 border rounded-lg px-3 py-2">{notice}</p>}
+      {error && <p className="text-sm text-red-800 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
+
+      {analysis && (
+        <div className="space-y-3">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm border-collapse">
+              <thead className="text-left text-slate-600 border-b bg-slate-50">
+                <tr>
+                  <th className="py-2 px-3 font-medium">Your column</th>
+                  <th className="py-2 px-3 font-medium">Maps to data field</th>
+                  <th className="py-2 px-3 font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {analysis.headers.map((header) => (
+                  <tr key={header} className={`border-b border-slate-100 ${rowClass(header)}`}>
+                    <td className="py-2 px-3">{header}</td>
+                    <td className="py-2 px-3">
+                      <select
+                        className="border rounded px-2 py-1 text-sm"
+                        value={mapping[header] ?? ""}
+                        onChange={(e) => setMapping((m) => ({ ...m, [header]: e.target.value }))}
+                      >
+                        <option value="">— choose a field —</option>
+                        {analysis.available_fields.map((f) => (
+                          <option key={f} value={f}>
+                            {f}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="py-2 px-3 text-xs text-slate-500">
+                      {header in analysis.matched
+                        ? "Matched"
+                        : header in analysis.suggestions
+                          ? `Guessed (${Math.round(analysis.suggestions[header].score * 100)}%) — confirm`
+                          : header in analysis.llm_guesses
+                            ? "AI guess — confirm"
+                            : mapping[header]
+                              ? "Chosen"
+                              : "Confirm mapping"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={compile}
+            className="rounded-lg bg-teal-700 text-white px-4 py-2 text-sm disabled:opacity-50"
+          >
+            {busy ? "Exporting…" : `Export ${outputFormat.toUpperCase()}`}
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function PublicationExportsPage() {
   const [faculty, setFaculty] = useState<Faculty[]>([]);
   const [selectedFacultyIds, setSelectedFacultyIds] = useState<string[]>([]);
@@ -400,6 +603,16 @@ export default function PublicationExportsPage() {
       </div>
 
       <CustomTemplateExport
+        selectedFacultyIds={selectedFacultyIds}
+        exportType={exportType}
+        year={year}
+        yearStart={yearStart}
+        yearEnd={yearEnd}
+        dateStart={dateStart}
+        dateEnd={dateEnd}
+      />
+
+      <CustomFieldEditorExport
         selectedFacultyIds={selectedFacultyIds}
         exportType={exportType}
         year={year}

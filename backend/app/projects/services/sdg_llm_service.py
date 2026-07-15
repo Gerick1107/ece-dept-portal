@@ -6,6 +6,7 @@ import numpy as np
 from sentence_transformers import SentenceTransformer
 
 from app.config import get_settings
+from app.utils.embedding_device import resolve_embedding_device
 
 SDG_REFERENCE = [
     (1, "No Poverty", "End poverty in all its forms everywhere."),
@@ -30,8 +31,9 @@ SDG_REFERENCE = [
 
 @lru_cache(maxsize=1)
 def _embedder() -> SentenceTransformer:
-    model_name = get_settings().sdg_embedding_model
-    return SentenceTransformer(model_name)
+    settings = get_settings()
+    device = resolve_embedding_device(getattr(settings, "embedding_device", "auto"))
+    return SentenceTransformer(settings.sdg_embedding_model, device=device)
 
 
 @lru_cache(maxsize=1)

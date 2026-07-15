@@ -708,8 +708,14 @@ async def generate_insights(
 
     settings = get_settings()
     insights_max_tokens = settings.local_llm_insights_max_tokens
+    insights_temperature = settings.local_llm_insights_temperature
     try:
-        llm_response = await generate_text(prompt, provider=provider, max_tokens=insights_max_tokens)
+        llm_response = await generate_text(
+            prompt,
+            provider=provider,
+            max_tokens=insights_max_tokens,
+            temperature=insights_temperature,
+        )
     except LlmError:
         raise
 

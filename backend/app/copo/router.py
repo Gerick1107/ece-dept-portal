@@ -28,6 +28,8 @@ from app.copo.schemas import (
     MarksTemplateComponentsResponse,
     MarksTemplateGenerateRequest,
     ParseStudentsResponse,
+    QuestionPaperAnalyzeResponse,
+    QuestionPaperGenerateRequest,
 )
 from app.copo.services import evaluation_service, mapping_service
 from app.copo.services.file_manager import (
@@ -210,6 +212,58 @@ def generate_constraint_marks_template(
     from app.copo.services.marks_template_builder import constraint_template_filename
 
     filename = constraint_template_filename(body.course_code, body.semester)
+    from fastapi.responses import Response
+
+    return Response(
+        content=payload,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+_QUESTION_PAPER_MAX_BYTES = 15 * 1024 * 1024
+
+
+@router.post("/analyze-question-paper", response_model=QuestionPaperAnalyzeResponse)
+async def analyze_question_paper(
+    _: Annotated[User, Depends(get_current_user)],
+    question_paper: UploadFile = File(...),
+):
+    """LLM analysis of an uploaded question paper (questions, COs, marks, bonus flags)."""
+    from app.copo.services.question_paper_analyzer import analyze_question_paper_file
+
+    content = await question_paper.read()
+    if len(content) > _QUESTION_PAPER_MAX_BYTES:
+        raise HTTPException(status_code=400, detail="Question paper too large (max 15 MB)")
+    try:
+        result = await analyze_question_paper_file(question_paper.filename or "paper.pdf", content)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Analysis failed: {exc}") from exc
+    return QuestionPaperAnalyzeResponse.model_validate(result)
+
+
+@router.post("/generate-from-question-paper")
+def generate_from_question_paper(
+    body: QuestionPaperGenerateRequest,
+    _: Annotated[User, Depends(get_current_user)],
+):
+    """Build a single-component marks Excel from analyzed question-paper data."""
+    from app.copo.services.question_paper_analyzer import generate_component_workbook
+
+    try:
+        payload = generate_component_workbook(
+            component_name=body.component_name,
+            questions=body.questions,
+            paper_total_marks=body.paper_total_marks,
+            weightage=body.weightage,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    safe = "".join(c if c.isalnum() or c in "-_" else "_" for c in body.component_name.strip())
+    filename = f"{safe or 'component'}_marks_template.xlsx"
     from fastapi.responses import Response
 
     return Response(

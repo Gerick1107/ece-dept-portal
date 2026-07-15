@@ -2,6 +2,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import CoWarningsBanner from "../../components/CoWarningsBanner";
 import ConstraintMarksTemplatePanel from "../../components/ConstraintMarksTemplatePanel";
+import QuestionPaperAnalyzerPanel from "../../components/QuestionPaperAnalyzerPanel";
 import CopoFullResultsView from "../../components/CopoFullResultsView";
 import CopoAttainmentCharts from "../analytics/components/CopoAttainmentCharts";
 import EvaluationScopePanel from "../../components/EvaluationScopePanel";
@@ -233,6 +234,7 @@ export default function CopoEvaluatePage() {
       </div>
 
       <ConstraintMarksTemplatePanel initialCourseCode={courseTitle} />
+      <QuestionPaperAnalyzerPanel />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-xl font-semibold">Generate CO-PO Attainment Report</h2>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiGet } from "../services/api";
+import { generateId } from "../utils/id";
 
 type ComponentRow = {
   id: string;
@@ -12,7 +13,7 @@ type ComponentRow = {
 function newRow(preset?: string): ComponentRow {
   const isBonus = preset?.toLowerCase() === "bonus";
   return {
-    id: crypto.randomUUID(),
+    id: generateId(),
     name: preset || "Quiz",
     questions: preset === "Project" ? 0 : 5,
     bonus_question: false,

@@ -22,9 +22,11 @@ from app.notifications.services.notification_service import (
     list_user_notifications,
     mark_all_read,
     mark_read,
+    send_external_emails,
     submit_notification_reply,
     unread_count,
 )
+from app.utils.email_parse import parse_emails_from_excel, parse_emails_from_text
 from app.notifications.services.requirement_service import (
     REQUIREMENT_LABELS,
     list_requirement_matrix,
@@ -186,27 +188,61 @@ async def admin_send(
     title: str = Form(...),
     message: str = Form(...),
     recipient_user_ids: str = Form(""),
+    extra_emails: str = Form(""),
+    skip_portal_recipients: bool = Form(False),
     requirement_type: str = Form(""),
     reminder_interval_minutes: int = Form(0),
     attachments: list[UploadFile] = File(default=[]),
+    recipient_excel: UploadFile | None = File(default=None),
 ):
     ids = [int(x.strip()) for x in recipient_user_ids.split(",") if x.strip().isdigit()] or None
     req_type = requirement_type.strip() or None
     reminder = reminder_interval_minutes if reminder_interval_minutes > 0 else None
-    notification = await create_and_send_notification(
-        db,
-        admin_user_id=current_user.id,
+    upload_files = [f for f in (attachments or []) if f.filename]
+
+    attachment_payloads: list[tuple[str, bytes, str | None]] = []
+    for upload in upload_files:
+        attachment_payloads.append((upload.filename or "attachment", await upload.read(), upload.content_type))
+
+    external_list = parse_emails_from_text(extra_emails)
+    if recipient_excel and recipient_excel.filename:
+        external_list.extend(parse_emails_from_excel(await recipient_excel.read()))
+
+    external_stats = await send_external_emails(
         title=title,
         message=message,
-        recipient_user_ids=ids,
-        attachment_files=[f for f in (attachments or []) if f.filename],
-        requirement_type=req_type,
-        reminder_interval_minutes=reminder,
+        emails=external_list,
+        attachment_payloads=attachment_payloads or None,
     )
+
+    notification = None
+    portal_count = 0
+    if not skip_portal_recipients:
+        notification = await create_and_send_notification(
+            db,
+            admin_user_id=current_user.id,
+            title=title,
+            message=message,
+            recipient_user_ids=ids,
+            attachment_payloads=attachment_payloads or None,
+            requirement_type=req_type,
+            reminder_interval_minutes=reminder,
+        )
+        portal_count = len(notification.recipients)
+    elif not external_list:
+        raise HTTPException(
+            status_code=400,
+            detail="Choose portal recipients or provide external email addresses.",
+        )
+
     return {
-        "id": notification.id,
-        "recipient_count": len(notification.recipients),
-        "title": notification.title,
+        "id": notification.id if notification else None,
+        "recipient_count": portal_count + int(external_stats.get("sent", 0)),
+        "portal_recipient_count": portal_count,
+        "external_email_sent": external_stats.get("sent", 0),
+        "external_email_failed": external_stats.get("failed", 0),
+        "external_email_skipped": external_stats.get("skipped", 0),
+        "title": title.strip(),
     }
 
 

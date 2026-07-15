@@ -43,13 +43,35 @@ async def save_attachments(notification_id: int, files: list[UploadFile]) -> lis
         safe = "".join(c if c.isalnum() or c in "._-" else "_" for c in upload.filename)
         dest = NOTIFICATIONS_DIR / f"n{notification_id}_{uuid.uuid4().hex[:8]}_{safe}"
         content = await upload.read()
-        dest.write_bytes(content)
         saved.append(
             NotificationAttachment(
                 notification_id=notification_id,
                 original_filename=upload.filename,
                 storage_path=str(dest.resolve()),
                 mime_type=upload.content_type,
+                file_size=len(content),
+            )
+        )
+        dest.write_bytes(content)
+    return saved
+
+
+def save_attachments_from_payloads(
+    notification_id: int,
+    payloads: list[tuple[str, bytes, str | None]],
+) -> list[NotificationAttachment]:
+    ensure_notifications_dir()
+    saved: list[NotificationAttachment] = []
+    for filename, content, mime in payloads:
+        safe = "".join(c if c.isalnum() or c in "._-" else "_" for c in filename)
+        dest = NOTIFICATIONS_DIR / f"n{notification_id}_{uuid.uuid4().hex[:8]}_{safe}"
+        dest.write_bytes(content)
+        saved.append(
+            NotificationAttachment(
+                notification_id=notification_id,
+                original_filename=filename,
+                storage_path=str(dest.resolve()),
+                mime_type=mime,
                 file_size=len(content),
             )
         )
@@ -77,6 +99,50 @@ def _recipient_users(db: Session, user_ids: list[int] | None) -> list[User]:
     )
 
 
+async def send_external_emails(
+    *,
+    title: str,
+    message: str,
+    emails: list[str],
+    attachment_payloads: list[tuple[str, bytes, str | None]] | None = None,
+) -> dict[str, int | list[str]]:
+    """One-time email blast — no portal notification or requirement-tracker records."""
+    from app.utils.email_parse import _valid_email
+
+    settings = get_settings()
+    unique: list[str] = []
+    seen: set[str] = set()
+    for raw in emails:
+        addr = _valid_email(raw)
+        if addr and addr not in seen:
+            seen.add(addr)
+            unique.append(addr)
+
+    if not unique:
+        return {"sent": 0, "failed": 0, "skipped": 0, "invalid": []}
+
+    body_html = f"<p>{message.replace(chr(10), '<br>')}</p>"
+    sent = failed = skipped = 0
+    invalid: list[str] = []
+
+    for email in unique:
+        if not settings.smtp_enabled:
+            skipped += 1
+            continue
+        ok = send_email(
+            email,
+            f"[ECE Portal] {title}",
+            message,
+            body_html,
+            attachments=attachment_payloads or None,
+        )
+        if ok:
+            sent += 1
+        else:
+            failed += 1
+    return {"sent": sent, "failed": failed, "skipped": skipped, "invalid": invalid}
+
+
 async def create_and_send_notification(
     db: Session,
     *,
@@ -85,6 +151,7 @@ async def create_and_send_notification(
     message: str,
     recipient_user_ids: list[int] | None,
     attachment_files: list[UploadFile] | None = None,
+    attachment_payloads: list[tuple[str, bytes, str | None]] | None = None,
     requirement_type: str | None = None,
     reminder_interval_minutes: int | None = None,
 ) -> Notification:
@@ -97,7 +164,10 @@ async def create_and_send_notification(
     db.add(notification)
     db.flush()
 
-    saved_atts = await save_attachments(notification.id, attachment_files or [])
+    if attachment_payloads:
+        saved_atts = save_attachments_from_payloads(notification.id, attachment_payloads)
+    else:
+        saved_atts = await save_attachments(notification.id, attachment_files or [])
     for att in saved_atts:
         db.add(att)
     db.flush()

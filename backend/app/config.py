@@ -156,11 +156,22 @@ class Settings(BaseSettings):
         default="http://localhost:11434/v1", validation_alias="LOCAL_LLM_BASE_URL"
     )
     local_llm_model: str = Field(default="llama3.2:3b", validation_alias="LOCAL_LLM_MODEL")
-    # Local insights are CPU-bound (~5-10 tok/s on a laptop), so use a modest budget
-    # to keep generation within the request timeout window.
+    # Ollama runtime options — set num_gpu=-1 to offload all layers to GPU when available.
+    local_llm_num_gpu: int = Field(default=-1, validation_alias="LOCAL_LLM_NUM_GPU")
+    local_llm_num_ctx: int = Field(default=4096, validation_alias="LOCAL_LLM_NUM_CTX")
+    local_llm_keep_alive: str = Field(default="10m", validation_alias="LOCAL_LLM_KEEP_ALIVE")
+    local_llm_num_thread: int = Field(default=0, validation_alias="LOCAL_LLM_NUM_THREAD")
+    local_llm_warmup_on_startup: bool = Field(default=True, validation_alias="LOCAL_LLM_WARMUP_ON_STARTUP")
+    # Completion budget for CO-PO insight generation.
     local_llm_insights_max_tokens: int = Field(
         default=2000, validation_alias="LOCAL_LLM_INSIGHTS_MAX_TOKENS"
     )
+    local_llm_insights_temperature: float = Field(
+        default=0.35, validation_alias="LOCAL_LLM_INSIGHTS_TEMPERATURE"
+    )
+
+    # Embeddings: auto | cuda | cpu
+    embedding_device: str = Field(default="auto", validation_alias="EMBEDDING_DEVICE")
 
     # Retained for backward compatibility; the only supported provider is "local".
     default_llm_provider: str = Field(default="local", validation_alias="DEFAULT_LLM_PROVIDER")

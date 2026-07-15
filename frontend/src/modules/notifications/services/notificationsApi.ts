@@ -129,6 +129,9 @@ export async function sendAdminNotification(form: {
   files: File[];
   requirementType?: string;
   reminderIntervalMinutes?: number;
+  extraEmails?: string;
+  recipientExcel?: File;
+  skipPortalRecipients?: boolean;
 }) {
   const fd = new FormData();
   fd.append("title", form.title);
@@ -142,6 +145,22 @@ export async function sendAdminNotification(form: {
   if (form.reminderIntervalMinutes) {
     fd.append("reminder_interval_minutes", String(form.reminderIntervalMinutes));
   }
+  if (form.extraEmails?.trim()) {
+    fd.append("extra_emails", form.extraEmails.trim());
+  }
+  if (form.skipPortalRecipients) {
+    fd.append("skip_portal_recipients", "true");
+  }
+  if (form.recipientExcel) {
+    fd.append("recipient_excel", form.recipientExcel);
+  }
   form.files.forEach((f) => fd.append("attachments", f));
-  return apiPostForm<{ id: number; recipient_count: number; title: string }>("/notifications/admin/send", fd);
+  return apiPostForm<{
+    id: number | null;
+    recipient_count: number;
+    portal_recipient_count?: number;
+    external_email_sent?: number;
+    external_email_failed?: number;
+    title: string;
+  }>("/notifications/admin/send", fd);
 }

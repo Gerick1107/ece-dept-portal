@@ -800,3 +800,136 @@ async def compile_export_template(
         media_type=_TEMPLATE_MEDIA.get(fmt, "application/octet-stream"),
         headers={"Content-Disposition": f"attachment; filename=publications_custom.{fmt}"},
     )
+
+
+_FIELDS_MEDIA = {
+    "csv": "text/csv",
+    "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "pdf": "application/pdf",
+    "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+}
+
+
+@router.post("/exports/fields/analyze")
+async def analyze_export_fields(
+    fields_text: str = Form(...),
+    use_llm: bool = Query(default=False),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Match user-typed column names to publication data fields."""
+    if user.role not in (UserRole.admin, UserRole.faculty, UserRole.hod):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    from app.publications.exports.custom_export_service import (
+        CANONICAL_FIELDS,
+        TemplateError,
+        llm_guess_fields,
+        match_headers,
+        parse_fields_from_text,
+    )
+    from app.publications.services.custom_columns_service import list_columns
+
+    headers = parse_fields_from_text(fields_text)
+    if not headers:
+        raise HTTPException(status_code=400, detail="Enter at least one column name.")
+    try:
+        result = match_headers(headers, db)
+    except TemplateError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    llm_guesses: dict[str, str] = {}
+    if use_llm and result.unknown:
+        llm_guesses = await llm_guess_fields(result.unknown)
+
+    available = list(CANONICAL_FIELDS.keys()) + [f"custom:{c.key}" for c in list_columns(db, enabled_only=True)]
+    return {
+        "format": "fields",
+        "headers": headers,
+        "matched": result.matched,
+        "suggestions": result.suggestions,
+        "unknown": [h for h in result.unknown if h not in llm_guesses],
+        "llm_guesses": llm_guesses,
+        "available_fields": available,
+    }
+
+
+@router.post("/exports/fields/compile")
+async def compile_export_fields(
+    mapping: str = Form(...),
+    fields_text: str = Form(...),
+    format: str = Form(default="xlsx"),
+    export_type: str = Form(default="both"),
+    faculty_ids: str | None = Form(default=None),
+    publication_year: int | None = Form(default=None),
+    year_start: int | None = Form(default=None),
+    year_end: int | None = Form(default=None),
+    date_start: str | None = Form(default=None),
+    date_end: str | None = Form(default=None),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    scope: FacultyScope = Depends(get_faculty_scope),
+):
+    """Export publication data using a user-defined column list (no template upload)."""
+    if user.role not in (UserRole.admin, UserRole.faculty, UserRole.hod):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    if export_type not in ("publications", "patents", "both"):
+        raise HTTPException(status_code=400, detail="Invalid export_type")
+
+    import json
+
+    from app.publications.exports.custom_export_service import (
+        TemplateError,
+        compile_fields_export,
+        parse_fields_from_text,
+    )
+
+    fmt = (format or "xlsx").lower().strip()
+    if fmt not in _FIELDS_MEDIA:
+        raise HTTPException(status_code=400, detail="format must be csv, xlsx, pdf, or docx")
+
+    try:
+        mapping_dict = json.loads(mapping)
+        if not isinstance(mapping_dict, dict):
+            raise ValueError
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="mapping must be a JSON object") from exc
+
+    headers = parse_fields_from_text(fields_text)
+    if not headers:
+        raise HTTPException(status_code=400, detail="Enter at least one column name.")
+
+    parsed_faculty_ids: list[int] = []
+    if faculty_ids:
+        try:
+            parsed_faculty_ids = sorted({int(p.strip()) for p in faculty_ids.split(",") if p.strip()})
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="faculty_ids must be comma-separated integers") from exc
+
+    if not scope.see_all:
+        parsed_faculty_ids = [scope.faculty_id] if scope.faculty_id is not None else [-1]
+
+    parsed_date_start = _parse_export_date(date_start, "date_start")
+    parsed_date_end = _parse_export_date(date_end, "date_end")
+
+    try:
+        payload = compile_fields_export(
+            db,
+            headers=headers,
+            mapping={h: mapping_dict[h] for h in headers if h in mapping_dict},
+            fmt=fmt,
+            faculty_ids=parsed_faculty_ids or None,
+            publication_year=publication_year,
+            year_start=year_start,
+            year_end=year_end,
+            date_start=parsed_date_start,
+            date_end=parsed_date_end,
+            export_type=export_type,
+        )
+    except TemplateError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return Response(
+        content=payload,
+        media_type=_FIELDS_MEDIA.get(fmt, "application/octet-stream"),
+        headers={"Content-Disposition": f"attachment; filename=publications_custom.{fmt}"},
+    )
