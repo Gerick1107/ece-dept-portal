@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.database.session import SessionLocal
 
-from app.documents.models.entities import DocumentChunk, Meeting, MeetingFile
+from app.documents.models.entities import DOCUMENT_TYPE_ECE_FACULTY_MEET, DocumentChunk, Meeting, MeetingFile
 from app.documents.services.embedding_service import embed_texts, embedding_to_json
 from app.documents.services.file_manager import DOCUMENT_TYPE_DIRS, resolve_document_path
 from app.documents.services.pdf_service import extract_pdf_metadata
@@ -239,6 +239,8 @@ async def ingest_meeting_file(
         )
         db.add(mf)
     if not preserve_meeting_title:
+        preserve_meeting_title = meeting.document_type == DOCUMENT_TYPE_ECE_FACULTY_MEET
+    if not preserve_meeting_title:
         if not meeting.meeting_title or file_role == "minutes":
             meeting.meeting_title = resolved_title
     if resolved_date and (not meeting.meeting_date or file_role == "minutes"):
@@ -331,6 +333,7 @@ async def sync_new_documents_from_disk(
                     file_role=role,
                     file_path=pdf_path,
                     generate_description=True,
+                    preserve_meeting_title=rtype == DOCUMENT_TYPE_ECE_FACULTY_MEET,
                 )
                 ingested += 1
     return {"ingested": ingested}

@@ -17,9 +17,13 @@ _CO_RE = re.compile(r"^CO\s*\d+$", re.IGNORECASE)
 @dataclass
 class AnalyzedQuestion:
     label: str
-    co_label: str
+    co_labels: list[str]
     max_marks: float
     is_bonus: bool = False
+
+    @property
+    def co_label(self) -> str:
+        return _format_co_cell(self.co_labels)
 
 
 def extract_document_text(filename: str, content: bytes) -> str:
@@ -66,6 +70,31 @@ def _normalize_co(value: str) -> str:
     return value if _CO_RE.match(value) else ""
 
 
+def _normalize_co_list(raw) -> list[str]:
+    if raw is None:
+        return []
+    if isinstance(raw, list):
+        labels: list[str] = []
+        for item in raw:
+            co = _normalize_co(str(item))
+            if co and co not in labels:
+                labels.append(co)
+        return labels
+    text = str(raw).strip()
+    if not text:
+        return []
+    labels = []
+    for part in text.split(","):
+        co = _normalize_co(part)
+        if co and co not in labels:
+            labels.append(co)
+    return labels
+
+
+def _format_co_cell(labels: list[str]) -> str:
+    return ", ".join(labels)
+
+
 def scale_questions(
     questions: list[AnalyzedQuestion],
     *,
@@ -78,12 +107,12 @@ def scale_questions(
     scaled: list[AnalyzedQuestion] = []
     for q in questions:
         if q.is_bonus:
-            scaled.append(AnalyzedQuestion(q.label, q.co_label, q.max_marks, is_bonus=True))
+            scaled.append(AnalyzedQuestion(q.label, q.co_labels, q.max_marks, is_bonus=True))
         else:
             scaled.append(
                 AnalyzedQuestion(
                     q.label,
-                    q.co_label,
+                    q.co_labels,
                     round(q.max_marks * factor, 2),
                     is_bonus=False,
                 )
@@ -100,7 +129,7 @@ async def analyze_question_paper_text(text: str) -> dict:
   "questions": [
     {{
       "label": "Q1 or Q1a",
-      "co_label": "CO1",
+      "co_labels": ["CO1", "CO2"],
       "max_marks": number,
       "is_bonus": false,
       "parts": []
@@ -110,7 +139,8 @@ async def analyze_question_paper_text(text: str) -> dict:
 
 Rules:
 - Treat sub-parts (a,b,c,d or i,ii,iii or 1,2,3 under one main question) as separate questions with labels like Q1a, Q1b.
-- Map each question/part to the CO stated or implied in the paper; use CO1, CO2, etc.
+- Map each question/part to ALL COs stated or implied; use co_labels array (e.g. ["CO1","CO2"]).
+- If only one CO applies, still use a one-element co_labels array.
 - Mark bonus questions with is_bonus=true.
 - paper_total_marks is the total for this component on the paper (before scaling).
 
@@ -122,24 +152,28 @@ Question paper text:
     questions: list[AnalyzedQuestion] = []
     for item in data.get("questions") or []:
         label = str(item.get("label") or "").strip() or f"Q{len(questions) + 1}"
-        co = _normalize_co(str(item.get("co_label") or ""))
+        cos = _normalize_co_list(item.get("co_labels"))
+        if not cos:
+            cos = _normalize_co_list(item.get("co_label"))
         try:
             marks = float(item.get("max_marks") or 0)
         except (TypeError, ValueError):
             marks = 0.0
         is_bonus = bool(item.get("is_bonus"))
-        questions.append(AnalyzedQuestion(label, co, marks, is_bonus=is_bonus))
+        questions.append(AnalyzedQuestion(label, cos, marks, is_bonus=is_bonus))
         for part in item.get("parts") or []:
             plabel = str(part.get("label") or "").strip()
             if not plabel:
                 continue
-            pco = _normalize_co(str(part.get("co_label") or co))
+            pcos = _normalize_co_list(part.get("co_labels"))
+            if not pcos:
+                pcos = _normalize_co_list(part.get("co_label")) or cos
             try:
                 pmarks = float(part.get("max_marks") or 0)
             except (TypeError, ValueError):
                 pmarks = 0.0
             questions.append(
-                AnalyzedQuestion(plabel, pco, pmarks, is_bonus=bool(part.get("is_bonus")))
+                AnalyzedQuestion(plabel, pcos, pmarks, is_bonus=bool(part.get("is_bonus")))
             )
     try:
         paper_total = float(data.get("paper_total_marks") or 0)
@@ -151,6 +185,7 @@ Question paper text:
         "questions": [
             {
                 "label": q.label,
+                "co_labels": q.co_labels,
                 "co_label": q.co_label,
                 "max_marks": q.max_marks,
                 "is_bonus": q.is_bonus,
@@ -177,7 +212,7 @@ def generate_component_workbook(
     parsed = [
         AnalyzedQuestion(
             str(q.get("label") or ""),
-            _normalize_co(str(q.get("co_label") or "")),
+            _normalize_co_list(q.get("co_labels")) or _normalize_co_list(q.get("co_label")),
             float(q.get("max_marks") or 0),
             is_bonus=bool(q.get("is_bonus")),
         )

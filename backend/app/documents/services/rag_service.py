@@ -71,6 +71,18 @@ _YEAR_RE = re.compile(r"\b(19\d{2}|20\d{2})\b")
 _FOLLOWUP_PRONOUN_RE = re.compile(r"\b(it|its|they|them|their|that|those|these|this|he|she)\b", re.IGNORECASE)
 _FOLLOWUP_PREFIX_RE = re.compile(r"^(and|also|then|did|was|were|is|are|what about|how about|who|when|why|how)\b", re.IGNORECASE)
 
+# ECE Faculty meetings are titled by type (Moderation, Graduation, …) not ordinal.
+_ECE_TITLE_HINTS: list[tuple[str, re.Pattern[str]]] = [
+    ("moderation", re.compile(r"\bmoderation\b", re.IGNORECASE)),
+    ("graduation", re.compile(r"\bgraduation\b", re.IGNORECASE)),
+    ("curriculum", re.compile(r"\bcurriculum\b", re.IGNORECASE)),
+    ("faculty", re.compile(r"\bfaculty\s+meet", re.IGNORECASE)),
+    ("board of studies", re.compile(r"\bboard\s+of\s+studies\b|\bbos\b", re.IGNORECASE)),
+    ("research", re.compile(r"\bresearch\b", re.IGNORECASE)),
+    ("placement", re.compile(r"\bplacement\b", re.IGNORECASE)),
+    ("induction", re.compile(r"\binduction\b", re.IGNORECASE)),
+]
+
 
 @dataclass
 class RetrievedChunk:
@@ -89,11 +101,14 @@ def _tokenize(text: str) -> set[str]:
     return {t.lower() for t in re.findall(r"[a-zA-Z0-9]+", text) if len(t) > 2}
 
 
-def _score_chunk(question_tokens: set[str], chunk_text: str) -> float:
+def _score_chunk(question_tokens: set[str], chunk_text: str, *, title_tokens: set[str] | None = None) -> float:
     chunk_tokens = _tokenize(chunk_text)
     if not question_tokens or not chunk_tokens:
-        return 0.0
-    overlap = len(question_tokens & chunk_tokens)
+        overlap = 0.0
+    else:
+        overlap = float(len(question_tokens & chunk_tokens))
+    if title_tokens:
+        overlap += len(question_tokens & title_tokens) * 1.5
     return overlap
 
 
@@ -129,17 +144,22 @@ def retrieve_chunks(
 
     scored: list[RetrievedChunk] = []
     for row in rows:
+        mf = row.meeting_file
+        meeting = mf.meeting
+        title_tokens = _tokenize(meeting.meeting_title or "")
         score = 0.0
         if query_vec is not None:
             chunk_vec = embedding_from_json(row.embedding_json)
             if chunk_vec is not None:
                 score = cosine_similarity(query_vec, chunk_vec)
         if score <= 0:
-            score = _score_chunk(question_tokens, row.chunk_text) / max(len(question_tokens), 1)
+            score = _score_chunk(question_tokens, row.chunk_text, title_tokens=title_tokens) / max(
+                len(question_tokens), 1
+            )
+        elif title_tokens:
+            score += len(question_tokens & title_tokens) * 0.08
         if score <= 0:
             continue
-        mf = row.meeting_file
-        meeting = mf.meeting
         scored.append(
             RetrievedChunk(
                 meeting_file_id=mf.id,
@@ -258,6 +278,29 @@ def _meetings_for_types(db: Session, types: list[str] | None) -> list[Meeting]:
     if types is not None:
         stmt = stmt.where(Meeting.document_type.in_(types))
     return list(db.scalars(stmt).unique().all())
+
+
+def detect_ece_title_hints(text: str) -> list[str]:
+    """Keywords from the question that may match ECE Faculty meeting titles."""
+    hints: list[str] = []
+    for label, pattern in _ECE_TITLE_HINTS:
+        if pattern.search(text):
+            hints.append(label)
+    return hints
+
+
+def find_meetings_by_title_hints(
+    db: Session, *, types: list[str] | None, hints: list[str]
+) -> list[Meeting]:
+    if not hints:
+        return []
+    candidates = _meetings_for_types(db, types)
+    matches: list[Meeting] = []
+    for meeting in candidates:
+        title_lower = (meeting.meeting_title or "").lower()
+        if any(hint in title_lower for hint in hints):
+            matches.append(meeting)
+    return matches
 
 
 def find_meetings_by_number(db: Session, *, types: list[str] | None, number: int) -> list[Meeting]:
@@ -495,6 +538,14 @@ def _resolve_target_meetings(db: Session, document_type: str, question: str) -> 
         if hint:
             date_types = [DOCUMENT_TYPE_ECE_FACULTY_MEET] if types is None else types
             return find_meetings_by_date(db, types=date_types, hint=hint), True, "that meeting"
+
+        title_hints = detect_ece_title_hints(question)
+        if title_hints:
+            title_types = [DOCUMENT_TYPE_ECE_FACULTY_MEET] if types is None else types
+            found = find_meetings_by_title_hints(db, types=title_types, hints=title_hints)
+            if found:
+                label = found[0].meeting_title or "matching"
+                return found, True, f"the {label} meeting"
 
     return [], False, ""
 

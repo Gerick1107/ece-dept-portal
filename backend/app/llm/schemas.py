@@ -65,6 +65,8 @@ class CourseComparison(BaseModel):
     previous_assessment_summary: list[AssessmentSummaryItem] = Field(default_factory=list)
     current_assessments: list[AssessmentDetail] = Field(default_factory=list)
     previous_assessments: list[AssessmentDetail] = Field(default_factory=list)
+    current_assessment_data_available: bool = False
+    previous_assessment_data_available: bool = False
     available_semesters: list[str] = Field(default_factory=list)
     available_sections: list[str] = Field(default_factory=list)
 

@@ -121,9 +121,23 @@ function AssessmentStructurePanel({
   currentLabel: string;
 }) {
   const hasCurrent =
-    comparison.current_assessments.length > 0 || comparison.assessment_summary.length > 0;
+    comparison.current_assessment_data_available ??
+    (comparison.current_assessments.length > 0 || comparison.assessment_summary.length > 0);
   const hasPrevious =
-    comparison.previous_assessments.length > 0 || comparison.previous_assessment_summary.length > 0;
+    comparison.previous_assessment_data_available ??
+    (comparison.previous_assessments.length > 0 || comparison.previous_assessment_summary.length > 0);
+
+  if (!hasCurrent && !hasPrevious && comparison.has_previous) {
+    return (
+      <section className="bg-amber-50 border border-amber-200 rounded-xl p-4 shadow-sm">
+        <h3 className="font-semibold text-amber-900">Assessment structure</h3>
+        <p className="text-sm text-amber-800 mt-1">
+          Neither semester has stored assessment IDs — insights will use CO/PO attainment only and will
+          not invent assessment components.
+        </p>
+      </section>
+    );
+  }
 
   if (!hasCurrent && !hasPrevious) return null;
 
@@ -167,14 +181,32 @@ function AssessmentStructurePanel({
         {comparison.has_previous && (
           <div>
             <h4 className="text-sm font-medium text-slate-700 mb-2">{previousLabel}</h4>
-            <p className="text-xs text-slate-500 mb-2">{formatAssessmentSummary(comparison.previous_assessment_summary)}</p>
-            {renderAssessments(comparison.previous_assessments)}
+            {hasPrevious ? (
+              <>
+                <p className="text-xs text-slate-500 mb-2">
+                  {formatAssessmentSummary(comparison.previous_assessment_summary)}
+                </p>
+                {renderAssessments(comparison.previous_assessments)}
+              </>
+            ) : (
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded px-2 py-1.5">
+                Backfilled CO/PO only — no assessment structure stored for this semester.
+              </p>
+            )}
           </div>
         )}
         <div>
           <h4 className="text-sm font-medium text-slate-700 mb-2">{currentLabel}</h4>
-          <p className="text-xs text-slate-500 mb-2">{formatAssessmentSummary(comparison.assessment_summary)}</p>
-          {renderAssessments(comparison.current_assessments)}
+          {hasCurrent ? (
+            <>
+              <p className="text-xs text-slate-500 mb-2">{formatAssessmentSummary(comparison.assessment_summary)}</p>
+              {renderAssessments(comparison.current_assessments)}
+            </>
+          ) : (
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded px-2 py-1.5">
+              Backfilled CO/PO only — no assessment structure stored for this semester.
+            </p>
+          )}
         </div>
       </div>
     </section>

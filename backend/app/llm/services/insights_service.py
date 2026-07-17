@@ -28,7 +28,7 @@ from app.llm.services.mapping_descriptions import extract_co_descriptions_for_co
 logger = logging.getLogger(__name__)
 
 _PO_PSO_ORDER = [f"PO{i}" for i in range(1, 13)] + ["PSO1", "PSO2", "PSO3"]
-PROMPT_VERSION = 7
+PROMPT_VERSION = 8
 
 
 def _evaluation_run_id(db: Session, public_id: str | None) -> int | None:
@@ -36,6 +36,33 @@ def _evaluation_run_id(db: Session, public_id: str | None) -> int | None:
         return None
     run = db.scalar(select(CopoEvaluationRun).where(CopoEvaluationRun.public_id == public_id))
     return run.id if run else None
+
+
+def _assessment_data_available(
+    run: dict | None,
+    summary: list[dict],
+    assessments: list[dict],
+) -> bool:
+    """True only when stored assessment columns and CO mappings exist (not backfill-only)."""
+    if not run:
+        return False
+    intermediate = run.get("intermediate") or {}
+    if intermediate.get("is_backfill"):
+        return False
+    if not (run.get("assessment_ids") or []) and not summary:
+        return False
+    if not assessments:
+        return False
+    return any(a.get("cos") for a in assessments)
+
+
+def _assessment_unavailable_notice(semester_label: str) -> str:
+    return (
+        f"Assessment structure data is NOT AVAILABLE for {semester_label}. "
+        "This semester has backfilled CO/PO attainment only (no stored assessment columns). "
+        "Do NOT invent, infer, or recommend specific assessment components, question counts, "
+        "or assessment-to-CO mappings for this semester."
+    )
 
 
 def _format_assessment_co_block(assessments: list[dict]) -> str:
@@ -50,7 +77,7 @@ def _format_assessment_co_block(assessments: list[dict]) -> str:
             q_count = co.get("question_count")
             q_txt = f", {q_count} question(s)" if q_count is not None else ""
             co_parts.append(f"{co.get('co_label')} (attainment {attainment_txt}{q_txt})")
-        co_summary = "; ".join(co_parts) if co_parts else "no CO mappings recorded"
+        co_summary = "; ".join(co_parts) if co_parts else "structure only — no CO mapping recorded"
         lines.append(
             f"- Assessment '{item.get('name')}' "
             f"[{item.get('type') or 'type unknown'}] — {co_summary}"
@@ -346,6 +373,15 @@ def get_course_comparison(
             co_attainment=(previous.get("co_attainment") or {}),
         )
 
+    current_assessment_available = _assessment_data_available(
+        current, assessment_summary, current_assessments
+    )
+    previous_assessment_available = (
+        _assessment_data_available(previous, previous_assessment_summary, previous_assessments)
+        if previous
+        else False
+    )
+
     return {
         "course_title": course_title,
         "course_key": course_display_key(course_title, section),
@@ -365,6 +401,8 @@ def get_course_comparison(
         "previous_assessment_summary": previous_assessment_summary,
         "current_assessments": current_assessments,
         "previous_assessments": previous_assessments,
+        "current_assessment_data_available": current_assessment_available,
+        "previous_assessment_data_available": previous_assessment_available,
         "available_semesters": semesters,
         "available_sections": sorted(
             {
@@ -423,27 +461,67 @@ def build_llm_prompt(
             + ", ".join(row["metric"] for row in comparison["co_comparison"] if row.get("current") is not None)
         )
 
-    po_desc_block = "\n".join(
-        po_descriptions.get(k, k) for k in _PO_PSO_ORDER if k in po_descriptions
-    ) or "PO descriptions: Standard PO1-PO12 as per NBA guidelines."
-    pso_lines = [po_descriptions[k] for k in ("PSO1", "PSO2", "PSO3") if k in po_descriptions]
-    pso_desc_block = "\n".join(pso_lines) if pso_lines else ""
-
     co_table = _format_comparison_lines(comparison["co_comparison"])
     po_table = _format_comparison_lines(comparison["po_comparison"])
-    assessment_block = format_assessment_summary_block(assessment_summary)
-    previous_summary_block = format_assessment_summary_block(previous_assessment_summary or [])
-    current_assessment_block = _format_assessment_co_block(current_assessments or [])
-    previous_assessment_block = _format_assessment_co_block(previous_assessments or [])
+
+    curr_avail = bool(comparison.get("current_assessment_data_available"))
+    prev_avail = bool(comparison.get("previous_assessment_data_available"))
 
     current_section_txt = _section_label_text(comparison.get("current_section"))
     previous_section_txt = _section_label_text(comparison.get("previous_section"))
 
-    constraints = """
+    curr_sem = comparison["current_semester"]
+    prev_sem = comparison.get("previous_semester")
+
+    if curr_avail:
+        current_summary_block = format_assessment_summary_block(assessment_summary)
+        current_assessment_block = _format_assessment_co_block(current_assessments or [])
+    else:
+        current_summary_block = _assessment_unavailable_notice(curr_sem)
+        current_assessment_block = current_summary_block
+
+    if comparison["has_previous"]:
+        if prev_avail:
+            previous_summary_block = format_assessment_summary_block(previous_assessment_summary or [])
+            previous_assessment_block = _format_assessment_co_block(previous_assessments or [])
+        else:
+            previous_summary_block = _assessment_unavailable_notice(prev_sem or "Semester A")
+            previous_assessment_block = previous_summary_block
+    else:
+        previous_summary_block = ""
+        previous_assessment_block = ""
+
+    no_assessment_data = comparison["has_previous"] and not curr_avail and not prev_avail
+    mixed_assessment_data = comparison["has_previous"] and curr_avail != prev_avail
+
+    assessment_constraints = ""
+    if no_assessment_data:
+        assessment_constraints = """
+Assessment data constraint (CRITICAL):
+- Neither semester has stored assessment structure or assessment-to-CO mappings.
+- This comparison is CO/PO attainment ONLY (backfilled snapshots).
+- Do NOT invent, infer, or recommend Quiz/Midsem/Endsem/Lab components, question counts,
+  or per-assessment CO coverage for either semester.
+- Omit assessment-structure comparison and next-semester assessment planning sections entirely.
+"""
+    elif mixed_assessment_data:
+        unavailable = []
+        if not prev_avail:
+            unavailable.append(f"Semester A ({prev_sem})")
+        if not curr_avail:
+            unavailable.append(f"Semester B ({curr_sem})")
+        assessment_constraints = f"""
+Assessment data constraint (CRITICAL):
+- Assessment structure data is missing for: {", ".join(unavailable)}.
+- For those semester(s), analyze CO/PO attainment changes ONLY — never fabricate assessment details.
+- Assessment-structure comparison and recommendations apply ONLY to the semester(s) with data above.
+"""
+
+    constraints = f"""
 Role and audience:
 - The reader is an experienced professor. Do not explain basic CO-attainment concepts.
 - Write as a data analyst speaking to a peer.
-
+{assessment_constraints}
 Strict tone and style rules:
 - Use analytical, non-judgmental language.
 - Do not use words such as "ineffective", "insufficient", "poor", or any fault-oriented phrasing.
@@ -457,8 +535,9 @@ Hard forbidden outputs:
 - Do not produce any sentence that could be copied unchanged across all COs.
 - Do not make claims that cannot be traced to the provided numbers.
 - Do not add a generic concluding paragraph that restates earlier points.
+- Never invent assessment components or question mappings for semesters marked NOT AVAILABLE.
 
-Assessment naming rules:
+Assessment naming rules (only when assessment data IS available for that semester):
 - Use assessment names exactly as provided (for example, Quiz 1, Quiz 2, Midsem, Endsem, Lab, Tutorial).
 - Do not invent ordinal names such as "Assessment 1", "Assessment 2".
 - If only column-derived names are available, quote those exact names and do not renumber.
@@ -466,10 +545,12 @@ Assessment naming rules:
 
     if comparison["has_previous"]:
         comparison_intro = (
-            f"Semester A (previous): {comparison['previous_semester']} ({previous_section_txt})\n"
-            f"Semester B (current): {comparison['current_semester']} ({current_section_txt})\n"
+            f"Semester A (previous): {prev_sem} ({previous_section_txt})\n"
+            f"Semester B (current): {curr_sem} ({current_section_txt})\n"
         )
-        return f"""You are an academic attainment analyst for an engineering college (Electronics & Communication Engineering department).
+
+        if no_assessment_data:
+            return f"""You are an academic attainment analyst for an engineering college (Electronics & Communication Engineering department).
 
 Course: {course_title}
 Faculty context: {faculty_name}
@@ -485,37 +566,62 @@ CO Attainment Comparison (Semester A vs Semester B):
 PO/PSO Attainment Comparison:
 {po_table}
 
+Note: Neither semester has assessment structure data — CO/PO backfill only.
+
+Required output format (use these exact section headings):
+
+## Section 1 — CO Attainment Comparison (Semester A vs B)
+- Compare every CO with Semester A and Semester B values and deltas using exact numbers.
+- Relate PO/PSO shifts to CO changes where the data supports it.
+- Explicitly state that assessment structure data is not available for either semester.
+
+## Section 2 — CO-Level Analysis
+- Cover every CO in the comparison table.
+- For each CO: attainment in A and B, delta, and one data-backed structural interpretation
+  based on attainment levels only (no invented assessments).
+
+## Section 3 — What Held Up
+- Mandatory section.
+- Report at least one positive or relatively stable finding, if present.
+- If all COs declined, identify the CO with the smallest decline and explain using numbers only.
+
+Generate the response using only the data above. Do not mention Quiz, Midsem, Endsem, or Lab unless quoting unavailable-data notices."""
+
+        assessment_sections = ""
+        if curr_avail or prev_avail:
+            assessment_sections = f"""
 Assessment structure summary (Semester A):
 {previous_summary_block}
 
 Assessment structure summary (Semester B):
-{assessment_block}
+{current_summary_block}
 
 Assessment-to-CO mapping with attainment (Semester A):
 {previous_assessment_block}
 
 Assessment-to-CO mapping with attainment (Semester B):
 {current_assessment_block}
+"""
 
-Required output format (use these exact section headings):
+        section1 = "## Section 1 — Assessment Structure Comparison (Semester A vs B)"
+        if mixed_assessment_data:
+            section1 += (
+                "\n- Compare assessment mix ONLY for semester(s) with data; for others, "
+                "state assessment data is not available and skip fabricated comparisons."
+            )
+        else:
+            section1 += (
+                "\n- Compare Semester A and Semester B assessment mix with counts by type."
+                "\n- Explicitly state additions/removals by assessment type between semesters."
+                "\n- For each CO, report coverage change across semesters (number of assessment components and question counts)."
+                "\n- Identify COs that lost coverage and COs that gained coverage, then relate each change to attainment delta using exact numbers."
+            )
 
-## Section 1 — Assessment Structure Comparison (Semester A vs B)
-- Compare Semester A and Semester B assessment mix with counts by type.
-- Explicitly state additions/removals by assessment type between semesters.
-- For each CO, report coverage change across semesters (number of assessment components and question counts).
-- Identify COs that lost coverage and COs that gained coverage, then relate each change to attainment delta using exact numbers.
-
-## Section 2 — CO-Level Analysis
-- Cover every CO present in the comparison table.
-- For each CO, include:
-  - attainment in Semester A and Semester B, with delta;
-  - total question coverage and component spread in both semesters;
-  - interpretation that distinguishes high-coverage decline vs low-coverage decline (do not give the same advice for both);
-  - one concrete, structurally justified action tied to specific assessments.
-- If recommending a change, name the exact component(s) where it should happen.
-
+        section3 = ""
+        if curr_avail:
+            section3 = """
 ## Section 3 — Recommended Assessment Structure for Next Semester
-- Provide a concrete plan in this style:
+- Provide a concrete plan in this style (Semester B data only if Semester A lacks assessment data):
   - Quizzes: ...
   - Midsem: ...
   - Endsem: ...
@@ -523,8 +629,36 @@ Required output format (use these exact section headings):
   - New addition (only if justified by data): ...
 - Justify each line with a specific finding from Sections 1–2.
 - Do not recommend new assessment types unless the provided structure and attainment trends justify it.
+"""
+        section4_num = 4 if section3 else 3
 
-## Section 4 — What Held Up
+        return f"""You are an academic attainment analyst for an engineering college (Electronics & Communication Engineering department).
+
+Course: {course_title}
+Faculty context: {faculty_name}
+{comparison_intro}
+{constraints}
+
+Course Outcome (CO) descriptions:
+{co_desc_block}
+
+CO Attainment Comparison (Semester A vs Semester B):
+{co_table}
+
+PO/PSO Attainment Comparison:
+{po_table}
+{assessment_sections}
+Required output format (use these exact section headings):
+
+{section1}
+
+## Section 2 — CO-Level Analysis
+- Cover every CO present in the comparison table.
+- For each CO, include attainment in Semester A and Semester B with delta.
+- Where assessment data exists for a semester, include question coverage and component spread; otherwise state data is unavailable.
+- One concrete, structurally justified action tied to specific assessments when data exists; otherwise base actions on attainment deltas only.
+{section3}
+## Section {section4_num} — What Held Up
 - Mandatory section.
 - Report at least one positive or relatively stable finding, if present.
 - If all COs declined, identify the CO with the smallest decline and provide a structural reason from the data.
@@ -536,7 +670,43 @@ Generate the response using only the data above."""
         for row in comparison["co_comparison"]
         if row.get("current") is not None
     ) or "No CO data."
-    comparison_intro = f"Current semester: {comparison['current_semester']} ({current_section_txt})\n"
+    comparison_intro = f"Current semester: {curr_sem} ({current_section_txt})\n"
+
+    if not curr_avail:
+        return f"""You are an academic attainment analyst for an engineering college (Electronics & Communication Engineering department).
+
+Course: {course_title}
+Faculty context: {faculty_name}
+{comparison_intro}
+Only one semester of attainment data is available.
+{constraints}
+
+Course Outcome (CO) descriptions:
+{co_desc_block}
+
+Current CO attainments:
+{co_table_single}
+
+PO/PSO Attainment:
+{po_table}
+
+Note: {current_summary_block}
+
+Required output format (single-semester, CO/PO only):
+
+## Section 1 — CO Attainment Snapshot
+- Summarize current CO and PO/PSO attainments with exact numbers.
+- State that assessment structure data is not available for this semester.
+
+## Section 2 — CO-Level Analysis
+- For each CO, report attainment and one data-backed observation (no invented assessments).
+
+## Section 3 — What Held Up
+- Mandatory section.
+- Identify at least one strongest or most stable CO from current data.
+
+Generate the response using only the data above. Do not invent assessment components."""
+
     return f"""You are an academic attainment analyst for an engineering college (Electronics & Communication Engineering department).
 
 Course: {course_title}
@@ -555,7 +725,7 @@ PO/PSO Attainment:
 {po_table}
 
 Assessment structure summary:
-{assessment_block}
+{current_summary_block}
 
 Assessment-to-CO mapping with attainment:
 {current_assessment_block}

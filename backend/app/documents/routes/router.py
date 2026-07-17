@@ -14,7 +14,7 @@ from app.auth.dependencies import get_current_user, require_roles
 from app.config import get_settings
 from app.database.models.user import User, UserRole
 from app.database.session import get_db
-from app.documents.models.entities import DOCUMENT_TYPE_ALL, Meeting, MeetingFile
+from app.documents.models.entities import DOCUMENT_TYPE_ALL, DOCUMENT_TYPE_ECE_FACULTY_MEET, Meeting, MeetingFile
 from app.documents.services.document_service import (
     delete_meeting,
     extract_upload_metadata,
@@ -219,6 +219,7 @@ async def upload_document(
             meeting_date=previews["agenda"]["meeting_date"],
             description=(agenda_description or previews["agenda"]["description"] or "").strip() or None,
             generate_description=False,
+            preserve_meeting_title=resolved == DOCUMENT_TYPE_ECE_FACULTY_MEET,
         )
         result_files["agenda"] = {"id": mf.id, "file_name": mf.file_name}
     if minutes_file and "minutes" in saved:
@@ -231,6 +232,7 @@ async def upload_document(
             meeting_date=previews["minutes"]["meeting_date"],
             description=(minutes_description or previews["minutes"]["description"] or "").strip() or None,
             generate_description=False,
+            preserve_meeting_title=resolved == DOCUMENT_TYPE_ECE_FACULTY_MEET,
         )
         result_files["minutes"] = {"id": mf.id, "file_name": mf.file_name}
 

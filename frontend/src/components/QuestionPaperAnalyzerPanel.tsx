@@ -11,7 +11,7 @@ function authHeader(): Record<string, string> {
 type AnalyzedQuestion = {
   id: string;
   label: string;
-  co_label: string;
+  co_labels: string[];
   max_marks: number;
   is_bonus: boolean;
 };
@@ -19,8 +19,45 @@ type AnalyzedQuestion = {
 type AnalysisResult = {
   component_name: string;
   paper_total_marks: number;
-  questions: Omit<AnalyzedQuestion, "id">[];
+  questions: Array<{
+    label: string;
+    co_label?: string;
+    co_labels?: string[];
+    max_marks: number;
+    is_bonus: boolean;
+  }>;
 };
+
+function parseCoLabels(q: AnalysisResult["questions"][number]): string[] {
+  if (q.co_labels?.length) return q.co_labels;
+  if (!q.co_label?.trim()) return [];
+  return q.co_label
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function formatCoInput(labels: string[]) {
+  return labels.join(", ");
+}
+
+function parseCoInput(value: string): string[] {
+  return value
+    .split(",")
+    .map((s) => s.trim().toUpperCase().replace(/\s+/g, ""))
+    .filter(Boolean)
+    .map((s) => (s.match(/^CO\d+$/i) ? s.replace(/^CO/i, "CO") : s));
+}
+
+function emptyQuestion(): AnalyzedQuestion {
+  return {
+    id: generateId(),
+    label: `Q${Date.now() % 1000}`,
+    co_labels: [],
+    max_marks: 0,
+    is_bonus: false,
+  };
+}
 
 export default function QuestionPaperAnalyzerPanel() {
   const [componentName, setComponentName] = useState("");
@@ -52,9 +89,11 @@ export default function QuestionPaperAnalyzerPanel() {
       }
       setQuestions(
         result.questions.map((q) => ({
-          ...q,
           id: generateId(),
+          label: q.label,
+          co_labels: parseCoLabels(q),
           max_marks: Number(q.max_marks) || 0,
+          is_bonus: q.is_bonus,
         }))
       );
     } catch (e) {
@@ -81,9 +120,10 @@ export default function QuestionPaperAnalyzerPanel() {
           component_name: name,
           paper_total_marks: analysis.paper_total_marks,
           weightage: Number(weightage) || 0,
-          questions: questions.map(({ label, co_label, max_marks, is_bonus }) => ({
+          questions: questions.map(({ label, co_labels, max_marks, is_bonus }) => ({
             label,
-            co_label,
+            co_labels,
+            co_label: co_labels.join(", "),
             max_marks,
             is_bonus,
           })),
@@ -112,6 +152,22 @@ export default function QuestionPaperAnalyzerPanel() {
 
   function updateQuestion(id: string, patch: Partial<AnalyzedQuestion>) {
     setQuestions((prev) => prev.map((q) => (q.id === id ? { ...q, ...patch } : q)));
+  }
+
+  function deleteQuestion(id: string) {
+    setQuestions((prev) => prev.filter((q) => q.id !== id));
+  }
+
+  function insertQuestionAfter(index: number) {
+    setQuestions((prev) => {
+      const next = [...prev];
+      next.splice(index + 1, 0, emptyQuestion());
+      return next;
+    });
+  }
+
+  function appendQuestion() {
+    setQuestions((prev) => [...prev, emptyQuestion()]);
   }
 
   const scaledPreview =
@@ -189,63 +245,103 @@ export default function QuestionPaperAnalyzerPanel() {
           <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</p>
         )}
 
-        {analysis && questions.length > 0 && (
+        {analysis && (
           <div className="space-y-3">
-            <p className="text-sm font-medium text-slate-700">Confirm questions before download</p>
-            <div className="overflow-x-auto border rounded-lg">
-              <table className="w-full text-xs">
-                <thead className="bg-slate-50 text-slate-600">
-                  <tr>
-                    <th className="py-2 px-2 text-left">Question</th>
-                    <th className="py-2 px-2">CO</th>
-                    <th className="py-2 px-2">Marks (paper)</th>
-                    <th className="py-2 px-2">Bonus</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {questions.map((q) => (
-                    <tr key={q.id} className="border-t border-slate-100">
-                      <td className="py-1 px-2">
-                        <input
-                          className="w-full border rounded px-2 py-1"
-                          value={q.label}
-                          onChange={(e) => updateQuestion(q.id, { label: e.target.value })}
-                        />
-                      </td>
-                      <td className="py-1 px-2">
-                        <input
-                          className="w-20 border rounded px-2 py-1"
-                          value={q.co_label}
-                          onChange={(e) => updateQuestion(q.id, { co_label: e.target.value })}
-                        />
-                      </td>
-                      <td className="py-1 px-2">
-                        <input
-                          type="number"
-                          min={0}
-                          step={0.5}
-                          className="w-20 border rounded px-2 py-1"
-                          value={q.max_marks}
-                          onChange={(e) =>
-                            updateQuestion(q.id, { max_marks: Number(e.target.value) || 0 })
-                          }
-                        />
-                      </td>
-                      <td className="py-1 px-2 text-center">
-                        <input
-                          type="checkbox"
-                          checked={q.is_bonus}
-                          onChange={(e) => updateQuestion(q.id, { is_bonus: e.target.checked })}
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-medium text-slate-700">
+                {questions.length > 0
+                  ? "Confirm or fix questions before download"
+                  : "No questions detected — add them manually"}
+              </p>
+              <button
+                type="button"
+                onClick={appendQuestion}
+                className="text-xs rounded border border-slate-300 px-2 py-1 hover:bg-slate-50"
+              >
+                + Add question
+              </button>
             </div>
+
+            {questions.length > 0 && (
+              <div className="overflow-x-auto border rounded-lg">
+                <table className="w-full text-xs">
+                  <thead className="bg-slate-50 text-slate-600">
+                    <tr>
+                      <th className="py-2 px-2 text-left">Question</th>
+                      <th className="py-2 px-2 text-left">CO(s)</th>
+                      <th className="py-2 px-2">Marks (paper)</th>
+                      <th className="py-2 px-2">Bonus</th>
+                      <th className="py-2 px-2 w-28">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {questions.map((q, index) => (
+                      <tr key={q.id} className="border-t border-slate-100">
+                        <td className="py-1 px-2">
+                          <input
+                            className="w-full border rounded px-2 py-1"
+                            value={q.label}
+                            onChange={(e) => updateQuestion(q.id, { label: e.target.value })}
+                          />
+                        </td>
+                        <td className="py-1 px-2">
+                          <input
+                            className="w-full min-w-[6rem] border rounded px-2 py-1"
+                            placeholder="CO1, CO2"
+                            value={formatCoInput(q.co_labels)}
+                            onChange={(e) =>
+                              updateQuestion(q.id, { co_labels: parseCoInput(e.target.value) })
+                            }
+                            disabled={q.is_bonus}
+                          />
+                        </td>
+                        <td className="py-1 px-2">
+                          <input
+                            type="number"
+                            min={0}
+                            step={0.5}
+                            className="w-20 border rounded px-2 py-1"
+                            value={q.max_marks}
+                            onChange={(e) =>
+                              updateQuestion(q.id, { max_marks: Number(e.target.value) || 0 })
+                            }
+                          />
+                        </td>
+                        <td className="py-1 px-2 text-center">
+                          <input
+                            type="checkbox"
+                            checked={q.is_bonus}
+                            onChange={(e) => updateQuestion(q.id, { is_bonus: e.target.checked })}
+                          />
+                        </td>
+                        <td className="py-1 px-2">
+                          <div className="flex flex-col gap-1">
+                            <button
+                              type="button"
+                              onClick={() => insertQuestionAfter(index)}
+                              className="text-teal-700 hover:underline text-left"
+                            >
+                              Insert below
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => deleteQuestion(q.id)}
+                              className="text-red-600 hover:underline text-left"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
             <button
               type="button"
-              disabled={busy || !componentName.trim()}
+              disabled={busy || !componentName.trim() || questions.length === 0}
               onClick={downloadTemplate}
               className="rounded-lg bg-teal-700 text-white px-4 py-2 text-sm disabled:opacity-50"
             >

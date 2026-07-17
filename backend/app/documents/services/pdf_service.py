@@ -123,17 +123,33 @@ def parse_senate_header_from_text(text: str) -> tuple[str, str | None]:
     return "Senate Minutes", meeting_date
 
 
+def parse_meeting_header_from_text(
+    text: str, *, fallback_title: str | None = None
+) -> tuple[str, str | None]:
+    """Parse meeting title/date; prefer Senate header when present, else fallback."""
+    title, meeting_date = parse_senate_header_from_text(text)
+    if title != "Senate Minutes":
+        return title, meeting_date
+    if fallback_title:
+        return fallback_title, meeting_date
+    return "Meeting Document", meeting_date
+
+
 def extract_pdf_metadata(path: Path, *, fallback_title: str | None = None) -> ExtractedPdfMeta:
     pages = extract_pdf_pages(path)
     first_page = pages[0][1] if pages else ""
     sample_text = "\n".join(text for _, text in pages[:2])
-    title, meeting_date = parse_senate_header_from_text(first_page)
+    title, meeting_date = parse_meeting_header_from_text(first_page, fallback_title=fallback_title)
 
     filename_title = parse_title_from_filename(path.name)
-    if title == "Senate Minutes" and filename_title:
+    if title in ("Senate Minutes", "Meeting Document") and filename_title:
         title = filename_title
-    elif title == "Senate Minutes" and fallback_title:
+    elif title in ("Senate Minutes", "Meeting Document") and fallback_title:
         title = fallback_title
+    elif title == "Senate Minutes":
+        stem_title = Path(path.name).stem.replace("_", " ").strip()
+        if stem_title and "senate" not in stem_title.lower():
+            title = stem_title
 
     if not meeting_date:
         meeting_date = parse_date_from_text(path.stem) or parse_date_from_text(sample_text)

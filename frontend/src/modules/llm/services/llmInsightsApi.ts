@@ -70,6 +70,8 @@ export type CourseComparison = {
   previous_assessment_summary: AssessmentSummaryItem[];
   current_assessments: AssessmentDetail[];
   previous_assessments: AssessmentDetail[];
+  current_assessment_data_available?: boolean;
+  previous_assessment_data_available?: boolean;
   available_semesters: string[];
   available_sections: string[];
 };
