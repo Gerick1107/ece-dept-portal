@@ -17,11 +17,46 @@ from app.llm.services.llm_dispatch import generate_text
 
 _CHUNK_SIZE = 1200
 _CHUNK_OVERLAP = 200
+_MIN_AGENDA_CHUNK = 180
 _AGENDA_ITEM_RE = re.compile(r"\b\d+(?:\.\d+)+\b")
 
 
+def _normalize_pdf_text(text: str) -> str:
+    """Collapse PDF extraction noise so embeddings and keyword search work better."""
+    text = (text or "").replace("\x00", " ")
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    # Soft hyphen / odd spaces from pypdf
+    text = text.replace("\u00ad", "").replace("\u00a0", " ")
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def _merge_small_chunks(
+    chunks: list[tuple[int, str | None, str]], *, min_chars: int = _MIN_AGENDA_CHUNK
+) -> list[tuple[int, str | None, str]]:
+    if not chunks:
+        return []
+    merged: list[tuple[int, str | None, str]] = []
+    page, section, buf = chunks[0]
+    for next_page, next_section, next_text in chunks[1:]:
+        if next_page == page and len(buf) < min_chars:
+            buf = f"{buf}\n{next_text}".strip()
+            if section and next_section:
+                section = f"{section}-{next_section}"
+            elif next_section and not section:
+                section = next_section
+        else:
+            if buf.strip():
+                merged.append((page, section, buf.strip()))
+            page, section, buf = next_page, next_section, next_text
+    if buf.strip():
+        merged.append((page, section, buf.strip()))
+    return merged
+
+
 def _chunk_page_text(page_number: int, text: str) -> list[tuple[int, str | None, str]]:
-    text = (text or "").strip()
+    text = _normalize_pdf_text(text)
     if not text:
         return []
     matches = list(_AGENDA_ITEM_RE.finditer(text))
@@ -34,7 +69,7 @@ def _chunk_page_text(page_number: int, text: str) -> list[tuple[int, str | None,
             snippet = text[start:end].strip()
             if snippet:
                 chunks.append((page_number, section, snippet))
-        return chunks
+        return _merge_small_chunks(chunks)
     chunks = []
     start = 0
     while start < len(text):
@@ -191,6 +226,50 @@ def index_meeting_file_chunks(db: Session, meeting_file: MeetingFile, pages: lis
         count += 1
     db.commit()
     return count
+
+
+def reindex_meeting_file(db: Session, meeting_file: MeetingFile) -> int:
+    """Re-read PDF from disk, re-chunk, and re-embed."""
+    path = resolve_document_path(meeting_file.file_path)
+    if not path.exists():
+        raise FileNotFoundError(f"PDF missing on disk: {path}")
+    meta = extract_pdf_metadata(path, fallback_title=meeting_file.meeting.meeting_title if meeting_file.meeting else None)
+    return index_meeting_file_chunks(db, meeting_file, meta.pages)
+
+
+def reindex_all_meeting_chunks(
+    db: Session,
+    *,
+    document_type: str | None = None,
+    missing_embeddings_only: bool = False,
+) -> dict[str, int]:
+    """Reindex every meeting PDF (or only those with missing embeddings)."""
+    stmt = select(MeetingFile).options(joinedload(MeetingFile.meeting))
+    files = list(db.scalars(stmt).unique().all())
+    if document_type:
+        files = [f for f in files if f.meeting and f.meeting.document_type == document_type]
+
+    if missing_embeddings_only:
+        filtered: list[MeetingFile] = []
+        for mf in files:
+            chunks = db.scalars(
+                select(DocumentChunk).where(DocumentChunk.meeting_file_id == mf.id)
+            ).all()
+            if not chunks or any(not (c.embedding_json or "").strip() for c in chunks):
+                filtered.append(mf)
+        files = filtered
+
+    ok = 0
+    failed = 0
+    chunks_total = 0
+    for mf in files:
+        try:
+            chunks_total += reindex_meeting_file(db, mf)
+            ok += 1
+        except Exception:
+            db.rollback()
+            failed += 1
+    return {"files": len(files), "ok": ok, "failed": failed, "chunks": chunks_total}
 
 
 async def ingest_meeting_file(

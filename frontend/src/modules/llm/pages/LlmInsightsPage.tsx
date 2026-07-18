@@ -228,6 +228,8 @@ export default function LlmInsightsPage() {
   const [loadingInsights, setLoadingInsights] = useState(false);
   const [error, setError] = useState("");
   const loadTokenRef = useRef(0);
+  const insightsReqRef = useRef(0);
+  const comparisonRef = useRef<CourseComparison | null>(null);
   const { provider, setProvider, providers } = useLlmProvider();
 
   const selectedCourse = useMemo(
@@ -248,7 +250,10 @@ export default function LlmInsightsPage() {
 
   useEffect(() => {
     fetchInsightCourses()
-      .then((items) => setCourses(items))
+      .then((items) => {
+        setCourses(items);
+        setError((prev) => (prev.startsWith("Failed to load courses") ? "" : prev));
+      })
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load courses"))
       .finally(() => setLoadingCourses(false));
   }, []);
@@ -275,6 +280,7 @@ export default function LlmInsightsPage() {
 
   useEffect(() => {
     if (!comparisonParams?.current_semester) {
+      comparisonRef.current = null;
       setComparison(null);
       setInsights("");
       setGeneratedAt(null);
@@ -282,44 +288,63 @@ export default function LlmInsightsPage() {
     }
 
     const token = ++loadTokenRef.current;
-    setComparison(null);
-    setInsights("");
-    setGeneratedAt(null);
     setLoadingComparison(true);
-    setError("");
 
-    Promise.all([fetchCourseComparison(comparisonParams), fetchCachedInsights(comparisonParams)])
-      .then(([comp, cached]) => {
-        if (token !== loadTokenRef.current) return;
-        setComparison(comp);
-        if (cached.insights) {
-          setInsights(cached.insights);
-          setGeneratedAt(cached.generated_at);
+    // Comparison + cached insights load independently. Cache failures are silent.
+    // A late failure must not paint a red banner over already-visible comparison
+    // (common when Generate is clicked while the initial load is still in flight).
+    Promise.allSettled([
+      fetchCourseComparison(comparisonParams),
+      fetchCachedInsights(comparisonParams),
+    ]).then(([compResult, cachedResult]) => {
+      if (token !== loadTokenRef.current) return;
+
+      if (compResult.status === "fulfilled") {
+        comparisonRef.current = compResult.value;
+        setComparison(compResult.value);
+        setError("");
+      } else if (!comparisonRef.current) {
+        const msg =
+          compResult.reason instanceof Error
+            ? compResult.reason.message
+            : "Failed to load course data";
+        setError(msg);
+      }
+
+      if (cachedResult.status === "fulfilled" && cachedResult.value.insights) {
+        setInsights(cachedResult.value.insights);
+        setGeneratedAt(cachedResult.value.generated_at);
+        if (cachedResult.value.comparison) {
+          comparisonRef.current = cachedResult.value.comparison;
+          setComparison(cachedResult.value.comparison);
         }
-      })
-      .catch((e) => {
-        if (token !== loadTokenRef.current) return;
-        setError(e instanceof Error ? e.message : "Failed to load course data");
-      })
-      .finally(() => {
-        if (token === loadTokenRef.current) setLoadingComparison(false);
-      });
+      }
+    }).finally(() => {
+      if (token === loadTokenRef.current) setLoadingComparison(false);
+    });
   }, [comparisonParams]);
 
   const loadInsights = useCallback(
     async (regenerate = false) => {
       if (!comparisonParams) return;
+      const reqId = ++insightsReqRef.current;
       setLoadingInsights(true);
       setError("");
       try {
         const result = await generateLlmInsights({ ...comparisonParams, regenerate, provider });
-        if (result.comparison) setComparison(result.comparison);
+        if (reqId !== insightsReqRef.current) return;
+        if (result.comparison) {
+          comparisonRef.current = result.comparison;
+          setComparison(result.comparison);
+        }
         setInsights(result.insights ?? "");
         setGeneratedAt(result.generated_at);
+        setError("");
       } catch (e) {
+        if (reqId !== insightsReqRef.current) return;
         setError(e instanceof Error ? e.message : "Could not generate insights at this time. Please try again.");
       } finally {
-        setLoadingInsights(false);
+        if (reqId === insightsReqRef.current) setLoadingInsights(false);
       }
     },
     [comparisonParams, provider]

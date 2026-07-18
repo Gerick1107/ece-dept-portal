@@ -29,15 +29,24 @@ from app.documents.services.meeting_matcher import parse_meeting_number
 from app.llm.services.errors import LlmError
 from app.llm.services.llm_dispatch import generate_text
 
-_MIN_RELEVANCE_SCORE = 0.32
-_TOP_K = 12
+_MIN_RELEVANCE_SCORE = 0.15
+_TOP_K = 16
 _USE_EMBEDDINGS = True
 _NOT_FOUND_REPLY = "I couldn't find this in the available minutes."
 
 # "meeting 22", "meeting no. 22", "meeting #22"
 _MEETING_NUM_RE = re.compile(r"\bmeeting\s*(?:no\.?|number|num|#)?\s*[:\-]?\s*(\d{1,3})\b", re.IGNORECASE)
-# "22nd", "41th" (typo), "36 th" (stray space) — used for "the 22nd Senate meeting"
-_ORDINAL_RE = re.compile(r"\b(\d{1,3})\s*(?:st|nd|rd|th)\b", re.IGNORECASE)
+# "the 22nd Senate/AAC/PGC/UGC meeting" or "22nd meeting"
+_ORDINAL_MEETING_RE = re.compile(
+    r"\b(\d{1,3})\s*(?:st|nd|rd|th)\s+"
+    r"(?:senate|aac|pgc|ugc|faculty|ece)?\s*meeting\b",
+    re.IGNORECASE,
+)
+# Bare ordinal only when immediately tied to a series name: "22nd Senate"
+_ORDINAL_SERIES_RE = re.compile(
+    r"\b(\d{1,3})\s*(?:st|nd|rd|th)\s+(?:senate|aac|pgc|ugc)\b",
+    re.IGNORECASE,
+)
 
 # Series keywords → document type, so "22nd Senate Meeting" never matches a
 # different series that happens to share the number.
@@ -72,15 +81,17 @@ _FOLLOWUP_PRONOUN_RE = re.compile(r"\b(it|its|they|them|their|that|those|these|t
 _FOLLOWUP_PREFIX_RE = re.compile(r"^(and|also|then|did|was|were|is|are|what about|how about|who|when|why|how)\b", re.IGNORECASE)
 
 # ECE Faculty meetings are titled by type (Moderation, Graduation, …) not ordinal.
+# Require "meeting" nearby so topic words like "curriculum" / "research" do not
+# falsely scope retrieval to a single wrongly-titled file.
 _ECE_TITLE_HINTS: list[tuple[str, re.Pattern[str]]] = [
-    ("moderation", re.compile(r"\bmoderation\b", re.IGNORECASE)),
-    ("graduation", re.compile(r"\bgraduation\b", re.IGNORECASE)),
-    ("curriculum", re.compile(r"\bcurriculum\b", re.IGNORECASE)),
-    ("faculty", re.compile(r"\bfaculty\s+meet", re.IGNORECASE)),
-    ("board of studies", re.compile(r"\bboard\s+of\s+studies\b|\bbos\b", re.IGNORECASE)),
-    ("research", re.compile(r"\bresearch\b", re.IGNORECASE)),
-    ("placement", re.compile(r"\bplacement\b", re.IGNORECASE)),
-    ("induction", re.compile(r"\binduction\b", re.IGNORECASE)),
+    ("moderation", re.compile(r"\bmoderation\s+meeting\b", re.IGNORECASE)),
+    ("graduation", re.compile(r"\bgraduation\s+meeting\b", re.IGNORECASE)),
+    ("curriculum", re.compile(r"\bcurriculum\s+(?:review\s+)?meeting\b", re.IGNORECASE)),
+    ("faculty", re.compile(r"\bfaculty\s+meet(?:ing)?\b", re.IGNORECASE)),
+    ("board of studies", re.compile(r"\b(?:board\s+of\s+studies|bos)\s+meeting\b", re.IGNORECASE)),
+    ("research", re.compile(r"\bresearch\s+meeting\b", re.IGNORECASE)),
+    ("placement", re.compile(r"\bplacement\s+meeting\b", re.IGNORECASE)),
+    ("induction", re.compile(r"\binduction\s+meeting\b", re.IGNORECASE)),
 ]
 
 
@@ -101,15 +112,79 @@ def _tokenize(text: str) -> set[str]:
     return {t.lower() for t in re.findall(r"[a-zA-Z0-9]+", text) if len(t) > 2}
 
 
-def _score_chunk(question_tokens: set[str], chunk_text: str, *, title_tokens: set[str] | None = None) -> float:
-    chunk_tokens = _tokenize(chunk_text)
-    if not question_tokens or not chunk_tokens:
-        overlap = 0.0
+_STOPWORDS = frozenset(
+    {
+        "the", "and", "for", "that", "with", "this", "from", "were", "was", "are",
+        "been", "have", "has", "had", "which", "what", "when", "where", "who",
+        "whom", "whose", "why", "how", "about", "into", "over", "under", "after",
+        "before", "between", "their", "there", "these", "those", "them", "they",
+        "meeting", "minutes", "agenda", "please", "tell", "find", "discussed",
+        "discussion", "regarding", "related", "information", "available",
+    }
+)
+
+
+def _content_tokens(text: str) -> set[str]:
+    return {t for t in _tokenize(text) if t not in _STOPWORDS and not t.isdigit()}
+
+
+def _normalize_for_match(text: str) -> str:
+    return re.sub(r"\s+", " ", (text or "").lower()).strip()
+
+
+def _lexical_score(question: str, chunk_text: str, question_tokens: set[str]) -> float:
+    """Keyword / phrase score in [0, ~3]. Strong phrase hits dominate embeddings."""
+    q_norm = _normalize_for_match(question)
+    c_norm = _normalize_for_match(chunk_text)
+    if not q_norm or not c_norm:
+        return 0.0
+
+    score = 0.0
+    # Copy-paste / near-exact phrase (very common for "find this topic" queries)
+    if len(q_norm) >= 24 and q_norm in c_norm:
+        score += 2.5
     else:
-        overlap = float(len(question_tokens & chunk_tokens))
+        # Sliding window of contentful tokens as a soft phrase
+        q_words = [w for w in re.findall(r"[a-z0-9]+", q_norm) if len(w) > 2 and w not in _STOPWORDS]
+        if len(q_words) >= 4:
+            for size in (8, 6, 5, 4):
+                if len(q_words) < size:
+                    continue
+                hit = False
+                for i in range(0, len(q_words) - size + 1):
+                    phrase = " ".join(q_words[i : i + size])
+                    if phrase in c_norm:
+                        score += 1.2 if size >= 6 else 0.8
+                        hit = True
+                        break
+                if hit:
+                    break
+
+    content_q = question_tokens or _content_tokens(question)
+    content_c = _content_tokens(chunk_text)
+    if content_q and content_c:
+        overlap = len(content_q & content_c)
+        score += overlap / max(len(content_q), 1)
+
+    return score
+
+
+def _score_chunk(
+    question: str,
+    chunk_text: str,
+    *,
+    question_tokens: set[str],
+    title_tokens: set[str] | None = None,
+    embedding_score: float = 0.0,
+) -> float:
+    lex = _lexical_score(question, chunk_text, question_tokens)
     if title_tokens:
-        overlap += len(question_tokens & title_tokens) * 1.5
-    return overlap
+        lex += len(question_tokens & title_tokens) * 0.15
+
+    if embedding_score > 0:
+        # Hybrid: embeddings for paraphrase, lexical for copy-paste / rare terms
+        return 0.55 * embedding_score + 0.45 * min(lex, 2.0) / 2.0
+    return min(lex, 3.0) / 3.0
 
 
 def retrieve_chunks(
@@ -120,7 +195,7 @@ def retrieve_chunks(
     top_k: int = _TOP_K,
     meeting_file_ids: set[int] | None = None,
 ) -> list[RetrievedChunk]:
-    question_tokens = _tokenize(question)
+    question_tokens = _content_tokens(question) or _tokenize(question)
     stmt = (
         select(DocumentChunk)
         .join(MeetingFile)
@@ -147,17 +222,18 @@ def retrieve_chunks(
         mf = row.meeting_file
         meeting = mf.meeting
         title_tokens = _tokenize(meeting.meeting_title or "")
-        score = 0.0
+        emb = 0.0
         if query_vec is not None:
             chunk_vec = embedding_from_json(row.embedding_json)
             if chunk_vec is not None:
-                score = cosine_similarity(query_vec, chunk_vec)
-        if score <= 0:
-            score = _score_chunk(question_tokens, row.chunk_text, title_tokens=title_tokens) / max(
-                len(question_tokens), 1
-            )
-        elif title_tokens:
-            score += len(question_tokens & title_tokens) * 0.08
+                emb = cosine_similarity(query_vec, chunk_vec)
+        score = _score_chunk(
+            question,
+            row.chunk_text,
+            question_tokens=question_tokens,
+            title_tokens=title_tokens,
+            embedding_score=emb,
+        )
         if score <= 0:
             continue
         scored.append(
@@ -221,11 +297,17 @@ def _looks_like_followup(question: str) -> bool:
 
 
 def detect_meeting_number(text: str) -> int | None:
-    """Detect a specific meeting number from question text (e.g. 'meeting 22', 'the 22nd meeting')."""
+    """Detect a specific meeting number only when clearly referring to a meeting.
+
+    Bare ordinals like "15th May" or "3rd year" must NOT route to meeting #15/#3.
+    """
     match = _MEETING_NUM_RE.search(text)
     if match:
         return int(match.group(1))
-    match = _ORDINAL_RE.search(text)
+    match = _ORDINAL_MEETING_RE.search(text)
+    if match:
+        return int(match.group(1))
+    match = _ORDINAL_SERIES_RE.search(text)
     if match:
         return int(match.group(1))
     return None
@@ -256,6 +338,29 @@ def detect_date_hint(text: str) -> dict | None:
     m = _YEAR_RE.search(text)
     if m:
         return {"year": int(m.group(1)), "month": None, "day": None}
+    return None
+
+
+def detect_routing_date_hint(text: str) -> dict | None:
+    """Date hint strong enough to scope retrieval to specific meeting(s).
+
+    Bare years (common inside pasted topic text) must NOT pin the search to one year.
+    Prefer day+month+year, or month+year when the question also mentions a meeting.
+    """
+    m = _ISO_DATE_RE.search(text)
+    if m:
+        return {"year": int(m.group(1)), "month": int(m.group(2)), "day": int(m.group(3))}
+    m = _DAY_MONTH_YEAR_RE.search(text)
+    if m and m.group(2).lower() in _MONTHS:
+        return {"year": int(m.group(3)), "month": _MONTHS[m.group(2).lower()], "day": int(m.group(1))}
+    m = _MONTH_DAY_YEAR_RE.search(text)
+    if m and m.group(1).lower() in _MONTHS:
+        return {"year": int(m.group(3)), "month": _MONTHS[m.group(1).lower()], "day": int(m.group(2))}
+    # Month+year only when the user is clearly asking about a meeting on that date
+    if re.search(r"\b(meeting|minutes|agenda|fm)\b", text, re.IGNORECASE):
+        m = _MONTH_YEAR_RE.search(text)
+        if m and m.group(1).lower() in _MONTHS:
+            return {"year": int(m.group(2)), "month": _MONTHS[m.group(1).lower()], "day": None}
     return None
 
 
@@ -534,7 +639,7 @@ def _resolve_target_meetings(db: Session, document_type: str, question: str) -> 
     # Date-based lookup applies to the date-identified ECE Faculty series only.
     date_series_active = document_type == DOCUMENT_TYPE_ECE_FACULTY_MEET or series == DOCUMENT_TYPE_ECE_FACULTY_MEET
     if date_series_active:
-        hint = detect_date_hint(question)
+        hint = detect_routing_date_hint(question)
         if hint:
             date_types = [DOCUMENT_TYPE_ECE_FACULTY_MEET] if types is None else types
             return find_meetings_by_date(db, types=date_types, hint=hint), True, "that meeting"
@@ -648,7 +753,12 @@ async def answer_document_question(
 
     chunks = retrieve_chunks(db, document_type=document_type, question=retrieval_query)
     max_score = max((c.score for c in chunks), default=0)
-    if max_score < _MIN_RELEVANCE_SCORE:
+    # Soft gate: always proceed when we have any lexical/phrase hit; otherwise
+    # require a modest hybrid score so weak embedding noise is filtered.
+    has_signal = max_score >= _MIN_RELEVANCE_SCORE or (
+        chunks and max_score >= 0.08 and len(chunks[0].chunk_text) > 40
+    )
+    if not chunks or not has_signal:
         log = DocumentQueryLog(
             document_type=document_type,
             question=question,
@@ -671,7 +781,9 @@ async def answer_document_question(
     prompt_parts.append(f"Question: {question}\n")
     prompt_parts.append(f"Context excerpts:\n{context}\n")
     prompt_parts.append(
-        f'If the context genuinely does not address the question, reply exactly: "{_NOT_FOUND_REPLY}"'
+        "Answer from the context above. The excerpts may use different wording than the question — "
+        "match by meaning. If several meetings mention the topic, list each meeting title, date/year, "
+        f'and what was said. Only reply exactly "{_NOT_FOUND_REPLY}" if none of the excerpts address the topic at all.'
     )
     prompt = "\n".join(prompt_parts)
 

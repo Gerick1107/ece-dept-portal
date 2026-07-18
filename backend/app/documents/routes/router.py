@@ -39,7 +39,7 @@ class ChatTurn(BaseModel):
 
 
 class DocumentQueryRequest(BaseModel):
-    question: str = Field(min_length=3, max_length=2000)
+    question: str = Field(min_length=3, max_length=8000)
     provider: Literal["local"] = "local"
     history: list[ChatTurn] = Field(default_factory=list, max_length=20)
 
@@ -58,6 +58,31 @@ async def _read_pdf(upload: UploadFile) -> bytes:
     if len(payload) > MAX_PDF_BYTES:
         raise HTTPException(status_code=400, detail="File too large (max 25 MB)")
     return payload
+
+
+@router.post("/admin/reindex-chunks")
+def reindex_chunks(
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[User, Depends(require_roles(UserRole.admin))],
+    document_type: str | None = None,
+    missing_embeddings_only: bool = False,
+):
+    """Re-chunk and re-embed meeting PDFs (admin). Prefer the CLI script for large runs."""
+    from app.documents.services.ingestion_service import reindex_all_meeting_chunks
+
+    resolved = None
+    if document_type:
+        resolved = _resolve_type(document_type)
+        if resolved == DOCUMENT_TYPE_ALL:
+            resolved = None
+    try:
+        return reindex_all_meeting_chunks(
+            db,
+            document_type=resolved,
+            missing_embeddings_only=missing_embeddings_only,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Reindex failed: {exc}") from exc
 
 
 @router.get("/{document_type}")
