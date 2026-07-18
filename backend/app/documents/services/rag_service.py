@@ -29,10 +29,15 @@ from app.documents.services.meeting_matcher import parse_meeting_number
 from app.llm.services.errors import LlmError
 from app.llm.services.llm_dispatch import generate_text
 
-_MIN_RELEVANCE_SCORE = 0.15
-_TOP_K = 16
+_TOP_K = 8
 _USE_EMBEDDINGS = True
 _NOT_FOUND_REPLY = "I couldn't find this in the available minutes."
+
+# Per-chunk relevance gates. A chunk is kept only if it clears one of these,
+# so the model never sees loosely-related filler it would otherwise summarize.
+_EMB_FLOOR = 0.30          # semantic similarity (paraphrase-friendly)
+_LEX_FLOOR = 0.45          # strong keyword/phrase hit alongside embeddings
+_LEX_ONLY_FLOOR = 0.30     # keyword floor when embeddings are unavailable
 
 # "meeting 22", "meeting no. 22", "meeting #22"
 _MEETING_NUM_RE = re.compile(r"\bmeeting\s*(?:no\.?|number|num|#)?\s*[:\-]?\s*(\d{1,3})\b", re.IGNORECASE)
@@ -169,22 +174,9 @@ def _lexical_score(question: str, chunk_text: str, question_tokens: set[str]) ->
     return score
 
 
-def _score_chunk(
-    question: str,
-    chunk_text: str,
-    *,
-    question_tokens: set[str],
-    title_tokens: set[str] | None = None,
-    embedding_score: float = 0.0,
-) -> float:
-    lex = _lexical_score(question, chunk_text, question_tokens)
-    if title_tokens:
-        lex += len(question_tokens & title_tokens) * 0.15
-
-    if embedding_score > 0:
-        # Hybrid: embeddings for paraphrase, lexical for copy-paste / rare terms
-        return 0.55 * embedding_score + 0.45 * min(lex, 2.0) / 2.0
-    return min(lex, 3.0) / 3.0
+def _lexical_norm(question: str, chunk_text: str, question_tokens: set[str]) -> float:
+    """Lexical score normalized to roughly [0, 1]."""
+    return min(_lexical_score(question, chunk_text, question_tokens), 3.0) / 3.0
 
 
 def retrieve_chunks(
@@ -195,6 +187,11 @@ def retrieve_chunks(
     top_k: int = _TOP_K,
     meeting_file_ids: set[int] | None = None,
 ) -> list[RetrievedChunk]:
+    """Hybrid retrieval: semantic embeddings (paraphrase) + lexical (exact/rare terms).
+
+    Only chunks that clear a relevance floor are returned, so the LLM never
+    receives loosely-related filler that it would otherwise summarize.
+    """
     question_tokens = _content_tokens(question) or _tokenize(question)
     stmt = (
         select(DocumentChunk)
@@ -217,25 +214,37 @@ def retrieve_chunks(
         except Exception:
             query_vec = None
 
+    # When scoped to specific meetings (support excerpts) be more permissive:
+    # the meeting is already the right one, we just want the best passages.
+    scoped = meeting_file_ids is not None
+    emb_floor = 0.22 if scoped else _EMB_FLOOR
+    lex_floor = 0.30 if scoped else _LEX_FLOOR
+    lex_only_floor = 0.20 if scoped else _LEX_ONLY_FLOOR
+
     scored: list[RetrievedChunk] = []
     for row in rows:
         mf = row.meeting_file
         meeting = mf.meeting
         title_tokens = _tokenize(meeting.meeting_title or "")
+        title_boost = len(question_tokens & title_tokens) * 0.04
+
         emb = 0.0
         if query_vec is not None:
             chunk_vec = embedding_from_json(row.embedding_json)
             if chunk_vec is not None:
                 emb = cosine_similarity(query_vec, chunk_vec)
-        score = _score_chunk(
-            question,
-            row.chunk_text,
-            question_tokens=question_tokens,
-            title_tokens=title_tokens,
-            embedding_score=emb,
-        )
-        if score <= 0:
+
+        lex_norm = _lexical_norm(question, row.chunk_text, question_tokens)
+
+        if emb > 0:
+            combined = emb + 0.40 * lex_norm + title_boost
+            relevant = emb >= emb_floor or lex_norm >= lex_floor
+        else:
+            combined = lex_norm + title_boost
+            relevant = lex_norm >= lex_only_floor
+        if not relevant:
             continue
+
         scored.append(
             RetrievedChunk(
                 meeting_file_id=mf.id,
@@ -245,7 +254,7 @@ def retrieve_chunks(
                 page_number=row.page_number,
                 section_label=row.section_label,
                 chunk_text=row.chunk_text,
-                score=score,
+                score=combined,
                 meeting_date=meeting.meeting_date,
             )
         )
@@ -260,8 +269,11 @@ def _format_context(chunks: list[RetrievedChunk]) -> str:
         if chunk.section_label:
             location += f", section {chunk.section_label}"
         role_label = "Agenda" if chunk.file_role == "agenda" else "Minutes"
+        # Surface the meeting date so "which meeting / on what date" can be answered.
+        date_txt = f", dated {chunk.meeting_date}" if chunk.meeting_date else ""
         parts.append(
-            f"[Source {index}] Meeting: {chunk.document_title} ({chunk.year}), {role_label}, {location}\n{chunk.chunk_text}"
+            f"[Source {index}] Meeting: {chunk.document_title} ({chunk.year}{date_txt}), "
+            f"{role_label}, {location}\n{chunk.chunk_text}"
         )
     return "\n\n".join(parts)
 
@@ -751,14 +763,10 @@ async def answer_document_question(
         if prior_user:
             retrieval_query = f"{prior_user}\n{question}"
 
+    # retrieve_chunks already filters to relevant passages, so an empty result
+    # is the reliable "not found" signal — no separate score gate needed.
     chunks = retrieve_chunks(db, document_type=document_type, question=retrieval_query)
-    max_score = max((c.score for c in chunks), default=0)
-    # Soft gate: always proceed when we have any lexical/phrase hit; otherwise
-    # require a modest hybrid score so weak embedding noise is filtered.
-    has_signal = max_score >= _MIN_RELEVANCE_SCORE or (
-        chunks and max_score >= 0.08 and len(chunks[0].chunk_text) > 40
-    )
-    if not chunks or not has_signal:
+    if not chunks:
         log = DocumentQueryLog(
             document_type=document_type,
             question=question,
@@ -781,9 +789,13 @@ async def answer_document_question(
     prompt_parts.append(f"Question: {question}\n")
     prompt_parts.append(f"Context excerpts:\n{context}\n")
     prompt_parts.append(
-        "Answer from the context above. The excerpts may use different wording than the question — "
-        "match by meaning. If several meetings mention the topic, list each meeting title, date/year, "
-        f'and what was said. Only reply exactly "{_NOT_FOUND_REPLY}" if none of the excerpts address the topic at all.'
+        "Answer the question directly using ONLY the excerpts above. The excerpts may use different "
+        "wording than the question — match by meaning, not exact phrasing. When the question asks which "
+        "meeting or on what date a topic was discussed, name the exact meeting title and its date/year "
+        "from the excerpt that actually contains the topic. Do NOT summarize or list meetings, agenda "
+        "items, or topics that are unrelated to the question. If only part of the question is covered, "
+        "answer that part and say what is missing. "
+        f'Only if NONE of the excerpts address the question, reply exactly: "{_NOT_FOUND_REPLY}"'
     )
     prompt = "\n".join(prompt_parts)
 

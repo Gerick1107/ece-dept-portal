@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.database.session import SessionLocal
@@ -269,7 +269,26 @@ def reindex_all_meeting_chunks(
         except Exception:
             db.rollback()
             failed += 1
-    return {"files": len(files), "ok": ok, "failed": failed, "chunks": chunks_total}
+
+    # Embedding coverage is the key health signal: if this is 0, semantic search
+    # is disabled and only keyword matching works (paraphrased queries will miss).
+    total_chunks = db.scalar(select(func.count()).select_from(DocumentChunk)) or 0
+    with_embeddings = (
+        db.scalar(
+            select(func.count())
+            .select_from(DocumentChunk)
+            .where(DocumentChunk.embedding_json.is_not(None))
+        )
+        or 0
+    )
+    return {
+        "files": len(files),
+        "ok": ok,
+        "failed": failed,
+        "chunks_reindexed": chunks_total,
+        "chunks_total": int(total_chunks),
+        "chunks_with_embeddings": int(with_embeddings),
+    }
 
 
 async def ingest_meeting_file(

@@ -14,12 +14,28 @@ from app.utils.embedding_device import resolve_embedding_device
 _DEFAULT_RAG_MODEL = "all-MiniLM-L6-v2"
 
 
+import logging
+
+logger = logging.getLogger(__name__)
+
+
 @lru_cache(maxsize=1)
 def _embedder() -> SentenceTransformer:
     settings = get_settings()
     model_name = getattr(settings, "rag_embedding_model", None) or _DEFAULT_RAG_MODEL
     device = resolve_embedding_device(getattr(settings, "embedding_device", "auto"))
-    return SentenceTransformer(model_name, device=device)
+    try:
+        return SentenceTransformer(model_name, device=device)
+    except Exception:
+        # A misconfigured EMBEDDING_DEVICE=cuda (e.g. CPU-only torch in the
+        # container) must not disable retrieval entirely. Fall back to CPU so
+        # embeddings are still generated and queried.
+        if device != "cpu":
+            logger.warning(
+                "Embedding model failed to load on device '%s'; falling back to CPU.", device
+            )
+            return SentenceTransformer(model_name, device="cpu")
+        raise
 
 
 def embed_texts(texts: list[str]) -> list[list[float]]:
