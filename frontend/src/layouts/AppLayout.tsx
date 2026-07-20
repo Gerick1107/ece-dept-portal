@@ -70,6 +70,8 @@ const navItems: NavItem[] = [
   },
   { kind: "link", to: "/llm-insights", label: "LLM Insights", exact: true },
   { kind: "link", to: "/notifications", label: "Notifications", exact: true },
+  { kind: "link", to: "/moderation", label: "Moderation", exact: true },
+  { kind: "link", to: "/labs", label: "Lab Seating Capacity", exact: true },
 ];
 
 const adminNavGroup: NavItem = {
