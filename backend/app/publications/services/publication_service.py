@@ -22,6 +22,7 @@ from app.publications.utils.helpers import make_source_hash
 from app.publications.utils.link_filters import (
     article_has_blocked_repository_link,
     has_blocked_repository_link,
+    is_iiitd_repository_thesis_venue,
     publication_has_blocked_repository_link,
 )
 
@@ -186,14 +187,19 @@ def list_publications(
     category: str | None = None,
 ) -> tuple[list[Publication], int]:
     stmt = select(Publication)
-    # Hard exclude repository.iiitd.edu.in even if a prior purge missed a row.
-    # Use COALESCE so NULL link columns are not dropped by SQL three-valued logic.
+    # Hard exclude repository.iiitd.edu.in and Scholar-listed IIITD theses
+    # (venue "IIIT-Delhi, YYYY") even if a prior purge missed a row.
     repo_pat = "%repository.iiitd.edu.in%"
+    thesis_pat = "%iiit%delhi%"
     stmt = stmt.where(
         ~func.lower(func.coalesce(Publication.link, "")).like(repo_pat),
         ~func.lower(func.coalesce(Publication.scholar_url, "")).like(repo_pat),
         ~func.lower(func.coalesce(Publication.pdf_url, "")).like(repo_pat),
         ~func.lower(func.coalesce(Publication.raw_metadata, "")).like(repo_pat),
+        ~func.lower(func.coalesce(Publication.journal, "")).like(thesis_pat),
+        ~func.lower(func.coalesce(Publication.conference, "")).like(thesis_pat),
+        ~func.lower(func.coalesce(Publication.book, "")).like(thesis_pat),
+        ~func.lower(func.coalesce(Publication.publisher, "")).like(thesis_pat),
     )
     if query:
         pattern = f"%{query.strip()}%"
@@ -261,8 +267,10 @@ def _sync_publication_faculty(db: Session, publication: Publication, faculty_ids
 
 
 def create_publication(db: Session, body: PublicationCreate) -> Publication:
-    if has_blocked_repository_link(body.link, body.scholar_url, body.pdf_url):
-        raise ValueError("Publications linking to repository.iiitd.edu.in are not allowed")
+    if has_blocked_repository_link(body.link, body.scholar_url, body.pdf_url) or is_iiitd_repository_thesis_venue(
+        body.journal, body.conference, body.book, body.publisher
+    ):
+        raise ValueError("Publications linking to repository.iiitd.edu.in / IIITD theses are not allowed")
 
     source_hash = make_source_hash(body.title, body.publication_year)
     blocked = db.scalar(select(BlockedPublication).where(BlockedPublication.source_hash == source_hash))
@@ -332,6 +340,8 @@ def delete_publications(
     if not publication_ids:
         return 0, 0
 
+    from sqlalchemy.exc import IntegrityError
+
     rows = db.scalars(select(Publication).where(Publication.id.in_(publication_ids))).all()
     if not rows:
         return 0, 0
@@ -343,14 +353,21 @@ def delete_publications(
     for row in rows:
         exists = db.scalar(select(BlockedPublication).where(BlockedPublication.source_hash == row.source_hash))
         if not exists:
-            db.add(
-                BlockedPublication(
-                    source_hash=row.source_hash,
-                    title=row.title,
-                    reason=reason,
-                )
-            )
-            blocked_added += 1
+            try:
+                # Savepoint so concurrent gunicorn workers don't abort the whole delete
+                # when two try to tombstone the same source_hash.
+                with db.begin_nested():
+                    db.add(
+                        BlockedPublication(
+                            source_hash=row.source_hash,
+                            title=row.title,
+                            reason=reason,
+                        )
+                    )
+                    db.flush()
+                blocked_added += 1
+            except IntegrityError:
+                pass
         db.add(
             PublicationAuditLog(
                 action="manual_delete",

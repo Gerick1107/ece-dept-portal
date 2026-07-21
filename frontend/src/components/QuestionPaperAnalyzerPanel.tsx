@@ -11,6 +11,8 @@ function authHeader(): Record<string, string> {
 type AnalyzedQuestion = {
   id: string;
   label: string;
+  /** Raw CO text while editing — preserves trailing commas mid-type. */
+  co_input: string;
   co_labels: string[];
   max_marks: number;
   is_bonus: boolean;
@@ -54,6 +56,7 @@ function emptyQuestion(): AnalyzedQuestion {
   return {
     id: generateId(),
     label: `Q${Date.now() % 1000}`,
+    co_input: "",
     co_labels: [],
     max_marks: 0,
     is_bonus: false,
@@ -98,13 +101,17 @@ export default function QuestionPaperAnalyzerPanel() {
         setComponentName(result.component_name);
       }
       setQuestions(
-        result.questions.map((q) => ({
-          id: generateId(),
-          label: q.label,
-          co_labels: parseCoLabels(q),
-          max_marks: Number(q.max_marks) || 0,
-          is_bonus: q.is_bonus,
-        }))
+        result.questions.map((q) => {
+          const co_labels = parseCoLabels(q);
+          return {
+            id: generateId(),
+            label: q.label,
+            co_input: formatCoInput(co_labels),
+            co_labels,
+            max_marks: Number(q.max_marks) || 0,
+            is_bonus: q.is_bonus,
+          };
+        })
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : "Analysis failed");
@@ -130,13 +137,16 @@ export default function QuestionPaperAnalyzerPanel() {
           component_name: name,
           paper_total_marks: analysis.paper_total_marks,
           weightage: Number(weightage) || 0,
-          questions: questions.map(({ label, co_labels, max_marks, is_bonus }) => ({
-            label,
-            co_labels,
-            co_label: co_labels.join(", "),
-            max_marks,
-            is_bonus,
-          })),
+          questions: questions.map(({ label, co_input, max_marks, is_bonus }) => {
+            const co_labels = parseCoInput(co_input);
+            return {
+              label,
+              co_labels,
+              co_label: co_labels.join(", "),
+              max_marks,
+              is_bonus,
+            };
+          }),
         }),
       });
       if (!res.ok) {
@@ -184,7 +194,9 @@ export default function QuestionPaperAnalyzerPanel() {
     analysis && Number(weightage) > 0 && analysis.paper_total_marks > 0
       ? (Number(weightage) / analysis.paper_total_marks).toFixed(3)
       : null;
-  const questionsMissingCos = questions.filter((q) => !q.is_bonus && q.co_labels.length === 0);
+  const questionsMissingCos = questions.filter(
+    (q) => !q.is_bonus && parseCoInput(q.co_input).length === 0
+  );
 
   return (
     <details className="bg-white border border-slate-200 rounded-xl group">
@@ -308,14 +320,17 @@ export default function QuestionPaperAnalyzerPanel() {
                         <td className="py-1 px-2">
                           <input
                             className={`w-full min-w-[6rem] border rounded px-2 py-1 ${
-                              !q.is_bonus && q.co_labels.length === 0
+                              !q.is_bonus && parseCoInput(q.co_input).length === 0
                                 ? "border-amber-500 bg-amber-50"
                                 : ""
                             }`}
                             placeholder={q.is_bonus ? "Not required" : "Add CO1, CO2"}
-                            value={formatCoInput(q.co_labels)}
+                            value={q.co_input}
                             onChange={(e) =>
-                              updateQuestion(q.id, { co_labels: parseCoInput(e.target.value) })
+                              updateQuestion(q.id, {
+                                co_input: e.target.value,
+                                co_labels: parseCoInput(e.target.value),
+                              })
                             }
                             disabled={q.is_bonus}
                           />

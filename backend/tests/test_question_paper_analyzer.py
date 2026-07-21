@@ -188,3 +188,72 @@ def test_redistribute_when_llm_copies_parent_total_onto_each_part():
     assert sum(q.max_marks for q in fixed) == 40.0
     assert fixed[0].max_marks == 5.0
     assert fixed[4].max_marks == 3.33
+
+
+def test_extract_paper_co_map_from_ss_style_headers():
+    from app.copo.services.question_paper_analyzer import extract_paper_co_map
+
+    text = """
+    [Q1] [CO1, CO2]: Determine convolution [3 Marks]
+    [Q2] [CO2]: Let x(t) be periodic
+    (a) Determine a0. [1 Mark]
+    [Q3] [CO2, CO4]: Consider a causal LTI system [6 Marks]
+    [Q7] [CO1, CO2, CO3]:
+    (c) [BONUS] ...
+    """
+    mapping = extract_paper_co_map(text)
+    assert mapping["Q1"] == ["CO1", "CO2"]
+    assert mapping["Q2"] == ["CO2"]
+    assert mapping["Q3"] == ["CO2", "CO4"]
+    assert mapping["Q7"] == ["CO1", "CO2", "CO3"]
+
+
+def test_apply_paper_cos_and_normalize_phantom_labels(monkeypatch):
+    response = {
+        "component_name": "EndSem",
+        "paper_total_marks": 9,
+        "questions": [
+            {
+                "label": "Q1",
+                "co_labels": [],
+                "co_evidence": "",
+                "max_marks": 3,
+                "parts": [{"label": "Q1a", "max_marks": 3}],
+            },
+            {
+                "label": "Q3",
+                "co_labels": [],
+                "co_evidence": "",
+                "max_marks": 6,
+                "parts": [{"label": "Q3a", "max_marks": 6}],
+            },
+            {
+                "label": "Q7",
+                "co_labels": [],
+                "co_evidence": "",
+                "max_marks": 0,
+                "is_bonus": False,
+                "parts": [
+                    {"label": "Q7c1", "max_marks": 2.5, "is_bonus": True},
+                    {"label": "Q7d1", "max_marks": 3.5, "is_bonus": True},
+                ],
+            },
+        ],
+    }
+
+    async def fake_generate_text(*args, **kwargs):
+        return json.dumps(response)
+
+    monkeypatch.setattr(question_paper_analyzer, "_generate_analysis_text", fake_generate_text)
+    result = asyncio.run(
+        question_paper_analyzer.analyze_question_paper_text(
+            "[Q1] [CO1, CO2]: x\n[Q3] [CO2, CO4]: y\n[Q7] [CO1, CO2, CO3]:\n(c) [BONUS]\n(d) [BONUS]"
+        )
+    )
+    by_label = {q["label"]: q for q in result["questions"]}
+    assert by_label["Q1a"]["co_labels"] == ["CO1", "CO2"]
+    assert by_label["Q3a"]["co_labels"] == ["CO2", "CO4"]
+    assert "Q7c1" not in by_label
+    assert "Q7d1" not in by_label
+    assert by_label["Q7c"]["is_bonus"] is True
+    assert by_label["Q7d"]["is_bonus"] is True

@@ -70,11 +70,16 @@ def _query_publications(
 ) -> list[Publication]:
     stmt = select(Publication)
     repo_pat = "%repository.iiitd.edu.in%"
+    thesis_pat = "%iiit%delhi%"
     stmt = stmt.where(
         ~func.lower(func.coalesce(Publication.link, "")).like(repo_pat),
         ~func.lower(func.coalesce(Publication.scholar_url, "")).like(repo_pat),
         ~func.lower(func.coalesce(Publication.pdf_url, "")).like(repo_pat),
         ~func.lower(func.coalesce(Publication.raw_metadata, "")).like(repo_pat),
+        ~func.lower(func.coalesce(Publication.journal, "")).like(thesis_pat),
+        ~func.lower(func.coalesce(Publication.conference, "")).like(thesis_pat),
+        ~func.lower(func.coalesce(Publication.book, "")).like(thesis_pat),
+        ~func.lower(func.coalesce(Publication.publisher, "")).like(thesis_pat),
     )
     resolved_faculty_ids: list[int] = []
     if faculty_ids:

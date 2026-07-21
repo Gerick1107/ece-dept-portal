@@ -21,6 +21,16 @@ _PART_SUFFIX_RE = re.compile(
     r"^(?P<parent>Q?\d+)\s*(?:[\.\-_]?\s*(?:\([a-z0-9ivx]+\)|[a-z]|[ivx]+|\d+))$",
     re.IGNORECASE,
 )
+# Strip phantom trailing digits: Q7c1 → Q7c, Q4ii2 → Q4ii
+_PHANTOM_TRAILING_DIGIT_RE = re.compile(r"^(?P<base>(?:Q)?\d+[a-z]+)(?P<extra>\d+)$", re.IGNORECASE)
+# [Q3] [CO2, CO4] or Q3 (CO1, CO2) or Question 1: CO1, CO2
+_PAPER_Q_CO_RE = re.compile(
+    r"(?:\[?\s*Q(?:uestion)?\s*(?P<num>\d+)\s*\]?)"
+    r"\s*[\[(:]?\s*"
+    r"(?P<cos>(?:CO\s*\d+\s*[;,/&]?[\s]*){1,8})"
+    r"\s*[\])]?",
+    re.IGNORECASE,
+)
 
 
 @dataclass
@@ -101,7 +111,7 @@ def _normalize_co_list(raw) -> list[str]:
     if not text:
         return []
     labels = []
-    for part in text.split(","):
+    for part in re.split(r"[,;/&]+", text):
         co = _normalize_co(part)
         if co and co not in labels:
             labels.append(co)
@@ -112,15 +122,48 @@ def _format_co_cell(labels: list[str]) -> str:
     return ", ".join(labels)
 
 
+def extract_paper_co_map(text: str) -> dict[str, list[str]]:
+    """
+    Deterministically map question numbers → CO labels from the paper text.
+
+    Handles common ECE formats like ``[Q3] [CO2, CO4]:`` so COs are not lost
+    when the LLM omits or mis-quotes evidence.
+    """
+    mapping: dict[str, list[str]] = {}
+    for match in _PAPER_Q_CO_RE.finditer(text or ""):
+        num = match.group("num")
+        cos = _normalize_co_list(match.group("cos"))
+        if not num or not cos:
+            continue
+        key = f"Q{int(num)}"
+        existing = mapping.setdefault(key, [])
+        for co in cos:
+            if co not in existing:
+                existing.append(co)
+    return mapping
+
+
+def _cos_for_label(label: str, paper_co_map: dict[str, list[str]]) -> list[str]:
+    parent = _parent_key(label)
+    if not parent:
+        return []
+    # Normalize 3 → Q3
+    if parent.isdigit():
+        parent = f"Q{int(parent)}"
+    elif parent.upper().startswith("Q") and parent[1:].isdigit():
+        parent = f"Q{int(parent[1:])}"
+    return list(paper_co_map.get(parent.upper(), []) or paper_co_map.get(parent, []))
+
+
 async def _generate_analysis_text(prompt: str) -> str:
     from app.llm.services.llm_dispatch import generate_text
 
-    # Papers with many sub-parts + CO evidence quotes need headroom to avoid truncated JSON.
+    # Papers with many sub-parts need headroom to avoid truncated JSON.
     return await generate_text(prompt, provider="local", temperature=0.0, max_tokens=4096)
 
 
 def _validated_co_labels(item: dict, source_text: str) -> list[str]:
-    """Only accept CO labels backed by an exact quote from the uploaded paper."""
+    """Accept LLM CO labels only when backed by an exact quote from the paper."""
     labels = _normalize_co_list(item.get("co_labels"))
     if not labels:
         labels = _normalize_co_list(item.get("co_label"))
@@ -184,6 +227,55 @@ def _is_subpart_label(label: str) -> bool:
     return bool(_PART_SUFFIX_RE.match((label or "").strip()))
 
 
+def normalize_question_label(label: str) -> str:
+    """Fix common LLM phantoms like Q7c1 → Q7c."""
+    text = (label or "").strip()
+    if not text:
+        return text
+    match = _PHANTOM_TRAILING_DIGIT_RE.match(text)
+    if match:
+        return match.group("base")
+    return text
+
+
+def apply_paper_cos(
+    questions: list[AnalyzedQuestion],
+    paper_co_map: dict[str, list[str]],
+) -> list[AnalyzedQuestion]:
+    """Prefer COs parsed from the paper; fall back to whatever the LLM already set."""
+    if not paper_co_map:
+        return questions
+    updated: list[AnalyzedQuestion] = []
+    for q in questions:
+        paper_cos = _cos_for_label(q.label, paper_co_map)
+        cos = paper_cos or q.co_labels
+        updated.append(AnalyzedQuestion(q.label, cos, q.max_marks, is_bonus=q.is_bonus))
+    return updated
+
+
+def dedupe_questions(questions: list[AnalyzedQuestion]) -> list[AnalyzedQuestion]:
+    """Merge duplicate labels after normalization (keep first non-zero marks / COs)."""
+    by_label: dict[str, AnalyzedQuestion] = {}
+    order: list[str] = []
+    for q in questions:
+        label = normalize_question_label(q.label)
+        key = label.upper()
+        if key not in by_label:
+            by_label[key] = AnalyzedQuestion(label, list(q.co_labels), q.max_marks, is_bonus=q.is_bonus)
+            order.append(key)
+            continue
+        existing = by_label[key]
+        cos = existing.co_labels or q.co_labels
+        marks = existing.max_marks if existing.max_marks > 0 else q.max_marks
+        by_label[key] = AnalyzedQuestion(
+            existing.label,
+            cos,
+            marks,
+            is_bonus=existing.is_bonus or q.is_bonus,
+        )
+    return [by_label[k] for k in order]
+
+
 def redistribute_sibling_marks(
     questions: list[AnalyzedQuestion],
     *,
@@ -219,7 +311,6 @@ def redistribute_sibling_marks(
         marks = [updated[i].max_marks for i in indices]
         if not marks or min(marks) != max(marks) or marks[0] <= 0:
             continue
-        # Identical marks on every sibling while paper is over-counted → parent total.
         splits = _equal_split(marks[0], len(indices))
         for i, split in zip(indices, splits):
             q = updated[i]
@@ -230,7 +321,7 @@ def redistribute_sibling_marks(
 def _flatten_llm_questions(data: dict, source_text: str) -> list[AnalyzedQuestion]:
     questions: list[AnalyzedQuestion] = []
     for item in data.get("questions") or []:
-        label = str(item.get("label") or "").strip() or f"Q{len(questions) + 1}"
+        label = normalize_question_label(str(item.get("label") or "").strip() or f"Q{len(questions) + 1}")
         parent_cos = _validated_co_labels(item, source_text)
         parent_marks = _safe_float(item.get("max_marks"))
         parent_bonus = bool(item.get("is_bonus"))
@@ -239,7 +330,7 @@ def _flatten_llm_questions(data: dict, source_text: str) -> list[AnalyzedQuestio
         if raw_parts:
             part_specs: list[tuple[str, list[str], float, bool]] = []
             for part in raw_parts:
-                plabel = str(part.get("label") or "").strip()
+                plabel = normalize_question_label(str(part.get("label") or "").strip())
                 if not plabel:
                     continue
                 pcos = _validated_co_labels(part, source_text) or list(parent_cos)
@@ -256,7 +347,6 @@ def _flatten_llm_questions(data: dict, source_text: str) -> list[AnalyzedQuestio
             elif all(m <= 0 for m in part_mark_values) and parent_marks > 0:
                 splits = _equal_split(parent_marks, len(part_specs))
             else:
-                # Use printed part marks; fill any zeros by equal share of remaining parent.
                 explicit = [m for m in part_mark_values if m > 0]
                 if parent_marks > 0 and len(explicit) < len(part_specs):
                     used = sum(explicit)
@@ -301,6 +391,7 @@ def scale_questions(
 
 async def analyze_question_paper_text(text: str) -> dict:
     snippet = text[:_MAX_TEXT_CHARS]
+    paper_co_map = extract_paper_co_map(snippet)
     prompt = f"""Analyze this exam question paper and return ONLY valid JSON (no markdown) with this schema:
 {{
   "component_name": "Quiz|MidSem|EndSem|Assignment|Lab|etc",
@@ -308,8 +399,8 @@ async def analyze_question_paper_text(text: str) -> dict:
   "questions": [
     {{
       "label": "Q1",
-      "co_labels": ["CO1", "CO2"],
-      "co_evidence": "exact quote from the paper containing the CO label(s), or empty string",
+      "co_labels": [],
+      "co_evidence": "",
       "max_marks": number,
       "is_bonus": false,
       "parts": [
@@ -327,17 +418,15 @@ async def analyze_question_paper_text(text: str) -> dict:
 
 Rules:
 - Prefer one parent object per main question with a "parts" array for sub-parts (a,b,c / i,ii / 1,2).
+- Use labels exactly as printed (Q7c not Q7c1). Never invent extra numbered suffixes.
 - Parent max_marks is the total for that question (excluding bonus).
 - Part max_marks: use the number ONLY when the paper prints marks for that part. If the paper does not print part-wise marks, set each part's max_marks to 0 (the server will divide the parent total equally).
 - NEVER copy the parent total onto every sub-part. Example: "each question is worth 10 marks" with parts (a)(b) and no part marks → parent max_marks=10, parts max_marks=0.
 - When part marks ARE printed (e.g. (a) [2 Marks] (b) [3 Marks]), use those exact values on the parts and set parent max_marks to their sum.
-- Map a question/part only to CO labels explicitly printed next to or attached to that question in the paper.
-- Never infer, guess, or invent a CO from the question topic, course content, or another question.
-- If no CO is explicitly attached, return co_labels=[] and co_evidence="".
-- For every non-empty co_labels array, co_evidence must be an exact quote from the paper that contains those CO labels.
-- Sub-parts inherit COs from the parent when the paper only labels COs on the parent question header.
+- Leave co_labels empty in the JSON; the server extracts COs from the paper text.
 - Mark bonus questions/parts with is_bonus=true.
 - paper_total_marks excludes bonus marks and is the total for this component before scaling.
+- Only include questions/parts that actually appear in the paper.
 
 Question paper text:
 {snippet}
@@ -345,6 +434,9 @@ Question paper text:
     raw = await _generate_analysis_text(prompt)
     data = _parse_llm_json(raw)
     questions = _flatten_llm_questions(data, snippet)
+    questions = dedupe_questions(questions)
+    questions = apply_paper_cos(questions, paper_co_map)
+
     try:
         paper_total = float(data.get("paper_total_marks") or 0)
     except (TypeError, ValueError):
