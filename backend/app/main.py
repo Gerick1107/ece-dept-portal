@@ -36,6 +36,9 @@ from app.llm.routes.router import router as llm_insights_router
 from app.projects.services.file_manager import ensure_projects_upload_dir
 from app.publications.scheduler.jobs import ensure_requirement_reminder_scheduler_started, ensure_scheduler_started
 
+from app.moderation.routes.router import router as moderation_router
+from app.labs.routes.router import router as labs_router
+
 settings = get_settings()
 logger = logging.getLogger("uvicorn.error")
 
@@ -142,6 +145,8 @@ api.include_router(publications_router)
 api.include_router(projects_router)
 api.include_router(ece_eve_projects_router)
 api.include_router(llm_insights_router)
+api.include_router(moderation_router)
+api.include_router(labs_router)
 
 app.mount(settings.api_v1_prefix, api)
 

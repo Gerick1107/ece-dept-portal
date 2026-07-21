@@ -25,6 +25,8 @@ export default function DashboardPage() {
       { name: "Minutes", path: "/modules/minutes", status: "Active" },
       { name: "Analytics", path: "/modules/analytics", status: "Active" },
       { name: "LLM Insights", path: "/llm-insights", status: "Active" },
+      { name: "Moderation", path: "/moderation", status: "Active" },
+      { name: "Lab Seating Capacity", path: "/labs", status: "Active" },
       {
         name: isAdmin ? "Send Notifications" : "Notifications",
         path: notificationsPath,

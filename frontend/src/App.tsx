@@ -42,6 +42,10 @@ import DashboardPage from "./pages/DashboardPage";
 import LoginPage from "./pages/LoginPage";
 import ProfilePage from "./pages/ProfilePage";
 
+import ModerationPage from "./modules/moderation/pages/ModerationPage";
+import CourseQuestionPapersPage from "./modules/moderation/pages/CourseQuestionPapersPage";
+import LabSeatingCapacityPage from "./modules/labs/pages/LabSeatingCapacityPage";
+
 function Protected({ children }: { children: React.ReactNode }) {
   const { user, loading, mustChangePassword } = useAuth();
   const path = window.location.pathname;
@@ -226,6 +230,9 @@ export default function App() {
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/moderation" element={<ModerationPage />} />
+      <Route path="/labs" element={<LabSeatingCapacityPage />} />
+      <Route path="/moderation/courses/:courseId" element={<CourseQuestionPapersPage />} />
     </Routes>
   );
 }

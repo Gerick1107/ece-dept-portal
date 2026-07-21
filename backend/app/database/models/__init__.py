@@ -20,6 +20,9 @@ from app.projects.models.entities import Project, ProjectSdg, ProjectStudent, Pr
 from app.ece_eve_projects.models.entities import EceEveProject
 from app.llm.models.entities import LlmInsightsCache
 
+from app.moderation.models.entities import GradeCriterion, QuestionPaper
+from app.labs.models.entities import Lab
+
 __all__ = [
     "User",
     "CopoMarksUpload",
@@ -49,4 +52,7 @@ __all__ = [
     "Sdg",
     "EceEveProject",
     "LlmInsightsCache",
+    "QuestionPaper", 
+    "GradeCriterion",
+    "Lab",
 ]
