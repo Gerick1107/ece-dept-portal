@@ -23,6 +23,13 @@ else:
 done
 
 echo "Running migrations..."
-alembic upgrade head
+# Use "heads" so a temporary multi-head graph cannot brick container startup
+# (that previously manifested as nginx 502 → UI "Login failed").
+if ! alembic upgrade heads; then
+  echo "ERROR: alembic upgrade heads failed. Backend will not start."
+  alembic heads || true
+  alembic history -r -3: || true
+  exit 1
+fi
 
 exec "$@"
