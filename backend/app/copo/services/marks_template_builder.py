@@ -236,6 +236,11 @@ def build_analyzed_component_workbook(
     for q in questions:
         sub = q.label if q.label else f"Q{len(columns) + 1}"
         if q.is_bonus:
+            # Generator warns on empty CO unless the column name matches bonus
+            # conventions (startswith "bonus" / ends with "_bonus"), same as the
+            # manual constraint builder's Bonus_Q{n} columns.
+            if not sub.lower().startswith("bonus"):
+                sub = f"Bonus_{sub}"
             columns.append(_ColumnSpec(group_name, sub, co_cell=None, is_bonus_question=True))
         else:
             co = q.co_label if q.co_label else ""

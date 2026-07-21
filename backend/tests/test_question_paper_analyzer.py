@@ -65,6 +65,25 @@ def test_generated_workbook_scales_bonus_but_excludes_it_from_total():
     assert worksheet["E4"].value == 20
 
 
+def test_llm_bonus_columns_use_bonus_prefix_for_generator_exemption():
+    """Generator exempts columns whose names start with 'bonus' (manual Bonus_Qn style)."""
+    payload = generate_component_workbook(
+        component_name="EndSem",
+        paper_total_marks=38,
+        weightage=38,
+        questions=[
+            {"label": "Q1", "co_labels": ["CO1"], "max_marks": 38, "is_bonus": False},
+            {"label": "Q7c", "co_labels": [], "max_marks": 2.5, "is_bonus": True},
+            {"label": "Q7d", "co_labels": [], "max_marks": 3.5, "is_bonus": True},
+        ],
+    )
+    worksheet = load_workbook(io.BytesIO(payload), data_only=True).active
+    assert worksheet["D2"].value == "Bonus_Q7c"
+    assert worksheet["E2"].value == "Bonus_Q7d"
+    assert worksheet["D3"].value is None
+    assert worksheet["E3"].value is None
+
+
 def test_equal_split_when_part_marks_missing(monkeypatch):
     """MTH-style: parent worth 10, parts a/b with no printed marks → 5 each."""
     response = {
