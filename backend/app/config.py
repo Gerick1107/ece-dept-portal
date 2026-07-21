@@ -144,7 +144,7 @@ class Settings(BaseSettings):
     documents_dir: str = str(BACKEND_ROOT / "documents")
 
     # SDG tagging (local embedding-based; no API key required)
-    enable_sdg_llm: bool = False
+    enable_sdg_llm: bool = True
     sdg_embedding_model: str = "BAAI/bge-large-en-v1.5"
     sdg_top_k: int = 5
     sdg_request_delay_seconds: float = 0.5

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
-import type { Publication, PublicationTableMode } from "../types/publications";
+import type { Publication, PublicationEditPayload, PublicationTableMode } from "../types/publications";
 import { publicationPeople, publicationTitleHref, publicationVenue } from "../types/publications";
+import EditPublicationModal from "./EditPublicationModal";
 
 type SortKey = "title" | "publication_year" | "citation_count";
 type SortDir = "asc" | "desc";
@@ -30,25 +31,37 @@ function SortHeader({
   );
 }
 
+function confirmDelete(): boolean {
+  const first = window.confirm(
+    "Delete this publication permanently?\n\nIt will be removed from the portal, database, and exports. Future Scholar syncs will not re-add it."
+  );
+  if (!first) return false;
+  return window.confirm("Please confirm once more: delete this publication?");
+}
+
 export default function PublicationsTable({
   publications,
   mode = "publications",
   showPatentOffice = true,
   venueLabel = "Venue / Journal",
   venueField,
-  isAdmin,
+  canManage,
   onDelete,
+  onEdit,
 }: {
   publications: Publication[];
   mode?: PublicationTableMode;
   showPatentOffice?: boolean;
   venueLabel?: string;
   venueField?: "journal" | "conference" | "book";
-  isAdmin?: boolean;
-  onDelete?: (id: number) => void;
+  canManage?: boolean;
+  onDelete?: (id: number) => Promise<void> | void;
+  onEdit?: (id: number, payload: PublicationEditPayload) => Promise<void>;
 }) {
   const [sortKey, setSortKey] = useState<SortKey>("publication_year");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [editing, setEditing] = useState<Publication | null>(null);
+  const [busyId, setBusyId] = useState<number | null>(null);
 
   const sorted = useMemo(() => {
     const copy = [...publications];
@@ -77,10 +90,20 @@ export default function PublicationsTable({
     }
   }
 
+  async function handleDelete(id: number) {
+    if (!onDelete || !confirmDelete()) return;
+    setBusyId(id);
+    try {
+      await onDelete(id);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   const patentExtraCols = mode === "patents" ? (showPatentOffice ? 2 : 1) : 0;
   const colSpan =
     (mode === "publications" ? 5 : mode === "patents" ? 4 + patentExtraCols : 4) +
-    (isAdmin && onDelete ? 1 : 0);
+    (canManage && (onDelete || onEdit) ? 1 : 0);
 
   return (
     <div className="overflow-x-auto">
@@ -122,7 +145,7 @@ export default function PublicationsTable({
               onClick={() => toggleSort("citation_count")}
               className="w-24 text-center"
             />
-            {isAdmin && onDelete && <th className="py-2 px-2 w-10" />}
+            {canManage && (onDelete || onEdit) && <th className="py-2 px-2 w-24 text-center">Actions</th>}
           </tr>
         </thead>
         <tbody>
@@ -138,6 +161,11 @@ export default function PublicationsTable({
                     </a>
                   ) : (
                     <span>{p.title}</span>
+                  )}
+                  {p.is_manual_book && mode !== "patents" && (
+                    <span className="ml-2 inline-block text-[10px] uppercase tracking-wide bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded">
+                      Book
+                    </span>
                   )}
                 </td>
                 {mode === "patents" ? (
@@ -155,7 +183,7 @@ export default function PublicationsTable({
                     <td className="py-3 px-3 align-top text-slate-700 max-w-xs truncate" title={people || undefined}>
                       {people || "—"}
                     </td>
-                    <td className="py-3 px-3 align-top text-slate-700">
+                    <td className="py-3 px-3 align-top text-slate-700 whitespace-pre-line">
                       {(venueField ? p[venueField] : publicationVenue(p)) || "—"}
                     </td>
                   </>
@@ -166,17 +194,34 @@ export default function PublicationsTable({
                 )}
                 <td className="py-3 px-3 text-center align-top">{p.publication_year ?? "—"}</td>
                 <td className="py-3 px-3 text-center align-top">{p.citation_count}</td>
-                {isAdmin && onDelete && (
+                {canManage && (onDelete || onEdit) && (
                   <td className="py-3 px-2 text-center align-top">
-                    <button
-                      type="button"
-                      onClick={() => onDelete(p.id)}
-                      className="text-slate-400 hover:text-red-600 p-1"
-                      title="Delete publication"
-                      aria-label="Delete publication"
-                    >
-                      🗑
-                    </button>
+                    <div className="inline-flex items-center gap-1">
+                      {onEdit && (
+                        <button
+                          type="button"
+                          onClick={() => setEditing(p)}
+                          className="text-slate-500 hover:text-teal-700 p-1 text-xs"
+                          title="Edit publication"
+                          aria-label="Edit publication"
+                          disabled={busyId === p.id}
+                        >
+                          Edit
+                        </button>
+                      )}
+                      {onDelete && (
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(p.id)}
+                          className="text-slate-400 hover:text-red-600 p-1"
+                          title="Delete publication"
+                          aria-label="Delete publication"
+                          disabled={busyId === p.id}
+                        >
+                          🗑
+                        </button>
+                      )}
+                    </div>
                   </td>
                 )}
               </tr>
@@ -191,6 +236,15 @@ export default function PublicationsTable({
           )}
         </tbody>
       </table>
+      {editing && onEdit && (
+        <EditPublicationModal
+          publication={editing}
+          onClose={() => setEditing(null)}
+          onSave={async (payload) => {
+            await onEdit(editing.id, payload);
+          }}
+        />
+      )}
     </div>
   );
 }

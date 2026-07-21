@@ -35,6 +35,7 @@ CANONICAL_FIELDS: dict[str, list[str]] = {
     "journal": ["journal", "journal name"],
     "conference": ["conference", "conference name", "proceedings"],
     "book": ["book", "book title"],
+    "is_manual_book": ["manual book", "books tab", "is manual book", "assigned book"],
     "venue": ["venue", "published in", "source", "journal/conference", "journal or conference"],
     "volume": ["volume", "vol"],
     "issue": ["issue", "number", "issue no", "issue number"],

@@ -61,12 +61,12 @@ Thank you.`,
   },
   {
     id: "verify-sdgs",
-    label: "Verify Project SDGs (BTP/IP)",
+    label: "Verify Project SDGs (Projects and Theses)",
     requirement_type: "verify_sdgs",
-    subject: "Verify & Accept SDGs for Your Projects (BTP/IP)",
+    subject: "Verify & Accept SDGs for Your Projects (Projects and Theses)",
     body: `Dear [Faculty Name],
 
-Please log in to the BTP/IP tab and verify & accept the SDGs linked to your student projects.
+Please log in to the Projects and Theses tab and verify & accept the SDGs linked to your student projects.
 
 Deadline: [Date]
 

@@ -1,17 +1,24 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { useAuth } from "../../auth/AuthContext";
 import {
+  deleteAllocation,
   downloadCoursesAllocationsExport,
   getCoursesDashboardSummary,
   getCurrentSemester,
   listCoursesAllocations,
+  type AllocationCourse,
   type CourseListResponse,
   type CoursesDashboardSummary,
 } from "../services/courseAllocationApi";
+import AllocationFormModal from "../components/AllocationFormModal";
 
 type FilterKind = "semester" | "academic_year" | "all";
 
 export default function CourseWiseAllocationPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+
   const [currentSemester, setCurrentSemester] = useState("Monsoon 2026");
   const [filterKind, setFilterKind] = useState<FilterKind>("semester");
   const [filterValue, setFilterValue] = useState("Monsoon 2026");
@@ -26,6 +33,10 @@ export default function CourseWiseAllocationPage() {
     academic_years: [],
   });
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState<AllocationCourse | null>(null);
+  const [formDefaults, setFormDefaults] = useState<Partial<AllocationCourse> | undefined>();
 
   const effectiveScope = useMemo(() => {
     if (filterKind === "all") return "all";
@@ -87,21 +98,66 @@ export default function CourseWiseAllocationPage() {
     }
   }, [filterKind, valueOptions, filterValue]);
 
+  function openAdd(defaults?: Partial<AllocationCourse>) {
+    setEditing(null);
+    setFormDefaults({
+      semester: filterKind === "semester" ? filterValue : currentSemester,
+      ...defaults,
+    });
+    setShowForm(true);
+  }
+
+  function openEdit(row: AllocationCourse) {
+    setEditing(row);
+    setFormDefaults(undefined);
+    setShowForm(true);
+  }
+
+  async function handleDelete(row: AllocationCourse) {
+    if (!window.confirm(`Delete allocation for ${row.course_code} / ${row.faculty_name} (${row.semester})?`)) {
+      return;
+    }
+    try {
+      await deleteAllocation(row.id);
+      setMessage("Allocation deleted.");
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Delete failed");
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold">Course-Wise Allocations</h2>
-          <p className="text-sm text-slate-600 mt-1">Filter by semester, academic year, or view all data — grouped by canonical course.</p>
+          <p className="text-sm text-slate-600 mt-1">
+            Filter by semester, academic year, or view all data — grouped by canonical course.
+          </p>
         </div>
-        <button
-          type="button"
-          onClick={() => downloadCoursesAllocationsExport(effectiveScope === "all" ? undefined : effectiveScope)}
-          className="rounded-lg border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50"
-        >
-          Export Excel
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => downloadCoursesAllocationsExport(effectiveScope === "all" ? undefined : effectiveScope)}
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50"
+          >
+            Export Excel
+          </button>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => openAdd()}
+              className="rounded-lg bg-teal-700 text-white px-3 py-2 text-sm"
+            >
+              Add allocation
+            </button>
+          )}
+        </div>
       </div>
+
+      {message && (
+        <p className="text-sm text-teal-800 bg-teal-50 border border-teal-200 rounded-lg px-3 py-2">{message}</p>
+      )}
 
       {summary && (
         <section className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
@@ -217,6 +273,23 @@ export default function CourseWiseAllocationPage() {
               <span className="text-sm font-normal text-slate-500 ml-2">
                 ({row.has_allocations ? `${row.allocations.length} instance(s)` : "NA"})
               </span>
+              {isAdmin && (
+                <button
+                  type="button"
+                  className="ml-3 text-xs font-normal text-teal-800 underline"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    openAdd({
+                      course_catalog_id: row.course_catalog_id,
+                      course_code: row.course_code,
+                      course_name: row.course_name,
+                    });
+                  }}
+                >
+                  Add faculty
+                </button>
+              )}
             </summary>
             {row.has_allocations ? (
               <div className="overflow-x-auto">
@@ -230,6 +303,7 @@ export default function CourseWiseAllocationPage() {
                       <th className="px-4 py-2">UG/PG</th>
                       <th className="px-4 py-2">Type</th>
                       <th className="px-4 py-2">FY</th>
+                      {isAdmin && <th className="px-4 py-2 w-36">Actions</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -242,6 +316,24 @@ export default function CourseWiseAllocationPage() {
                         <td className="px-4 py-2">{a.ug_pg}</td>
                         <td className="px-4 py-2">{a.core_elective}</td>
                         <td className="px-4 py-2">{a.is_first_year ? "Yes" : "—"}</td>
+                        {isAdmin && (
+                          <td className="px-4 py-2 whitespace-nowrap">
+                            <button
+                              type="button"
+                              className="text-xs px-2 py-1 rounded bg-slate-100 mr-2"
+                              onClick={() => openEdit(a)}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              className="text-xs px-2 py-1 rounded bg-red-50 text-red-700"
+                              onClick={() => handleDelete(a)}
+                            >
+                              Delete
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -253,6 +345,20 @@ export default function CourseWiseAllocationPage() {
           </details>
         ))}
       </div>
+
+      {showForm && isAdmin && (
+        <AllocationFormModal
+          initial={editing}
+          defaults={formDefaults}
+          onClose={() => setShowForm(false)}
+          onSaved={(msg) => {
+            setMessage(msg);
+            setError("");
+            load();
+          }}
+          onError={setError}
+        />
+      )}
     </div>
   );
 }

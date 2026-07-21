@@ -177,9 +177,16 @@ def backfill_publication_dates(*, limit: int | None = None, delay_seconds: float
                 _, current_precision = parse_precision(pub.publication_date)
                 iso, precision = resolve_exact_date(pub, client=client)
                 if iso and _PRECISION_RANK[precision] > _PRECISION_RANK[current_precision]:
-                    pub.publication_date = iso
-                    updated += 1
-                    db.commit()
+                    from app.publications.services.publication_service import (
+                        apply_updates_respecting_overrides,
+                    )
+
+                    applied = apply_updates_respecting_overrides(
+                        pub, {"publication_date": iso}
+                    )
+                    if applied:
+                        updated += 1
+                        db.commit()
                 if delay_seconds > 0:
                     time.sleep(delay_seconds)
     finally:

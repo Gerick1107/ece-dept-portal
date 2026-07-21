@@ -38,6 +38,7 @@ class MarksTemplateComponentsResponse(BaseModel):
 class QuestionPaperAnalyzeResponse(BaseModel):
     component_name: str
     paper_total_marks: float
+    warnings: list[str] = Field(default_factory=list)
     questions: list[dict]
 
 

@@ -19,7 +19,7 @@ export default function DashboardPage() {
     const base: ModuleCard[] = [
       { name: "CO-PO Attainment", path: "/modules/copo", status: "Active" },
       { name: "Publications", path: "/modules/publications", status: "Active" },
-      { name: "BTP / IP", path: "/projects", status: "Active" },
+      { name: "Projects and Theses", path: "/projects", status: "Active" },
       { name: "Budget", path: "/modules/budget", status: "Active" },
       { name: "Course Allocation", path: "/course-allocation", status: "Active" },
       { name: "Minutes", path: "/modules/minutes", status: "Active" },

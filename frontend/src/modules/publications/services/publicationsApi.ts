@@ -1,5 +1,11 @@
 import { apiDelete, apiGet, apiPatchJson, apiPostJson } from "../../../services/api";
-import type { Faculty, PaginationMeta, Publication } from "../types/publications";
+import type {
+  Faculty,
+  PaginationMeta,
+  Publication,
+  PublicationEditPayload,
+  PublicationSearchBy,
+} from "../types/publications";
 
 export type CustomColumn = {
   id: number;
@@ -54,18 +60,22 @@ export async function listPublications(params?: {
   page?: number;
   page_size?: number;
   query?: string;
+  search_by?: PublicationSearchBy;
   faculty_id?: number;
   publication_year?: number;
   is_patent?: boolean;
+  category?: "journals" | "conferences" | "book_chapters" | "books" | "preprints";
 }): Promise<{ items: Publication[]; pagination: PaginationMeta }> {
   const qs = new URLSearchParams();
   if (params?.page) qs.set("page", String(params.page));
   const pageSize = Math.min(params?.page_size ?? MAX_PAGE_SIZE, MAX_PAGE_SIZE);
   qs.set("page_size", String(pageSize));
   if (params?.query) qs.set("query", params.query);
+  if (params?.search_by) qs.set("search_by", params.search_by);
   if (params?.faculty_id) qs.set("faculty_id", String(params.faculty_id));
   if (params?.publication_year) qs.set("publication_year", String(params.publication_year));
   if (params?.is_patent !== undefined) qs.set("is_patent", params.is_patent ? "true" : "false");
+  if (params?.category) qs.set("category", params.category);
   const suffix = qs.toString() ? `?${qs.toString()}` : "";
   return apiGet(`/publications/publications${suffix}`);
 }
@@ -73,9 +83,11 @@ export async function listPublications(params?: {
 /** Fetch every page (API caps page_size at 200). */
 export async function listAllPublications(params?: {
   query?: string;
+  search_by?: PublicationSearchBy;
   faculty_id?: number;
   publication_year?: number;
   is_patent?: boolean;
+  category?: "journals" | "conferences" | "book_chapters" | "books" | "preprints";
 }): Promise<Publication[]> {
   const all: Publication[] = [];
   let page = 1;
@@ -99,6 +111,13 @@ export async function fetchFacultyAffiliations(facultyId: number) {
 
 export async function deletePublication(publicationId: number): Promise<void> {
   await apiDelete(`/publications/publications/${publicationId}`);
+}
+
+export async function updatePublication(
+  publicationId: number,
+  body: PublicationEditPayload
+): Promise<Publication> {
+  return apiPatchJson(`/publications/publications/${publicationId}`, body);
 }
 
 export async function syncAllPublications(): Promise<{ status: string; message: string }> {

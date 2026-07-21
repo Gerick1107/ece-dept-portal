@@ -7,6 +7,7 @@ export type User = {
   role: "faculty" | "hod" | "admin";
   is_active: boolean;
   must_change_password?: boolean;
+  faculty_id?: number | null;
 };
 
 export type UserCreate = {

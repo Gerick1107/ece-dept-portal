@@ -120,13 +120,13 @@ export default function EceEveProjectsTab() {
             className="rounded-lg border border-red-300 text-red-800 px-3 py-2 text-sm hover:bg-red-50 disabled:opacity-50"
             disabled={busy}
             onClick={async () => {
-              if (!window.confirm("Delete all ECE/EVE tab data? BTP/IP projects are kept; mirrored rows are rebuilt from BTP after purge.")) return;
+              if (!window.confirm("Delete all ECE/EVE tab data? Projects and Theses are kept; mirrored rows are rebuilt from that module after purge.")) return;
               setBusy(true);
               setError("");
               try {
                 const r = await purgeAllEceEveProjects();
                 setMessage(
-                  `Purged ECE/EVE tab (${r.standalone_removed} standalone removed, ${r.resynced_from_btp} mirrored from BTP).`
+                  `Purged ECE/EVE tab (${r.standalone_removed} standalone removed, ${r.resynced_from_btp} mirrored from Projects and Theses).`
                 );
                 await reload();
               } catch (e) {

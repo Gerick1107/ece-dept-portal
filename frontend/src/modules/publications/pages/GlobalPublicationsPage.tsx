@@ -1,16 +1,26 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../auth/AuthContext";
 import PublicationsTable from "../components/PublicationsTable";
-import { deletePublication, listAllPublications } from "../services/publicationsApi";
-import type { Publication, PublicationTableMode } from "../types/publications";
+import {
+  deletePublication,
+  listAllPublications,
+  updatePublication,
+} from "../services/publicationsApi";
+import type {
+  Publication,
+  PublicationEditPayload,
+  PublicationSearchBy,
+  PublicationTableMode,
+} from "../types/publications";
 
 type RecordFilter = "all" | "publications" | "patents";
 
 export default function GlobalPublicationsPage() {
   const { user } = useAuth();
-  const isAdmin = user?.role === "admin";
+  const canManage = user?.role === "admin" || user?.role === "faculty" || user?.role === "hod";
   const [items, setItems] = useState<Publication[]>([]);
-  const [titleQuery, setTitleQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchBy, setSearchBy] = useState<PublicationSearchBy>("title");
   const [recordFilter, setRecordFilter] = useState<RecordFilter>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -34,18 +44,28 @@ export default function GlobalPublicationsPage() {
   }, [load]);
 
   const filtered = useMemo(() => {
-    const q = titleQuery.trim().toLowerCase();
+    const q = searchQuery.trim().toLowerCase();
     if (!q) return items;
-    return items.filter((p) => p.title.toLowerCase().includes(q));
-  }, [items, titleQuery]);
+    return items.filter((p) => {
+      if (searchBy === "venue") {
+        const venue = `${p.journal || ""} ${p.conference || ""} ${p.book || ""} ${p.publisher || ""}`.toLowerCase();
+        return venue.includes(q);
+      }
+      return p.title.toLowerCase().includes(q);
+    });
+  }, [items, searchQuery, searchBy]);
 
   const tableMode: PublicationTableMode =
     recordFilter === "patents" ? "patents" : recordFilter === "publications" ? "publications" : "all";
 
   async function handleDelete(publicationId: number) {
-    if (!window.confirm("Delete this publication permanently? This cannot be undone.")) return;
     await deletePublication(publicationId);
     setItems((prev) => prev.filter((p) => p.id !== publicationId));
+  }
+
+  async function handleEdit(publicationId: number, payload: PublicationEditPayload) {
+    const updated = await updatePublication(publicationId, payload);
+    setItems((prev) => prev.map((p) => (p.id === publicationId ? { ...p, ...updated } : p)));
   }
 
   return (
@@ -73,11 +93,20 @@ export default function GlobalPublicationsPage() {
               </button>
             ))}
           </div>
+          <select
+            className="border rounded px-2 py-2 text-sm"
+            value={searchBy}
+            onChange={(e) => setSearchBy(e.target.value as PublicationSearchBy)}
+            aria-label="Search by"
+          >
+            <option value="title">Search by title</option>
+            <option value="venue">Search by venue</option>
+          </select>
           <input
             className="border rounded px-3 py-2 text-sm w-80"
-            placeholder="Search by title..."
-            value={titleQuery}
-            onChange={(e) => setTitleQuery(e.target.value)}
+            placeholder={searchBy === "venue" ? "Search by venue..." : "Search by title..."}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
       </div>
@@ -92,8 +121,9 @@ export default function GlobalPublicationsPage() {
             publications={filtered}
             mode={tableMode}
             showPatentOffice={false}
-            isAdmin={isAdmin}
-            onDelete={isAdmin ? handleDelete : undefined}
+            canManage={canManage}
+            onDelete={canManage ? handleDelete : undefined}
+            onEdit={canManage ? handleEdit : undefined}
           />
         )}
       </div>

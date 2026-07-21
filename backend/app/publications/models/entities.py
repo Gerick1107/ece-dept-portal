@@ -114,6 +114,10 @@ class Publication(Base):
     raw_metadata: Mapped[str | None] = mapped_column(Text, nullable=True)
     # JSON blob of admin-defined custom columns, keyed by column key (e.g. {"issn": "1234-5678"}).
     custom_fields: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # JSON list of field names manually edited in the UI; sync/enrichment must not overwrite these.
+    manual_overrides: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Faculty/admin-assigned "Books" category (independent of Scholar "book"/chapter metadata).
+    is_manual_book: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
     source_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
     is_iiitd_publication: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

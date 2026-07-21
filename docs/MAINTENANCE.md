@@ -12,14 +12,26 @@ Ensure `SMTP_ENABLED=true` and SMTP settings in `backend/.env` for email feature
 
 ### Adding a new faculty member
 
-1. Add their row to `faculty_master.csv` (include `scholar_id`).
-2. Admin → Publications → Import CSV.
-3. Admin → Sync All Publications.
+**Preferred:** Admin → **Faculty Admin** → fill the form (same fields as `faculty_master.csv`). This writes the DB row, upserts `data/assets/faculty_master.csv`, and shows the person in Faculty Directory / filters.
+
+**Alternate:** Edit `faculty_master.csv` manually, then Admin → Publications → Import CSV, then Sync All Publications.
 
 ### Faculty member leaves
 
-1. Set `leave_year` in `faculty_master.csv`, re-import CSV.
+1. Set `leave_year` via CSV re-import or faculty update API/UI.
 2. They appear under Former Faculty; publications are retained.
+
+### Deleting / editing publications
+
+- Delete (faculty or admin) double-confirms in the UI and inserts a `blocked_publications` tombstone so Scholar sync will not recreate the paper.
+- Edit protects changed columns via `manual_overrides`. Title/authors/year/citations stay scrape-owned.
+- Tick **Assign to Books** in the edit dialog to place a paper on the Books tab (Book Chapters remain Scholar-driven).
+
+### Student publications
+
+- UI: Publications → **Student Publications**
+- Download template (Title, Authors, Years), import any wider Excel; extra headers appear automatically.
+- Admin can add single rows or delete; all authenticated users can view/search.
 
 ### Monthly sync (hosted server)
 
@@ -155,7 +167,7 @@ cd backend
 python -m alembic upgrade head
 ```
 
-Recent migrations include course allocation (`029`), faculty contributions expansions (`030`), notification replies (`031`), document embeddings (`032`), and the budget module (`033`).
+Recent migrations include course allocation (`029`), faculty contributions expansions (`030`), notification replies (`031`), document embeddings (`032`), budget (`033`), user↔faculty link (`034`), publication custom columns (`035`), publication manual overrides / books flag (`036`), and student publications (`037`). See [DATABASE.md](DATABASE.md).
 
 ---
 

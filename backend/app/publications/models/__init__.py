@@ -9,6 +9,7 @@ from app.publications.models.entities import (
     PublicationFaculty,
     ScrapeLog,
 )
+from app.publications.models.student_publication import StudentPublication
 
 __all__ = [
     "Affiliation",
@@ -20,4 +21,5 @@ __all__ = [
     "BlockedPublication",
     "PublicationAuditLog",
     "PublicationCustomColumn",
+    "StudentPublication",
 ]

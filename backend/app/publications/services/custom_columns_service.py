@@ -132,6 +132,11 @@ def set_custom_field(pub: Publication, key: str, value: str) -> None:
     pub.custom_fields = json.dumps(data, ensure_ascii=False)
 
 
+def set_custom_fields(pub: Publication, values: dict[str, str]) -> None:
+    cleaned = {str(k): ("" if v is None else str(v)) for k, v in (values or {}).items()}
+    pub.custom_fields = json.dumps(cleaned, ensure_ascii=False) if cleaned else None
+
+
 # --- value resolution -------------------------------------------------------
 
 def _meta_re(name: str) -> re.Pattern[str]:
@@ -282,10 +287,14 @@ def fill_custom_columns_for_publications(
     db: Session, publications: list[Publication], *, client: httpx.Client
 ) -> None:
     """Populate custom columns for freshly-synced publications (best-effort)."""
+    from app.publications.services.publication_service import get_manual_overrides
+
     columns = list_columns(db, enabled_only=True)
     if not columns:
         return
     for pub in publications:
+        if "custom_fields" in set(get_manual_overrides(pub)):
+            continue
         existing = get_custom_fields(pub)
         for column in columns:
             if existing.get(column.key):

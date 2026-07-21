@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, apiPostJson } from "../../../services/api";
+import { apiDelete, apiGet, apiPostJson, apiPutJson } from "../../../services/api";
 
 export type AllocationCourse = {
   id: number;
@@ -12,6 +12,35 @@ export type AllocationCourse = {
   core_elective: string;
   is_first_year: boolean;
   first_year_course_name: string | null;
+  source?: string;
+  is_faculty_placeholder?: boolean;
+  course_catalog_id?: number | null;
+};
+
+export type AllocationWritePayload = {
+  faculty_name?: string;
+  faculty_id?: number | null;
+  semester: string;
+  academic_year?: string;
+  course_code: string;
+  course_name: string;
+  ug_pg: string;
+  core_elective: string;
+  is_first_year?: boolean;
+  first_year_course_name?: string | null;
+  course_catalog_id?: number | null;
+  source?: string;
+  is_faculty_placeholder?: boolean;
+  clear_faculty?: boolean;
+};
+
+export type CatalogEntry = {
+  id: number;
+  course_code: string;
+  course_name: string;
+  ug_pg: string;
+  core_elective: string;
+  is_first_year: boolean;
 };
 
 export type FacultyAllocationRow = {
@@ -195,9 +224,23 @@ export async function downloadAllocationsExport(scope?: string) {
 }
 
 export function resolveAllocationFaculty(rowId: number, facultyId: number) {
-  return apiPostJson(`/course-allocation/${rowId}/resolve-faculty`, { faculty_id: facultyId });
+  return apiPostJson<AllocationCourse>(`/course-allocation/${rowId}/resolve-faculty`, {
+    faculty_id: facultyId,
+  });
+}
+
+export function createAllocation(payload: AllocationWritePayload) {
+  return apiPostJson<AllocationCourse>("/course-allocation", payload);
+}
+
+export function updateAllocation(rowId: number, payload: Partial<AllocationWritePayload>) {
+  return apiPutJson<AllocationCourse>(`/course-allocation/${rowId}`, payload);
 }
 
 export function deleteAllocation(rowId: number) {
   return apiDelete(`/course-allocation/${rowId}`);
+}
+
+export function listCourseCatalog() {
+  return apiGet<{ items: CatalogEntry[] }>("/course-allocation/catalog");
 }

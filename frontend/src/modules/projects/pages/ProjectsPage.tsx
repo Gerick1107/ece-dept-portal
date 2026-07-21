@@ -104,7 +104,7 @@ const SEMESTER_TERMS = ["Monsoon", "Winter", "Summer"] as const;
 import EceEveProjectsTab from "./EceEveProjectsTab";
 
 const PROJECT_TABS = [
-  { id: "btp", label: "BTP / IP Projects" },
+  { id: "btp", label: "Projects and Theses" },
   { id: "ece_eve", label: "ECE/EVE Projects" },
 ] as const;
 
@@ -359,7 +359,7 @@ export default function ProjectsPage() {
         <>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-xl font-semibold">BTP / IP Project Repository</h2>
+          <h2 className="text-xl font-semibold">Projects and Theses Repository</h2>
           <p className="text-sm text-slate-600 mt-1">
             Import department Excel sheets, filter ECE projects, and manage SDG tags.
           </p>
@@ -404,7 +404,7 @@ export default function ProjectsPage() {
                 className="rounded-lg border border-red-300 text-red-800 px-3 py-2 text-sm hover:bg-red-50"
                 disabled={busy}
                 onClick={async () => {
-                  if (!window.confirm("Delete ALL BTP/IP projects? This cannot be undone.")) return;
+                  if (!window.confirm("Delete ALL Projects and Theses entries? This cannot be undone.")) return;
                   setBusy(true);
                   try {
                     const r = await purgeAllProjects();
@@ -575,7 +575,14 @@ export default function ProjectsPage() {
             </thead>
             <tbody>
               {projects.map((p, idx) => (
-                <tr key={p.id} className="border-t border-slate-100 hover:bg-slate-50/80">
+                <tr
+                  key={p.id}
+                  className={
+                    p.sdg_ever_accepted || effectiveSdgStatus(p) === "confirmed"
+                      ? "border-t border-teal-200/80 bg-teal-100/70 hover:bg-teal-100"
+                      : "border-t border-slate-100 hover:bg-slate-50/80"
+                  }
+                >
                   <td className="px-3 py-2">{(filters.page - 1) * 50 + idx + 1}</td>
                   <td className="px-3 py-2">
                     <CommaCell value={p.semesters} />
@@ -749,7 +756,7 @@ export default function ProjectsPage() {
             <h3 className="font-semibold">Import summary</h3>
             <ul className="text-sm space-y-1 text-slate-700">
               <li>Total rows in file: {importSummary.total_rows ?? "—"}</li>
-              <li>Rows imported to BTP/IP: {importSummary.btp_imported ?? importSummary.imported}</li>
+              <li>Rows imported to Projects and Theses: {importSummary.btp_imported ?? importSummary.imported}</li>
               <li>Rows added to ECE/EVE tab: {importSummary.ece_eve_imported ?? 0}</li>
               <li>Rows merged (existing projects): {importSummary.merged ?? 0}</li>
               <li>Rows skipped (non-ECE/EVE branch, no ECE faculty match): {importSummary.skipped_rows ?? 0}</li>

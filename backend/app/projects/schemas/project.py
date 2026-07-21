@@ -78,6 +78,7 @@ class ProjectResponse(BaseModel):
     students: list[str] = Field(default_factory=list)
     student_rolls: list[str] = Field(default_factory=list)
     sdg_review_status: str
+    sdg_ever_accepted: bool = False
     suggested_sdgs: list[SdgBrief] = Field(default_factory=list)
     confirmed_sdgs: list[SdgBrief] = Field(default_factory=list)
     upload_batch_id: int | None

@@ -19,6 +19,7 @@ from app.config import get_settings
 from app.publications.models import BlockedPublication, Faculty, Publication, PublicationFaculty, ScrapeLog
 from app.publications.scraper.serpapi_scraper import scrape_faculty_serpapi
 from app.publications.utils.helpers import is_within_tenure, make_source_hash
+from app.publications.utils.link_filters import article_has_blocked_repository_link
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -86,6 +87,8 @@ def _ingest_publications(db: Session, faculty: Faculty, normalized_items: list[d
         title = normalized.get("title")
         if not title:
             continue
+        if article_has_blocked_repository_link(normalized):
+            continue
 
         year = normalized.get("publication_year")
         source_hash = make_source_hash(title, year)
@@ -105,6 +108,13 @@ def _ingest_publications(db: Session, faculty: Faculty, normalized_items: list[d
             db.add(existing)
             db.flush()
             inserted += 1
+        else:
+            # Refresh citations only; never overwrite manually edited fields.
+            from app.publications.services.publication_service import apply_updates_respecting_overrides
+
+            cite = normalized.get("citation_count")
+            if cite is not None:
+                apply_updates_respecting_overrides(existing, {"citation_count": int(cite)})
 
         if existing.id in linked_publication_ids:
             continue

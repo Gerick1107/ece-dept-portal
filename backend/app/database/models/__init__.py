@@ -15,6 +15,7 @@ from app.publications.models.entities import (
     PublicationFaculty,
     ScrapeLog,
 )
+from app.publications.models.student_publication import StudentPublication
 from app.projects.models.entities import Project, ProjectSdg, ProjectStudent, ProjectUpload, Sdg
 from app.ece_eve_projects.models.entities import EceEveProject
 from app.llm.models.entities import LlmInsightsCache
@@ -40,6 +41,7 @@ __all__ = [
     "ScrapeLog",
     "BlockedPublication",
     "PublicationAuditLog",
+    "StudentPublication",
     "Project",
     "ProjectStudent",
     "ProjectSdg",

@@ -5,13 +5,19 @@ import uuid
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import FacultyScope, get_current_user, get_faculty_scope, require_roles
+from app.course_allocation.schemas.allocation import (
+    AllocationCreateRequest,
+    AllocationResponse,
+    AllocationUpdateRequest,
+)
 from app.course_allocation.services.allocation_service import (
+    _allocation_dict,
     course_history,
     courses_dashboard_summary,
     create_allocation,
@@ -26,7 +32,7 @@ from app.course_allocation.services.allocation_service import (
     update_allocation,
     update_catalog_entry,
 )
-from app.course_allocation.services.csv_sync import sync_all_course_allocation_csv, write_allocations_csv
+from app.course_allocation.services.csv_sync import sync_all_course_allocation_csv
 from app.course_allocation.services.export_service import export_allocations_xlsx, export_courses_xlsx
 from app.course_allocation.services.semester_service import effective_current_semester
 from app.course_allocation.services.xlsx_upload_service import parse_allocation_xlsx, preview_upload
@@ -269,23 +275,23 @@ def catalog_edit(
     }
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED, response_model=AllocationResponse)
 def add_allocation(
-    body: dict[str, Any],
+    body: AllocationCreateRequest,
     db: Annotated[Session, Depends(get_db)],
     _: Annotated[User, Depends(require_roles(UserRole.admin))],
 ):
     try:
-        row = create_allocation(db, body)
+        row = create_allocation(db, body.model_dump())
     except (ValueError, KeyError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {"id": row.id}
+    return _allocation_dict(row)
 
 
-@router.put("/{row_id}")
+@router.put("/{row_id}", response_model=AllocationResponse)
 def edit_allocation(
     row_id: int,
-    body: dict[str, Any],
+    body: AllocationUpdateRequest,
     db: Annotated[Session, Depends(get_db)],
     _: Annotated[User, Depends(require_roles(UserRole.admin))],
 ):
@@ -293,13 +299,13 @@ def edit_allocation(
     if not row:
         raise HTTPException(status_code=404, detail="Allocation not found")
     try:
-        row = update_allocation(db, row, body)
+        row = update_allocation(db, row, body.model_dump(exclude_unset=True))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {"id": row.id}
+    return _allocation_dict(row)
 
 
-@router.post("/{row_id}/resolve-faculty")
+@router.post("/{row_id}/resolve-faculty", response_model=AllocationResponse)
 def resolve_faculty(
     row_id: int,
     body: ResolveFacultyRequest,
@@ -310,7 +316,7 @@ def resolve_faculty(
         row = resolve_allocation_faculty_row(db, row_id, body.faculty_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {"id": row.id, "faculty_id": row.faculty_id}
+    return _allocation_dict(row)
 
 
 @router.delete("/{row_id}", status_code=status.HTTP_204_NO_CONTENT)

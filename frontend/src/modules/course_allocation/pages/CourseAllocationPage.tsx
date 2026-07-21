@@ -2,13 +2,16 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
 import {
+  deleteAllocation,
   downloadAllocationsExport,
   getAllocationDashboardSummary,
   getCurrentSemester,
   listAllocations,
+  type AllocationCourse,
   type AllocationListResponse,
   type DashboardSummary,
 } from "../services/courseAllocationApi";
+import AllocationFormModal from "../components/AllocationFormModal";
 import CourseAllocationAdminPanel from "../components/CourseAllocationAdminPanel";
 
 type FilterKind = "semester" | "academic_year" | "all";
@@ -31,6 +34,10 @@ export default function CourseAllocationPage() {
     academic_years: [],
   });
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState<AllocationCourse | null>(null);
+  const [formDefaults, setFormDefaults] = useState<Partial<AllocationCourse> | undefined>();
 
   const effectiveScope = useMemo(() => {
     if (filterKind === "all") return "all";
@@ -38,11 +45,13 @@ export default function CourseAllocationPage() {
   }, [filterKind, filterValue]);
 
   useEffect(() => {
-    getCurrentSemester().then((r: { semester: string }) => {
-      setCurrentSemester(r.semester);
-      setFilterKind("semester");
-      setFilterValue(r.semester);
-    }).catch(() => {});
+    getCurrentSemester()
+      .then((r: { semester: string }) => {
+        setCurrentSemester(r.semester);
+        setFilterKind("semester");
+        setFilterValue(r.semester);
+      })
+      .catch(() => {});
   }, []);
 
   const load = useCallback(async () => {
@@ -90,6 +99,32 @@ export default function CourseAllocationPage() {
     }
   }, [filterKind, valueOptions, filterValue]);
 
+  function openAdd(defaults?: Partial<AllocationCourse>) {
+    setEditing(null);
+    setFormDefaults({
+      semester: filterKind === "semester" ? filterValue : currentSemester,
+      ...defaults,
+    });
+    setShowForm(true);
+  }
+
+  function openEdit(row: AllocationCourse) {
+    setEditing(row);
+    setFormDefaults(undefined);
+    setShowForm(true);
+  }
+
+  async function handleDelete(row: AllocationCourse) {
+    if (!window.confirm(`Delete allocation for ${row.course_code} (${row.semester})?`)) return;
+    try {
+      await deleteAllocation(row.id);
+      setMessage("Allocation deleted.");
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Delete failed");
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -97,10 +132,29 @@ export default function CourseAllocationPage() {
           <h2 className="text-xl font-semibold">Faculty-Wise Allocations</h2>
           <p className="text-sm text-slate-600 mt-1">Filter by semester, academic year, or view all data.</p>
         </div>
-        <button type="button" onClick={() => downloadAllocationsExport(effectiveScope === "all" ? undefined : effectiveScope)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50">
-          Export Excel
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => downloadAllocationsExport(effectiveScope === "all" ? undefined : effectiveScope)}
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50"
+          >
+            Export Excel
+          </button>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => openAdd()}
+              className="rounded-lg bg-teal-700 text-white px-3 py-2 text-sm"
+            >
+              Add allocation
+            </button>
+          )}
+        </div>
       </div>
+
+      {message && (
+        <p className="text-sm text-teal-800 bg-teal-50 border border-teal-200 rounded-lg px-3 py-2">{message}</p>
+      )}
 
       {summary && (
         <section className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
@@ -115,12 +169,18 @@ export default function CourseAllocationPage() {
               <p className="text-xs text-slate-600 mt-1">Total courses</p>
             </div>
             <div className="rounded-lg bg-slate-50 border border-slate-100 p-3">
-              <p className="text-2xl font-semibold text-teal-800">{summary.ug_courses} UG · {summary.pg_courses} PG</p>
+              <p className="text-2xl font-semibold text-teal-800">
+                {summary.ug_courses} UG · {summary.pg_courses} PG
+              </p>
               <p className="text-xs text-slate-600 mt-1">UG vs PG</p>
             </div>
             <div className="rounded-lg bg-slate-50 border border-slate-100 p-3">
-              <p className="text-2xl font-semibold text-teal-800">{summary.core_courses} core · {summary.elective_courses} elective</p>
-              <p className="text-xs text-slate-600 mt-1">Core vs elective · {summary.first_year_courses} first-year</p>
+              <p className="text-2xl font-semibold text-teal-800">
+                {summary.core_courses} core · {summary.elective_courses} elective
+              </p>
+              <p className="text-xs text-slate-600 mt-1">
+                Core vs elective · {summary.first_year_courses} first-year
+              </p>
             </div>
           </div>
         </section>
@@ -162,18 +222,29 @@ export default function CourseAllocationPage() {
           >
             {!valueOptions.length && <option value="">No options</option>}
             {valueOptions.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
             ))}
           </select>
         )}
-        <input placeholder="Search faculty, code, course…" className="border rounded-lg px-3 py-2 text-sm lg:col-span-2" value={query} onChange={(e) => setQuery(e.target.value)} />
+        <input
+          placeholder="Search faculty, code, course…"
+          className="border rounded-lg px-3 py-2 text-sm lg:col-span-2"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
         <select className="border rounded-lg px-3 py-2 text-sm" value={ugPg} onChange={(e) => setUgPg(e.target.value)}>
           <option value="">All UG/PG</option>
           <option value="UG">UG</option>
           <option value="PG">PG</option>
           <option value="UG/PG">UG/PG</option>
         </select>
-        <select className="border rounded-lg px-3 py-2 text-sm" value={coreElective} onChange={(e) => setCoreElective(e.target.value)}>
+        <select
+          className="border rounded-lg px-3 py-2 text-sm"
+          value={coreElective}
+          onChange={(e) => setCoreElective(e.target.value)}
+        >
           <option value="">All Core/Elective</option>
           <option value="Core">Core</option>
           <option value="Elective">Elective</option>
@@ -189,10 +260,33 @@ export default function CourseAllocationPage() {
         {data?.faculty_rows.map((row) => (
           <details key={row.faculty_id} open className="bg-white border border-slate-200 rounded-xl shadow-sm">
             <summary className="cursor-pointer px-4 py-3 font-medium text-slate-800 border-b border-slate-100">
-              <Link to={`/course-allocation/faculty/${row.faculty_id}`} className="text-teal-800 hover:underline" onClick={(e) => e.stopPropagation()}>
+              <Link
+                to={`/course-allocation/faculty/${row.faculty_id}`}
+                className="text-teal-800 hover:underline"
+                onClick={(e) => e.stopPropagation()}
+              >
                 {row.faculty_name}
               </Link>
-              <span className="text-sm font-normal text-slate-500 ml-2">({row.has_courses ? `${row.courses.length} course(s)` : "NA"})</span>
+              <span className="text-sm font-normal text-slate-500 ml-2">
+                ({row.has_courses ? `${row.courses.length} course(s)` : "NA"})
+              </span>
+              {isAdmin && (
+                <button
+                  type="button"
+                  className="ml-3 text-xs font-normal text-teal-800 underline"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    openAdd({
+                      faculty_id: row.faculty_id,
+                      faculty_name: row.faculty_name,
+                      is_faculty_placeholder: false,
+                    });
+                  }}
+                >
+                  Add course
+                </button>
+              )}
             </summary>
             {row.has_courses ? (
               <div className="overflow-x-auto">
@@ -205,6 +299,7 @@ export default function CourseAllocationPage() {
                       <th className="px-4 py-2">UG/PG</th>
                       <th className="px-4 py-2">Type</th>
                       <th className="px-4 py-2">FY</th>
+                      {isAdmin && <th className="px-4 py-2 w-36">Actions</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -216,6 +311,24 @@ export default function CourseAllocationPage() {
                         <td className="px-4 py-2">{c.ug_pg}</td>
                         <td className="px-4 py-2">{c.core_elective}</td>
                         <td className="px-4 py-2">{c.is_first_year ? "Yes" : "—"}</td>
+                        {isAdmin && (
+                          <td className="px-4 py-2 whitespace-nowrap">
+                            <button
+                              type="button"
+                              className="text-xs px-2 py-1 rounded bg-slate-100 mr-2"
+                              onClick={() => openEdit(c)}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              className="text-xs px-2 py-1 rounded bg-red-50 text-red-700"
+                              onClick={() => handleDelete(c)}
+                            >
+                              Delete
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -231,18 +344,65 @@ export default function CourseAllocationPage() {
       {data && data.unassigned.length > 0 && (
         <section className="bg-slate-50 border border-slate-200 rounded-xl p-4">
           <h3 className="font-medium text-slate-800 mb-2">Unassigned / Not offered</h3>
-          <ul className="text-sm space-y-1">
-            {data.unassigned.map((u) => (
-              <li key={u.id}>
-                <span className="text-slate-500">{u.semester}</span> — {u.course_code}: {u.course_name}
-                {u.faculty_name ? ` (${u.faculty_name})` : ""}
-              </li>
-            ))}
-          </ul>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[700px]">
+              <thead>
+                <tr className="text-slate-600 text-left">
+                  <th className="px-2 py-1">Semester</th>
+                  <th className="px-2 py-1">Code</th>
+                  <th className="px-2 py-1">Course</th>
+                  <th className="px-2 py-1">Label</th>
+                  {isAdmin && <th className="px-2 py-1 w-36">Actions</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {data.unassigned.map((u) => (
+                  <tr key={u.id} className="border-t border-slate-200">
+                    <td className="px-2 py-1">{u.semester}</td>
+                    <td className="px-2 py-1">{u.course_code}</td>
+                    <td className="px-2 py-1">{u.course_name}</td>
+                    <td className="px-2 py-1">{u.faculty_name || "—"}</td>
+                    {isAdmin && (
+                      <td className="px-2 py-1 whitespace-nowrap">
+                        <button
+                          type="button"
+                          className="text-xs px-2 py-1 rounded bg-slate-100 mr-2"
+                          onClick={() => openEdit(u)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="text-xs px-2 py-1 rounded bg-red-50 text-red-700"
+                          onClick={() => handleDelete(u)}
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
       )}
 
       {isAdmin && <CourseAllocationAdminPanel scope={effectiveScope} onChanged={load} />}
+
+      {showForm && isAdmin && (
+        <AllocationFormModal
+          initial={editing}
+          defaults={formDefaults}
+          onClose={() => setShowForm(false)}
+          onSaved={(msg) => {
+            setMessage(msg);
+            setError("");
+            load();
+          }}
+          onError={setError}
+        />
+      )}
     </div>
   );
 }

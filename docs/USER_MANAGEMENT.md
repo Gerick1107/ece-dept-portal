@@ -6,7 +6,7 @@ Portal accounts are stored in the `users` table. CO-PO uploads and evaluation ru
 
 | Role | Access |
 |------|--------|
-| `faculty` | CO-PO, publications (own views), BTP/IP projects |
+| `faculty` | CO-PO, publications (own views), Projects and Theses |
 | `hod` | Same as faculty (department views as configured) |
 | `admin` | All modules + user management |
 

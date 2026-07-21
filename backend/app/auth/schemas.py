@@ -30,6 +30,7 @@ class UserResponse(BaseModel):
     is_active: bool
     profile_removed: bool = False
     must_change_password: bool
+    faculty_id: int | None = None
 
     model_config = {"from_attributes": True}
 

@@ -52,6 +52,7 @@ class Project(Base):
         ForeignKey("project_uploads.id", ondelete="SET NULL"), nullable=True
     )
     sdg_review_status: Mapped[str] = mapped_column(String(32), nullable=False, default="none")
+    sdg_ever_accepted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

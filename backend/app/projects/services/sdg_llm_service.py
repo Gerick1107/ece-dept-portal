@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from functools import lru_cache
 
 import numpy as np
@@ -7,6 +8,8 @@ from sentence_transformers import SentenceTransformer
 
 from app.config import get_settings
 from app.utils.embedding_device import resolve_embedding_device
+
+logger = logging.getLogger(__name__)
 
 SDG_REFERENCE = [
     (1, "No Poverty", "End poverty in all its forms everywhere."),
@@ -29,11 +32,31 @@ SDG_REFERENCE = [
 ]
 
 
+def _load_sentence_transformer(model_name: str, device: str) -> SentenceTransformer:
+    try:
+        return SentenceTransformer(model_name, device=device)
+    except Exception:
+        # Misconfigured EMBEDDING_DEVICE=cuda (e.g. CPU-only torch in Docker)
+        # must not break SDG tagging — fall back to CPU.
+        if device != "cpu":
+            logger.warning(
+                "SDG embedding model failed on device '%s'; falling back to CPU.",
+                device,
+            )
+            return SentenceTransformer(model_name, device="cpu")
+        raise
+
+
 @lru_cache(maxsize=1)
 def _embedder() -> SentenceTransformer:
     settings = get_settings()
     device = resolve_embedding_device(getattr(settings, "embedding_device", "auto"))
-    return SentenceTransformer(settings.sdg_embedding_model, device=device)
+    logger.info(
+        "Loading SDG embedding model '%s' on device '%s'",
+        settings.sdg_embedding_model,
+        device,
+    )
+    return _load_sentence_transformer(settings.sdg_embedding_model, device)
 
 
 @lru_cache(maxsize=1)
@@ -45,6 +68,17 @@ def _sdg_embeddings() -> np.ndarray:
 
 
 SDG_CONFIDENCE_THRESHOLD = 0.5
+
+
+def warm_up_sdg_embedder() -> None:
+    """Pre-load the SDG embedding model so first tag requests don't time out."""
+    try:
+        _ = _sdg_embeddings()
+        logger.info("SDG embedding model warmed up successfully")
+    except Exception:
+        logger.exception(
+            "SDG embedding warmup failed — auto-tag and regenerate will fail until the model loads"
+        )
 
 
 def score_all_project_sdgs(project_title: str, project_type: str, project_abstract: str | None = None) -> list[dict]:

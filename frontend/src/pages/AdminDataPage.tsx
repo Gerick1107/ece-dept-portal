@@ -325,7 +325,7 @@ export default function AdminDataPage() {
           </section>
 
           <section className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-            <h3 className="font-medium px-4 py-3 border-b bg-slate-50">Project uploads (BTP / IP)</h3>
+            <h3 className="font-medium px-4 py-3 border-b bg-slate-50">Project uploads (Projects and Theses)</h3>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="text-left text-slate-500 border-b">

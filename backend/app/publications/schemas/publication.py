@@ -97,12 +97,13 @@ class PublicationCreate(PublicationBase):
 
 
 class PublicationUpdate(BaseModel):
-    title: str | None = None
-    authors: str | None = None
-    publication_year: int | None = None
+    """Editable publication fields for faculty/admin UI.
+
+    Identity / scrape-critical fields (title, authors, year, citations, scholar URL,
+    patent flag, inventors) are intentionally omitted so sync keeps working.
+    """
+
     publisher: str | None = None
-    citation_count: int | None = None
-    link: str | None = None
     publication_date: str | None = None
     pages: str | None = None
     conference: str | None = None
@@ -110,20 +111,18 @@ class PublicationUpdate(BaseModel):
     book: str | None = None
     volume: str | None = None
     issue: str | None = None
-    is_patent: bool | None = None
-    inventors: str | None = None
     patent_office: str | None = None
     patent_number: str | None = None
     application_number: str | None = None
-    scholar_url: str | None = None
-    pdf_url: str | None = None
-    is_iiitd_publication: bool | None = None
-    faculty_ids: list[int] | None = None
+    is_manual_book: bool | None = None
+    custom_fields: dict[str, str] | None = None
 
 
 class PublicationResponse(PublicationBase):
     id: int
     source_hash: str
+    is_manual_book: bool = False
+    manual_overrides: list[str] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
     faculty_ids: list[int] = Field(default_factory=list)
@@ -202,3 +201,34 @@ class CustomColumnSuggestRequest(BaseModel):
 class DeletionResponse(BaseModel):
     deleted_count: int
     blocked_hashes_added: int
+
+
+class StudentPublicationCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=1024)
+    authors: str | None = None
+    publication_year: int | None = None
+    extra_fields: dict[str, str] = Field(default_factory=dict)
+
+
+class StudentPublicationResponse(BaseModel):
+    id: int
+    title: str
+    authors: str | None = None
+    publication_year: int | None = None
+    extra_fields: dict[str, str] = Field(default_factory=dict)
+    fields: dict[str, str] = Field(default_factory=dict)
+    created_at: datetime
+    updated_at: datetime
+
+
+class StudentPublicationListResponse(BaseModel):
+    items: list[StudentPublicationResponse]
+    columns: list[str] = Field(default_factory=list)
+    pagination: PaginationMeta
+
+
+class StudentPublicationImportSummary(BaseModel):
+    inserted: int
+    skipped: int
+    columns: list[str] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)

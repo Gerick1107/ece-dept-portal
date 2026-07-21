@@ -47,6 +47,10 @@ from app.publications.schemas import (
     PublicationUpdate,
     ScrapeTriggerRequest,
     ScrapeTriggerResponse,
+    StudentPublicationCreate,
+    StudentPublicationImportSummary,
+    StudentPublicationListResponse,
+    StudentPublicationResponse,
     SyncAllResponse,
 )
 from app.publications.scheduler.jobs import scheduler_status
@@ -62,8 +66,10 @@ from app.publications.services.publication_service import (
     list_publications,
     publication_faculty_ids,
     publication_faculty_ids_map,
+    purge_repository_publications,
     update_faculty,
     update_publication,
+    user_can_manage_publication,
 )
 
 router = APIRouter(prefix="/publications", tags=["publications"])
@@ -97,18 +103,22 @@ def _to_faculty_response(item: Faculty, total_publications: int) -> FacultyRespo
 
 def _to_publication_response(db: Session, item: Publication) -> PublicationResponse:
     from app.publications.services.custom_columns_service import get_custom_fields
+    from app.publications.services.publication_service import get_manual_overrides
 
     return PublicationResponse.model_validate(
         {
             **item.__dict__,
             "faculty_ids": publication_faculty_ids(db, item.id),
             "custom_fields": get_custom_fields(item),
+            "manual_overrides": get_manual_overrides(item),
+            "is_manual_book": bool(getattr(item, "is_manual_book", False)),
         }
     )
 
 
 def _to_publication_responses(db: Session, items: list[Publication]) -> list[PublicationResponse]:
     from app.publications.services.custom_columns_service import get_custom_fields
+    from app.publications.services.publication_service import get_manual_overrides
 
     faculty_map = publication_faculty_ids_map(db, [item.id for item in items])
     return [
@@ -117,6 +127,8 @@ def _to_publication_responses(db: Session, items: list[Publication]) -> list[Pub
                 **item.__dict__,
                 "faculty_ids": faculty_map.get(item.id, []),
                 "custom_fields": get_custom_fields(item),
+                "manual_overrides": get_manual_overrides(item),
+                "is_manual_book": bool(getattr(item, "is_manual_book", False)),
             }
         )
         for item in items
@@ -191,10 +203,20 @@ def add_faculty(
     db: Annotated[Session, Depends(get_db)],
     _: Annotated[User, Depends(require_roles(UserRole.admin))],
 ):
-    existing = db.scalar(select(Faculty).where(Faculty.scholar_id == body.scholar_id))
+    from app.publications.utils.helpers import normalize_scholar_id
+
+    scholar_id = normalize_scholar_id(body.scholar_id)
+    if not scholar_id:
+        raise HTTPException(status_code=400, detail="scholar_id is required")
+    existing = db.scalar(select(Faculty).where(Faculty.scholar_id == scholar_id))
     if existing:
         raise HTTPException(status_code=409, detail="scholar_id already exists")
-    item = create_faculty(db, body)
+    try:
+        # Persist normalized id.
+        body = body.model_copy(update={"scholar_id": scholar_id})
+        item = create_faculty(db, body)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return _to_faculty_response(item, 0)
 
 
@@ -217,8 +239,7 @@ def edit_faculty(
 async def upload_faculty_csv(
     csv_file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    # TODO: restore admin auth dependency after development verification.
-    # _: User = Depends(require_roles(UserRole.admin)),
+    _: User = Depends(require_roles(UserRole.admin)),
 ):
     suffix = Path(csv_file.filename or "faculty_master.csv").suffix.lower()
     if suffix != ".csv":
@@ -245,9 +266,14 @@ def get_publications(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=200),
     query: str | None = None,
+    search_by: str = Query(default="title", pattern="^(title|venue)$"),
     faculty_id: int | None = None,
     publication_year: int | None = None,
     is_patent: bool | None = None,
+    category: str | None = Query(
+        default=None,
+        pattern="^(journals|conferences|book_chapters|books|preprints)$",
+    ),
 ):
     # Non-admins are locked to their own publications regardless of the param.
     if not scope.see_all:
@@ -264,6 +290,8 @@ def get_publications(
         faculty_id=faculty_id,
         publication_year=publication_year,
         is_patent=is_patent,
+        search_by=search_by,
+        category=category,
     )
     return PublicationListResponse(
         items=_to_publication_responses(db, items),
@@ -289,11 +317,16 @@ def edit_publication(
     publication_id: int,
     body: PublicationUpdate,
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[User, Depends(require_roles(UserRole.admin))],
+    user: Annotated[User, Depends(require_roles(UserRole.admin, UserRole.faculty, UserRole.hod))],
+    scope: FacultyScopeDep,
 ):
     item = db.scalar(select(Publication).where(Publication.id == publication_id))
     if item is None:
         raise HTTPException(status_code=404, detail="Publication not found")
+    if not user_can_manage_publication(
+        db, publication_id=publication_id, faculty_id=scope.faculty_id, see_all=scope.see_all
+    ):
+        raise HTTPException(status_code=403, detail="You can only edit your own publications")
     item = update_publication(db, item, body)
     return _to_publication_response(db, item)
 
@@ -302,8 +335,16 @@ def edit_publication(
 def remove_publication(
     publication_id: int,
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[User, Depends(require_roles(UserRole.admin))],
+    user: Annotated[User, Depends(require_roles(UserRole.admin, UserRole.faculty, UserRole.hod))],
+    scope: FacultyScopeDep,
 ):
+    item = db.scalar(select(Publication).where(Publication.id == publication_id))
+    if item is None:
+        raise HTTPException(status_code=404, detail="Publication not found")
+    if not user_can_manage_publication(
+        db, publication_id=publication_id, faculty_id=scope.faculty_id, see_all=scope.see_all
+    ):
+        raise HTTPException(status_code=403, detail="You can only delete your own publications")
     deleted_count, blocked = delete_publications(db, [publication_id])
     if deleted_count == 0:
         raise HTTPException(status_code=404, detail="Publication not found")
@@ -322,8 +363,14 @@ def remove_publications_bulk(
 
 @router.post("/scrape/sync-all", response_model=SyncAllResponse)
 def sync_all_publications(
+    db: Annotated[Session, Depends(get_db)],
     _: Annotated[User, Depends(require_roles(UserRole.admin))],
 ):
+    # Defensive cleanup before background sync so UI/export never keep repository links.
+    try:
+        purge_repository_publications(db)
+    except Exception:
+        pass
     worker = threading.Thread(target=run_gap_fill_background, daemon=True)
     worker.start()
     return SyncAllResponse(
@@ -331,6 +378,7 @@ def sync_all_publications(
         message=(
             "Sync running in background. New publications and patents will be fetched from "
             "Google Scholar profiles, enriched with full metadata, and saved to the database. "
+            "Publications linking to repository.iiitd.edu.in are excluded. "
             "Refresh Scrape Logs for progress."
         ),
     )
@@ -447,8 +495,7 @@ def backfill_custom_columns_endpoint(
 def trigger_scrape(
     body: ScrapeTriggerRequest,
     db: Annotated[Session, Depends(get_db)],
-    # TODO: restore admin auth dependency after development verification.
-    # _: Annotated[User, Depends(require_roles(UserRole.admin))],
+    _: Annotated[User, Depends(require_roles(UserRole.admin))],
 ):
     _mark_stale_scrapes_as_failed(db)
     if body.faculty_id:
@@ -933,3 +980,116 @@ async def compile_export_fields(
         media_type=_FIELDS_MEDIA.get(fmt, "application/octet-stream"),
         headers={"Content-Disposition": f"attachment; filename=publications_custom.{fmt}"},
     )
+
+
+@router.get("/student-publications/template")
+def download_student_publications_template(
+    _: Annotated[User, Depends(get_current_user)],
+):
+    from app.publications.services.student_publications_service import build_student_publications_template
+
+    payload = build_student_publications_template()
+    return Response(
+        content=payload,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=student_publications_template.xlsx"},
+    )
+
+
+@router.get("/student-publications", response_model=StudentPublicationListResponse)
+def get_student_publications(
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_user)],
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
+    title: str | None = None,
+    authors: str | None = None,
+    year: int | None = None,
+    year_min: int | None = None,
+    year_max: int | None = None,
+    sort_dir: str = Query(default="desc", pattern="^(asc|desc)$"),
+):
+    from app.publications.services.student_publications_service import (
+        list_student_publications,
+        row_to_dict,
+    )
+
+    items, total, columns = list_student_publications(
+        db,
+        page=page,
+        page_size=page_size,
+        title_query=title,
+        authors_query=authors,
+        year=year,
+        year_min=year_min,
+        year_max=year_max,
+        sort_dir=sort_dir,
+    )
+    return StudentPublicationListResponse(
+        items=[StudentPublicationResponse.model_validate(row_to_dict(item)) for item in items],
+        columns=columns,
+        pagination={"page": page, "page_size": page_size, "total": total},
+    )
+
+
+@router.post(
+    "/student-publications",
+    response_model=StudentPublicationResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def add_student_publication(
+    body: StudentPublicationCreate,
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[User, Depends(require_roles(UserRole.admin))],
+):
+    from app.publications.services.student_publications_service import (
+        create_student_publication,
+        row_to_dict,
+    )
+
+    try:
+        item = create_student_publication(
+            db,
+            title=body.title,
+            authors=body.authors,
+            publication_year=body.publication_year,
+            extra_fields=body.extra_fields,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return StudentPublicationResponse.model_validate(row_to_dict(item))
+
+
+@router.post("/student-publications/import", response_model=StudentPublicationImportSummary)
+async def import_student_publications(
+    excel_file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles(UserRole.admin)),
+):
+    from app.publications.services.student_publications_service import import_student_publications_excel
+
+    filename = excel_file.filename or "student_publications.xlsx"
+    suffix = Path(filename).suffix.lower()
+    if suffix not in {".xlsx", ".xls"}:
+        raise HTTPException(status_code=400, detail="Only .xlsx or .xls files are accepted")
+    content = await excel_file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty")
+    try:
+        summary = import_student_publications_excel(db, content, filename)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return StudentPublicationImportSummary(**summary)
+
+
+@router.delete("/student-publications/{publication_id}", status_code=status.HTTP_204_NO_CONTENT)
+def remove_student_publication(
+    publication_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[User, Depends(require_roles(UserRole.admin))],
+):
+    from app.publications.services.student_publications_service import delete_student_publication
+
+    if not delete_student_publication(db, publication_id):
+        raise HTTPException(status_code=404, detail="Student publication not found")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

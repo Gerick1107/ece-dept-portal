@@ -7,7 +7,7 @@ import PublicationsAnalyticsTab from "../components/PublicationsAnalyticsTab";
 
 const TABS = [
   { id: "copo", label: "CO/PO Attainment" },
-  { id: "projects", label: "BTP / IP Projects" },
+  { id: "projects", label: "Projects and Theses" },
   { id: "ece_eve_projects", label: "ECE/EVE Projects" },
   { id: "awards", label: "Faculty Awards" },
   { id: "publications", label: "Publications" },
@@ -24,7 +24,7 @@ export default function AnalyticsPage() {
         <div>
           <h2 className="text-xl font-semibold text-slate-900">Analytics Dashboard</h2>
           <p className="text-sm text-slate-600 mt-1">
-            Aggregated insights from CO/PO runs, BTP/IP projects, faculty awards, and publications.
+            Aggregated insights from CO/PO runs, Projects and Theses, faculty awards, and publications.
           </p>
           <p className="text-xs text-slate-400 mt-1">Last loaded: {new Date().toLocaleString()}</p>
         </div>

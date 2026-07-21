@@ -12,6 +12,8 @@ import ModuleHubPage from "./pages/ModuleHubPage";
 import GlobalPublicationsPage from "./modules/publications/pages/GlobalPublicationsPage";
 import PublicationExportsPage from "./modules/publications/pages/PublicationExportsPage";
 import PublicationsAdminPage from "./modules/publications/pages/PublicationsAdminPage";
+import StudentPublicationsPage from "./modules/publications/pages/StudentPublicationsPage";
+import FacultyAdminPage from "./modules/publications/pages/FacultyAdminPage";
 import ProjectsPage from "./modules/projects/pages/ProjectsPage";
 import AwardsPage from "./modules/awards/pages/AwardsPage";
 import FacultyContributionsPage from "./modules/contributions/pages/FacultyContributionsPage";
@@ -92,6 +94,7 @@ export default function App() {
               links={[
                 { label: "Faculty Directory", path: "/publications/faculty", description: "View all faculty members" },
                 { label: "Publications Search", path: "/publications/search", description: "Search across publications" },
+                { label: "Student Publications", path: "/publications/student", description: "Shared student publication list" },
                 { label: "Publication Exports", path: "/publications/exports", description: "Export CSV, Excel, or PDF" },
               ]}
             />
@@ -151,6 +154,7 @@ export default function App() {
                 description="Administrative tools for publications, users, and archived data."
                 links={[
                   { label: "Publications Admin", path: "/publications/admin", description: "Manage faculty and scraping" },
+                  { label: "Faculty Admin", path: "/admin/faculty", description: "Add faculty to directory and CSV" },
                   { label: "Users", path: "/admin/users", description: "User accounts and roles" },
                   { label: "Send Notifications", path: "/admin/notifications", description: "Notify faculty" },
                   { label: "Requirement Tracker", path: "/admin/requirement-tracker", description: "Data request status" },
@@ -168,8 +172,16 @@ export default function App() {
         <Route path="/publications/faculty/:facultyId" element={<FacultyProfilePage />} />
         <Route path="/publications/faculty/:facultyId/affiliations" element={<FacultyAffiliationsPage />} />
         <Route path="/publications/search" element={<GlobalPublicationsPage />} />
+        <Route path="/publications/student" element={<StudentPublicationsPage />} />
         <Route path="/publications/exports" element={<PublicationExportsPage />} />
-        <Route path="/publications/admin" element={<PublicationsAdminPage />} />
+        <Route
+          path="/publications/admin"
+          element={
+            <AdminOnly>
+              <PublicationsAdminPage />
+            </AdminOnly>
+          }
+        />
         <Route path="/projects" element={<ProjectsPage />} />
         <Route path="/budget/accumulated-income" element={<AccumulatedIncomePage />} />
         <Route path="/budget/expenditure-budget" element={<ExpenditureBudgetPage />} />
@@ -201,6 +213,14 @@ export default function App() {
         <Route path="/admin/notifications" element={<AdminNotificationsPage />} />
         <Route path="/admin/requirement-tracker" element={<RequirementTrackerPage />} />
         <Route path="/admin/users" element={<AdminUsersPage />} />
+        <Route
+          path="/admin/faculty"
+          element={
+            <AdminOnly>
+              <FacultyAdminPage />
+            </AdminOnly>
+          }
+        />
         <Route path="/admin/data" element={<AdminDataPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />

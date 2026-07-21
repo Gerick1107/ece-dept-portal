@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Annotated
 
-import httpx
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse, Response
 from sqlalchemy import select
@@ -285,14 +284,13 @@ def generate_sdgs(
     try:
         tag_project_now(db, project)
     except ValueError as exc:
+        # Clear message for disabled tagging, model download/OOM, etc. (not a bare 500).
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except httpx.HTTPStatusError as exc:
-        if exc.response.status_code == 429:
-            raise HTTPException(
-                status_code=429,
-                detail="SDG tagging rate limit reached — wait a minute and try again.",
-            ) from exc
-        raise HTTPException(status_code=502, detail="SDG service error") from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"SDG tagging temporarily unavailable: {exc}",
+        ) from exc
     project = _load_project(db, project_id)
     return ProjectResponse.model_validate(project_to_dict(db, project))
 

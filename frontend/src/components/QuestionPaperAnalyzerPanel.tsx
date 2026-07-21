@@ -19,6 +19,7 @@ type AnalyzedQuestion = {
 type AnalysisResult = {
   component_name: string;
   paper_total_marks: number;
+  warnings?: string[];
   questions: Array<{
     label: string;
     co_label?: string;
@@ -174,6 +175,7 @@ export default function QuestionPaperAnalyzerPanel() {
     analysis && Number(weightage) > 0 && analysis.paper_total_marks > 0
       ? (Number(weightage) / analysis.paper_total_marks).toFixed(3)
       : null;
+  const questionsMissingCos = questions.filter((q) => !q.is_bonus && q.co_labels.length === 0);
 
   return (
     <details className="bg-white border border-slate-200 rounded-xl group">
@@ -247,6 +249,16 @@ export default function QuestionPaperAnalyzerPanel() {
 
         {analysis && (
           <div className="space-y-3">
+            {questionsMissingCos.length > 0 && (
+              <div
+                role="alert"
+                className="text-sm text-amber-900 bg-amber-50 border border-amber-300 rounded px-3 py-2"
+              >
+                <span className="font-medium">No COs found</span> for{" "}
+                {questionsMissingCos.map((q) => q.label).join(", ")}. Manually edit/add the CO
+                mappings before downloading.
+              </div>
+            )}
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm font-medium text-slate-700">
                 {questions.length > 0
@@ -286,8 +298,12 @@ export default function QuestionPaperAnalyzerPanel() {
                         </td>
                         <td className="py-1 px-2">
                           <input
-                            className="w-full min-w-[6rem] border rounded px-2 py-1"
-                            placeholder="CO1, CO2"
+                            className={`w-full min-w-[6rem] border rounded px-2 py-1 ${
+                              !q.is_bonus && q.co_labels.length === 0
+                                ? "border-amber-500 bg-amber-50"
+                                : ""
+                            }`}
+                            placeholder={q.is_bonus ? "Not required" : "Add CO1, CO2"}
                             value={formatCoInput(q.co_labels)}
                             onChange={(e) =>
                               updateQuestion(q.id, { co_labels: parseCoInput(e.target.value) })

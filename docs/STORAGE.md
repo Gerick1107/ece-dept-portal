@@ -90,7 +90,7 @@ Reference workbooks live in `data/samples/` (moved from project root). Runtime m
 
 | Path | Purpose |
 |------|---------|
-| `backend/storage/uploads/projects/` | BTP/IP project uploads |
+| `backend/storage/uploads/projects/` | Projects and Theses uploads |
 | `backend/storage/uploads/budget-invoices/` | Budget module invoice PDFs (≤ 10 MB) |
 | `backend/storage/notifications/` | Admin notification attachments and faculty reply attachments |
 | `backend/documents/` | Meeting PDFs (Senate, AAC, UGC, PGC, ECE faculty meets) |

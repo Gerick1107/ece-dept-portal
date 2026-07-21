@@ -30,7 +30,7 @@ def list_project_uploads(db: Session, limit: int = 200) -> list[dict]:
 
 
 def purge_all_projects(db: Session) -> dict:
-    """Delete all BTP/IP projects, links, upload metadata, and files on disk."""
+    """Delete all Projects and Theses entries, links, upload metadata, and files on disk."""
     import shutil
 
     from app.config import get_settings

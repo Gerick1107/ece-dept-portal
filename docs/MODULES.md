@@ -54,7 +54,8 @@ Workflow: [WORKFLOW_A.md](WORKFLOW_A.md)
 - Semesters listed newest-first within each group
 - Dashboard summary widget (faculty teaching, UG/PG, core/elective, first-year counts)
 - Faculty and course drill-in history / analytics pages
-- Admin: upload XLSX, resolve unmatched faculty names, edit catalog entries
+- Admin: upload XLSX, resolve unmatched faculty names, **add / edit / delete** allocation rows (both views), edit catalog entries
+- Mutations write back to `course_allocations.csv`; both views read the same allocation rows
 - Export allocations to Excel
 
 Faculty and HOD see **Allocations** only; **Course Catalog** is hidden from faculty nav and route-guarded to admin.
@@ -123,10 +124,20 @@ See [MAINTENANCE.md](MAINTENANCE.md) for CSV sync behaviour.
 
 | Item | Detail |
 |------|--------|
-| UI | `/publications/*` |
+| UI | `/publications/faculty`, `/publications/search`, `/publications/student`, `/publications/exports`, `/publications/admin` |
 | API | `/api/v1/publications` |
-| Data | Faculty profiles, Google Scholar / SerpAPI sync, patents, exports |
-| Maintenance | `faculty_master.csv`, `ENABLE_SCHEDULER` — [MAINTENANCE.md](MAINTENANCE.md) |
+| Data | Faculty profiles, Google Scholar / SerpAPI sync, patents, exports, student Excel list |
+| Maintenance | `faculty_master.csv`, Faculty Admin UI, `ENABLE_SCHEDULER` — [MAINTENANCE.md](MAINTENANCE.md) |
+
+**Features:**
+
+- Faculty profile tabs: Publications, Journals, Conferences, **Book Chapters** (Scholar `book` field), **Books** (manual `is_manual_book` only), **Preprints & Unlisted** (arXiv or empty venue), Patents
+- Search by **title** or **venue** on faculty profiles and global search
+- Faculty + admin can **edit** publication metadata (venue/pages/volume/…); edited fields are stored in `manual_overrides` and skipped by future sync/enrichment
+- Faculty + admin can **delete** with double confirm; rows are tombstoned in `blocked_publications`
+- Links to `repository.iiitd.edu.in` are purged and never re-ingested
+- **Student Publications** (`/publications/student`): shared table, Excel template/import, dynamic columns, admin add/delete
+- **Faculty Admin** (`/admin/faculty`): add faculty through UI → DB + `faculty_master.csv` + directory
 
 ### Faculty affiliations
 
@@ -135,11 +146,11 @@ See [MAINTENANCE.md](MAINTENANCE.md) for CSV sync behaviour.
 
 ---
 
-## BTP / IP projects
+## Projects and Theses
 
 | Item | Detail |
 |------|--------|
-| UI | `/projects` (BTP/IP tab) |
+| UI | `/projects` (Projects and Theses tab) |
 | API | `/api/v1/projects` |
 | Features | Import template, filters, SDG tagging, PDF export |
 
@@ -151,7 +162,7 @@ See [MAINTENANCE.md](MAINTENANCE.md) for CSV sync behaviour.
 |------|--------|
 | UI | `/projects` (ECE/EVE tab) |
 | API | `/api/v1/ece-eve-projects` |
-| Sync | Rebuilt from `projects` on BTP/IP import |
+| Sync | Rebuilt from `projects` on Projects and Theses import |
 
 ---
 

@@ -2,7 +2,7 @@
 
 Unified departmental automation platform for the ECE Department at IIIT-D.
 
-**Modules:** CO-PO attainment · Publications · BTP/IP & ECE/EVE projects · Course allocation · Faculty contributions · Meeting minutes · Budget · Notifications & requirement tracker · Analytics · LLM insights · Faculty awards
+**Modules:** CO-PO attainment · Publications · Projects and Theses & ECE/EVE projects · Course allocation · Faculty contributions · Meeting minutes · Budget · Notifications & requirement tracker · Analytics · LLM insights · Faculty awards
 
 ## Stack
 
@@ -21,7 +21,7 @@ backend/              FastAPI application
 frontend/             React SPA (Vite)
 data/assets/          Runtime CSV/Excel (gitignored — see docs/DATA_ASSETS.md)
 data/sql/             MySQL bootstrap script
-data/templates/       BTP/IP import template
+data/templates/       Projects and Theses import template
 backend/documents/    Meeting PDFs (folders in git; PDFs local only)
 docs/                 Architecture & deployment guides
 deploy/               Gunicorn + PM2 configs
@@ -104,7 +104,7 @@ expected tradeoff for zero-cost / offline, not a bug.
 |--------|------------|------------|
 | CO-PO | `/copo/*` | `/api/v1/copo` |
 | Publications | `/publications/*` | `/api/v1/publications` |
-| BTP/IP Projects | `/projects` | `/api/v1/projects` |
+| Projects and Theses | `/projects` | `/api/v1/projects` |
 | ECE/EVE Projects | `/projects` (tab) | `/api/v1/ece-eve-projects` |
 | Course allocation | `/course-allocation` | `/api/v1/course-allocation` |
 | Faculty contributions | `/contributions` | `/api/v1/contributions` |
@@ -142,7 +142,10 @@ docker compose --env-file .env.docker up -d --build
 
 | Document | Purpose |
 |----------|---------|
+| [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) | Handoff entry point |
 | [docs/MODULES.md](docs/MODULES.md) | Feature reference |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | How to change code safely |
+| [docs/FILE_INVENTORY.md](docs/FILE_INVENTORY.md) | Per-file purpose list |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Server hosting (native) |
 | [docs/DOCKER_DEPLOYMENT.md](docs/DOCKER_DEPLOYMENT.md) | Docker hosting |
 | [docs/SECURITY.md](docs/SECURITY.md) | OWASP checklist |

@@ -25,10 +25,11 @@ const navItems: NavItem[] = [
     links: [
       { to: "/publications/faculty", label: "Faculty Directory", exact: true },
       { to: "/publications/search", label: "Publications Search" },
+      { to: "/publications/student", label: "Student Publications" },
       { to: "/publications/exports", label: "Publication Exports" },
     ],
   },
-  { kind: "link", to: "/projects", label: "BTP / IP Projects", exact: true },
+  { kind: "link", to: "/projects", label: "Projects and Theses", exact: true },
   {
     kind: "group",
     label: "Budget",
@@ -77,6 +78,7 @@ const adminNavGroup: NavItem = {
   label: "Admin",
   links: [
     { to: "/publications/admin", label: "Publications Admin", exact: true },
+    { to: "/admin/faculty", label: "Faculty Admin", exact: true },
     { to: "/admin/users", label: "Users", exact: true },
     { to: "/admin/notifications", label: "Send Notifications", exact: true },
     { to: "/admin/requirement-tracker", label: "Requirement Tracker", exact: true },

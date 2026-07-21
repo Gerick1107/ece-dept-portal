@@ -22,6 +22,7 @@ export type Project = {
   students: string[];
   student_rolls: string[];
   sdg_review_status: string;
+  sdg_ever_accepted?: boolean;
   suggested_sdgs: SdgBrief[];
   confirmed_sdgs: SdgBrief[];
   upload_batch_id: number | null;

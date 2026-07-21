@@ -18,6 +18,10 @@ from app.publications.schemas.publication import (
     PublicationUpdate,
     ScrapeTriggerRequest,
     ScrapeTriggerResponse,
+    StudentPublicationCreate,
+    StudentPublicationImportSummary,
+    StudentPublicationListResponse,
+    StudentPublicationResponse,
     SyncAllResponse,
 )
 
@@ -42,4 +46,8 @@ __all__ = [
     "CustomColumnUpdate",
     "CustomColumnResponse",
     "CustomColumnSuggestRequest",
+    "StudentPublicationCreate",
+    "StudentPublicationResponse",
+    "StudentPublicationListResponse",
+    "StudentPublicationImportSummary",
 ]

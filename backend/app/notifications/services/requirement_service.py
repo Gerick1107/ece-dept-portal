@@ -13,7 +13,7 @@ REQUIREMENT_LABELS = {
     "yearly_report": "Yearly report",
     "new_awards": "New awards since last asked",
     "new_fdps": "New FDPs since last asked",
-    "verify_sdgs": "Verify SDGs (BTP/IP)",
+    "verify_sdgs": "Verify SDGs (Projects and Theses)",
     "copo_attainment": "CO-PO attainment (prev. semester)",
 }
 

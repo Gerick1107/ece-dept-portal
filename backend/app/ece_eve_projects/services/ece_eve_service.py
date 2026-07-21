@@ -111,7 +111,7 @@ def create_ece_eve_from_import(
 
 
 def purge_ece_eve_projects(db: Session) -> dict:
-    """Clear the ECE/EVE tab data without deleting BTP/IP projects."""
+    """Clear the ECE/EVE tab data without deleting Projects and Theses."""
     standalone_removed = (
         db.scalar(
             select(func.count()).select_from(EceEveProject).where(EceEveProject.source_project_id.is_(None))

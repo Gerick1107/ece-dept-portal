@@ -18,7 +18,7 @@ from app.course_allocation.services.csv_sync import write_allocations_csv, write
 from app.analytics.utils.semester import semester_sort_key
 from app.course_allocation.services.semester_service import scope_semesters
 from app.publications.models.entities import Faculty
-from app.utils.contribution_faculty_resolver import FacultyResolveFailure, FacultyResolveResult
+from app.utils.contribution_faculty_resolver import FacultyResolveResult
 
 
 def _active_faculty(db: Session) -> list[Faculty]:
@@ -130,6 +130,7 @@ def _allocation_dict(row: CourseAllocation) -> dict:
         "first_year_course_name": row.first_year_course_name,
         "source": row.source,
         "is_faculty_placeholder": row.is_faculty_placeholder,
+        "course_catalog_id": row.course_catalog_id,
     }
 
 
@@ -242,23 +243,41 @@ def _build_catalog_lookup(db: Session) -> tuple[dict[str, CourseCatalogEntry], d
     return variant_to_course, token_to_course
 
 
+def _resolve_catalog_for_code(
+    course_code: str,
+    course_catalog_id: int | None,
+    variant_to_course: dict[str, CourseCatalogEntry],
+    token_to_course: dict[str, CourseCatalogEntry],
+    db: Session,
+) -> CourseCatalogEntry | None:
+    if course_catalog_id:
+        entry = db.get(CourseCatalogEntry, course_catalog_id)
+        if entry:
+            return entry
+    code_key = collapse_repeated_dept_prefix(course_code or "").upper()
+    entry = variant_to_course.get(code_key)
+    if entry:
+        return entry
+    for tok in tokenize_course_codes(course_code or ""):
+        entry = token_to_course.get(tok)
+        if entry:
+            return entry
+    return None
+
+
 def _resolve_catalog_for_allocation(
     row: CourseAllocation,
     variant_to_course: dict[str, CourseCatalogEntry],
     token_to_course: dict[str, CourseCatalogEntry],
     db: Session,
 ) -> CourseCatalogEntry | None:
-    if row.course_catalog_id:
-        return db.get(CourseCatalogEntry, row.course_catalog_id)
-    code_key = collapse_repeated_dept_prefix(row.course_code).upper()
-    entry = variant_to_course.get(code_key)
-    if entry:
-        return entry
-    for tok in tokenize_course_codes(row.course_code):
-        entry = token_to_course.get(tok)
-        if entry:
-            return entry
-    return None
+    return _resolve_catalog_for_code(
+        row.course_code,
+        row.course_catalog_id,
+        variant_to_course,
+        token_to_course,
+        db,
+    )
 
 
 def _course_group_id(
@@ -465,29 +484,125 @@ def get_allocation(db: Session, row_id: int) -> CourseAllocation | None:
     return db.get(CourseAllocation, row_id)
 
 
+def _apply_faculty_fields(
+    db: Session,
+    *,
+    faculty_id: int | None,
+    faculty_name: str,
+    placeholder_flag: bool | None,
+    clear_faculty: bool = False,
+) -> tuple[str, int | None, bool]:
+    """Canonicalize faculty identity so faculty-wise and course-wise views stay aligned."""
+    name = (faculty_name or "").strip()
+    if clear_faculty or (placeholder_flag is True) or is_placeholder_name(name):
+        label = name or "Not Assigned"
+        return label, None, True
+
+    if faculty_id is not None:
+        faculty = db.get(Faculty, int(faculty_id))
+        if not faculty:
+            raise ValueError("Faculty not found")
+        return faculty.name, faculty.id, False
+
+    if name:
+        resolved = resolve_allocation_faculty(db, name)
+        if isinstance(resolved, FacultyResolveResult):
+            faculty = db.get(Faculty, resolved.faculty_id)
+            if faculty:
+                return faculty.name, faculty.id, False
+        return name, None, False
+
+    raise ValueError("faculty_id or faculty_name is required")
+
+
+def _apply_course_fields(
+    db: Session,
+    *,
+    course_catalog_id: int | None,
+    course_code: str,
+    course_name: str,
+    ug_pg: str,
+    core_elective: str,
+    is_first_year: bool,
+    first_year_course_name: str | None,
+) -> dict:
+    """Link catalog when possible and keep denormalized course fields consistent."""
+    entry: CourseCatalogEntry | None = None
+    if course_catalog_id is not None:
+        entry = db.get(CourseCatalogEntry, int(course_catalog_id))
+        if not entry:
+            raise ValueError("Course catalog entry not found")
+    else:
+        code = (course_code or "").strip()
+        if code:
+            variant_to_course, token_to_course = _build_catalog_lookup(db)
+            entry = _resolve_catalog_for_code(
+                code, None, variant_to_course, token_to_course, db
+            )
+
+    if entry:
+        return {
+            "course_catalog_id": entry.id,
+            "course_code": entry.course_code,
+            "course_name": (course_name or "").strip() or entry.course_name,
+            "ug_pg": (ug_pg or "").strip() or entry.ug_pg,
+            "core_elective": (core_elective or "").strip() or entry.core_elective,
+            "is_first_year": bool(is_first_year) if is_first_year is not None else entry.is_first_year,
+            "first_year_course_name": (first_year_course_name or "").strip() or None,
+        }
+
+    code = (course_code or "").strip()
+    name = (course_name or "").strip()
+    if not code or not name:
+        raise ValueError("course_code and course_name are required")
+    return {
+        "course_catalog_id": None,
+        "course_code": code,
+        "course_name": name,
+        "ug_pg": (ug_pg or "").strip() or "UG",
+        "core_elective": (core_elective or "").strip() or "Core",
+        "is_first_year": bool(is_first_year),
+        "first_year_course_name": (first_year_course_name or "").strip() or None,
+    }
+
+
 def create_allocation(db: Session, data: dict) -> CourseAllocation:
-    faculty_name = (data.get("faculty_name") or "").strip()
-    placeholder = data.get("is_faculty_placeholder") or is_placeholder_name(faculty_name)
-    row = CourseAllocation(
-        faculty_name=faculty_name,
-        semester=data["semester"].strip(),
-        academic_year=data["academic_year"].strip(),
-        course_code=data["course_code"].strip(),
-        course_name=data["course_name"].strip(),
-        ug_pg=data["ug_pg"].strip(),
-        core_elective=data["core_elective"].strip(),
+    from app.course_allocation.services.semester_service import academic_year_for_semester
+
+    semester = data["semester"].strip()
+    academic_year = (data.get("academic_year") or "").strip() or academic_year_for_semester(semester)
+    faculty_name, faculty_id, placeholder = _apply_faculty_fields(
+        db,
+        faculty_id=data.get("faculty_id"),
+        faculty_name=(data.get("faculty_name") or "").strip(),
+        placeholder_flag=data.get("is_faculty_placeholder"),
+        clear_faculty=bool(data.get("clear_faculty")),
+    )
+    course = _apply_course_fields(
+        db,
+        course_catalog_id=data.get("course_catalog_id"),
+        course_code=(data.get("course_code") or "").strip(),
+        course_name=(data.get("course_name") or "").strip(),
+        ug_pg=(data.get("ug_pg") or "UG").strip(),
+        core_elective=(data.get("core_elective") or "Core").strip(),
         is_first_year=bool(data.get("is_first_year")),
         first_year_course_name=(data.get("first_year_course_name") or "").strip() or None,
-        source=(data.get("source") or "new").strip(),
-        is_faculty_placeholder=placeholder,
     )
-    if not placeholder:
-        if data.get("faculty_id"):
-            row.faculty_id = int(data["faculty_id"])
-        else:
-            resolved = resolve_allocation_faculty(db, faculty_name)
-            if isinstance(resolved, FacultyResolveResult):
-                row.faculty_id = resolved.faculty_id
+    row = CourseAllocation(
+        faculty_name=faculty_name,
+        faculty_id=faculty_id,
+        semester=semester,
+        academic_year=academic_year,
+        course_code=course["course_code"],
+        course_name=course["course_name"],
+        ug_pg=course["ug_pg"],
+        core_elective=course["core_elective"],
+        is_first_year=course["is_first_year"],
+        first_year_course_name=course["first_year_course_name"],
+        source=(data.get("source") or "manual").strip(),
+        is_faculty_placeholder=placeholder,
+        course_catalog_id=course["course_catalog_id"],
+    )
     db.add(row)
     db.commit()
     db.refresh(row)
@@ -496,27 +611,56 @@ def create_allocation(db: Session, data: dict) -> CourseAllocation:
 
 
 def update_allocation(db: Session, row: CourseAllocation, data: dict) -> CourseAllocation:
-    faculty_name = (data.get("faculty_name") or row.faculty_name).strip()
-    placeholder = data.get("is_faculty_placeholder", row.is_faculty_placeholder)
-    if is_placeholder_name(faculty_name):
-        placeholder = True
+    from app.course_allocation.services.semester_service import academic_year_for_semester
+
+    semester = (data.get("semester") or row.semester).strip()
+    academic_year = (data.get("academic_year") or row.academic_year or "").strip()
+    if data.get("semester") and not data.get("academic_year"):
+        academic_year = academic_year_for_semester(semester)
+    if not academic_year:
+        academic_year = academic_year_for_semester(semester)
+
+    faculty_name, faculty_id, placeholder = _apply_faculty_fields(
+        db,
+        faculty_id=data.get("faculty_id") if "faculty_id" in data else row.faculty_id,
+        faculty_name=(data.get("faculty_name") if "faculty_name" in data else row.faculty_name) or "",
+        placeholder_flag=data.get("is_faculty_placeholder"),
+        clear_faculty=bool(data.get("clear_faculty")),
+    )
+    course = _apply_course_fields(
+        db,
+        course_catalog_id=(
+            data.get("course_catalog_id")
+            if "course_catalog_id" in data
+            else row.course_catalog_id
+        ),
+        course_code=(data.get("course_code") if "course_code" in data else row.course_code) or "",
+        course_name=(data.get("course_name") if "course_name" in data else row.course_name) or "",
+        ug_pg=(data.get("ug_pg") if "ug_pg" in data else row.ug_pg) or "UG",
+        core_elective=(data.get("core_elective") if "core_elective" in data else row.core_elective)
+        or "Core",
+        is_first_year=bool(
+            data.get("is_first_year") if "is_first_year" in data else row.is_first_year
+        ),
+        first_year_course_name=(
+            data.get("first_year_course_name")
+            if "first_year_course_name" in data
+            else row.first_year_course_name
+        ),
+    )
+
     row.faculty_name = faculty_name
-    row.semester = data.get("semester", row.semester).strip()
-    row.academic_year = data.get("academic_year", row.academic_year).strip()
-    row.course_code = data.get("course_code", row.course_code).strip()
-    row.course_name = data.get("course_name", row.course_name).strip()
-    row.ug_pg = data.get("ug_pg", row.ug_pg).strip()
-    row.core_elective = data.get("core_elective", row.core_elective).strip()
-    row.is_first_year = bool(data.get("is_first_year", row.is_first_year))
-    row.first_year_course_name = (data.get("first_year_course_name") or row.first_year_course_name or "").strip() or None
+    row.faculty_id = faculty_id
     row.is_faculty_placeholder = placeholder
-    if placeholder:
-        row.faculty_id = None
-    elif data.get("faculty_id"):
-        row.faculty_id = int(data["faculty_id"])
-    else:
-        resolved = resolve_allocation_faculty(db, faculty_name)
-        row.faculty_id = resolved.faculty_id if isinstance(resolved, FacultyResolveResult) else None
+    row.semester = semester
+    row.academic_year = academic_year
+    row.course_code = course["course_code"]
+    row.course_name = course["course_name"]
+    row.ug_pg = course["ug_pg"]
+    row.core_elective = course["core_elective"]
+    row.is_first_year = course["is_first_year"]
+    row.first_year_course_name = course["first_year_course_name"]
+    row.course_catalog_id = course["course_catalog_id"]
     row.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(row)
@@ -541,6 +685,7 @@ def resolve_allocation_faculty_row(db: Session, row_id: int, faculty_id: int) ->
         raise ValueError("Faculty not found")
     add_faculty_alias(db, row.faculty_name, faculty_id)
     row.faculty_id = faculty.id
+    row.faculty_name = faculty.name
     row.is_faculty_placeholder = False
     row.updated_at = datetime.utcnow()
     db.commit()
@@ -561,8 +706,18 @@ def update_catalog_entry(db: Session, entry: CourseCatalogEntry, data: dict) -> 
     entry.core_elective = data.get("core_elective", entry.core_elective).strip()
     entry.is_first_year = bool(data.get("is_first_year", entry.is_first_year))
     entry.updated_at = datetime.utcnow()
-    rows = list(db.scalars(select(CourseAllocation).where(CourseAllocation.course_code == old_code)).all())
+    rows = list(
+        db.scalars(
+            select(CourseAllocation).where(
+                or_(
+                    CourseAllocation.course_catalog_id == entry.id,
+                    CourseAllocation.course_code == old_code,
+                )
+            )
+        ).all()
+    )
     for r in rows:
+        r.course_catalog_id = entry.id
         r.course_code = entry.course_code
         r.course_name = entry.course_name
         r.ug_pg = entry.ug_pg

@@ -68,7 +68,7 @@ def export_projects_excel(db: Session, filters: ProjectSearchFilters) -> bytes:
     return output.getvalue()
 
 
-def export_projects_pdf(db: Session, filters: ProjectSearchFilters, title: str = "BTP/IP Projects") -> bytes:
+def export_projects_pdf(db: Session, filters: ProjectSearchFilters, title: str = "Projects and Theses") -> bytes:
     records = _rows_from_filters(db, filters)
     pdf_records = [
         {

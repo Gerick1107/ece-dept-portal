@@ -50,11 +50,31 @@ export type Publication = {
   application_number?: string | null;
   scholar_url?: string | null;
   source_hash: string;
+  is_manual_book?: boolean;
+  manual_overrides?: string[];
   faculty_ids: number[];
   custom_fields?: Record<string, string>;
 };
 
 export type PublicationTableMode = "publications" | "patents" | "all";
+
+export type PublicationSearchBy = "title" | "venue";
+
+export type PublicationEditPayload = {
+  publisher?: string | null;
+  publication_date?: string | null;
+  pages?: string | null;
+  conference?: string | null;
+  journal?: string | null;
+  book?: string | null;
+  volume?: string | null;
+  issue?: string | null;
+  patent_office?: string | null;
+  patent_number?: string | null;
+  application_number?: string | null;
+  is_manual_book?: boolean;
+  custom_fields?: Record<string, string>;
+};
 
 export function publicationVenue(p: Publication): string {
   return p.journal || p.conference || p.book || "";
@@ -69,4 +89,13 @@ export function publicationPeople(p: Publication): string {
     return p.inventors || p.authors || "";
   }
   return p.authors || "";
+}
+
+export function venueIsPreprintOrUnlisted(p: Publication): boolean {
+  const journal = (p.journal || "").trim();
+  const conference = (p.conference || "").trim();
+  const book = (p.book || "").trim();
+  if (!journal && !conference && !book) return true;
+  const joined = `${journal} ${conference} ${book}`.toLowerCase();
+  return joined.includes("arxiv");
 }

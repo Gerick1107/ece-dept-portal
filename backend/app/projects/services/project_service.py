@@ -146,6 +146,7 @@ def project_to_dict(db: Session, project: Project) -> dict:
         "students": parse_csv_field(project.student_names),
         "student_rolls": parse_csv_field(project.student_roll_nos),
         "sdg_review_status": project.sdg_review_status,
+        "sdg_ever_accepted": bool(getattr(project, "sdg_ever_accepted", False)),
         "suggested_sdgs": suggested,
         "confirmed_sdgs": confirmed,
         "upload_batch_id": project.upload_batch_id,
@@ -400,6 +401,8 @@ def edit_confirmed_sdgs(db: Session, project: Project, sdg_numbers: list[int]) -
                 )
             )
     project.sdg_review_status = "confirmed" if unique else "none"
+    if unique:
+        project.sdg_ever_accepted = True
     db.commit()
     db.refresh(project)
     return project

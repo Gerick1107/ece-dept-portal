@@ -48,8 +48,8 @@ MySQL + filesystem storage
 |--------|--------------|-------|
 | CO-PO | `backend/app/copo/` | Legacy engine preserved |
 | Publications | `backend/app/publications/` | Scholar/SerpAPI sync |
-| BTP/IP Projects | `backend/app/projects/` | SDG tagging |
-| ECE/EVE Projects | `backend/app/ece_eve_projects/` | Mirror of BTP subset |
+| Projects and Theses | `backend/app/projects/` | SDG tagging |
+| ECE/EVE Projects | `backend/app/ece_eve_projects/` | Mirror of Projects and Theses subset |
 | Course allocation | `backend/app/course_allocation/` | CSV + XLSX upload |
 | Contributions | `backend/app/contributions/` | Multi-tab faculty data |
 | Awards | `backend/app/awards/` | CSV sync |

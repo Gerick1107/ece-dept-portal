@@ -88,6 +88,12 @@ async def lifespan(_app: FastAPI):
         from app.llm.services.local_service import warm_up_model
 
         threading.Thread(target=warm_up_model, daemon=True).start()
+    if settings.enable_sdg_llm:
+        from app.projects.services.sdg_llm_service import warm_up_sdg_embedder
+        from app.projects.services.sdg_queue import ensure_sdg_worker
+
+        threading.Thread(target=warm_up_sdg_embedder, daemon=True, name="sdg-warmup").start()
+        ensure_sdg_worker()
     thread = threading.Thread(target=_periodic_cleanup_loop, daemon=True)
     thread.start()
     yield

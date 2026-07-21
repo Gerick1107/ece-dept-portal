@@ -102,5 +102,12 @@ def build_updates_from_metadata(meta: dict[str, Any]) -> dict[str, Any]:
 
 
 def apply_metadata_to_publication(publication: Publication, meta: dict[str, Any]) -> None:
-    for key, value in build_updates_from_metadata(meta).items():
-        setattr(publication, key, value)
+    from app.publications.services.publication_service import apply_updates_respecting_overrides
+    from app.publications.utils.link_filters import has_blocked_repository_link
+
+    updates = build_updates_from_metadata(meta)
+    # Never persist blocked institutional-repository URLs from enrichment.
+    for url_field in ("link", "pdf_url"):
+        if url_field in updates and has_blocked_repository_link(updates.get(url_field)):
+            updates[url_field] = None
+    apply_updates_respecting_overrides(publication, updates)

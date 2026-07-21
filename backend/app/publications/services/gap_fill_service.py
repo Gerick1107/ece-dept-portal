@@ -18,6 +18,11 @@ from app.publications.services.enrichment_service import enrich_publication
 from app.publications.services.serpapi_keys import SerpApiKeyManager, load_api_keys
 from app.publications.utils.dates import parse_precision
 from app.publications.utils.helpers import is_within_tenure, make_source_hash
+from app.publications.utils.link_filters import article_has_blocked_repository_link
+from app.publications.services.publication_service import (
+    apply_updates_respecting_overrides,
+    purge_repository_publications,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -94,11 +99,16 @@ def gap_fill_faculty(
         faculty.i10_index = int(metrics.get("i10_index") or 0)
         result.metrics_updated = True
 
+        # Keep the live DB clean even if older rows slipped in before the filter existed.
+        purge_repository_publications(db)
+
         new_publications: list[Publication] = []
 
         for article in payload["articles"]:
             title = (article.get("title") or "").strip()
             if not title:
+                continue
+            if article_has_blocked_repository_link(article):
                 continue
             year = article.get("publication_year")
             if not is_within_tenure(faculty.join_year, faculty.leave_year, year):
@@ -121,8 +131,11 @@ def gap_fill_faculty(
                 if list_citations is not None:
                     new_count = int(list_citations)
                     if existing.citation_count != new_count:
-                        existing.citation_count = new_count
-                        result.updated_existing += 1
+                        applied = apply_updates_respecting_overrides(
+                            existing, {"citation_count": new_count}
+                        )
+                        if applied:
+                            result.updated_existing += 1
                 mapping_exists = db.scalar(
                     select(PublicationFaculty).where(
                         PublicationFaculty.faculty_id == faculty.id,
@@ -133,11 +146,17 @@ def gap_fill_faculty(
                     db.add(PublicationFaculty(faculty_id=faculty.id, publication_id=existing.id))
                 continue
 
+            # Drop blocked repository URLs before insert if they somehow remain.
+            cleaned = dict(article)
+            for url_field in ("link", "scholar_url", "pdf_url"):
+                if article_has_blocked_repository_link({url_field: cleaned.get(url_field)}):
+                    cleaned[url_field] = None
+
             publication = Publication(
                 source_hash=source_hash,
                 is_iiitd_publication=True,
                 raw_metadata=None,
-                **article,
+                **cleaned,
             )
             db.add(publication)
             db.flush()
