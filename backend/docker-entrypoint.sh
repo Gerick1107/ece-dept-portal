@@ -28,7 +28,7 @@ echo "Running migrations..."
 if ! alembic upgrade heads; then
   echo "ERROR: alembic upgrade heads failed. Backend will not start."
   alembic heads || true
-  alembic history -r -3: || true
+  alembic history || true
   exit 1
 fi
 
