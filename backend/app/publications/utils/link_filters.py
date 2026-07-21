@@ -31,6 +31,11 @@ def publication_has_blocked_repository_link(publication: Any) -> bool:
         getattr(publication, "link", None),
         getattr(publication, "scholar_url", None),
         getattr(publication, "pdf_url", None),
+        getattr(publication, "raw_metadata", None),
+        getattr(publication, "journal", None),
+        getattr(publication, "conference", None),
+        getattr(publication, "book", None),
+        getattr(publication, "publisher", None),
     )
 
 
@@ -41,6 +46,13 @@ def article_has_blocked_repository_link(article: dict[str, Any]) -> bool:
         article.get("pdf_url"),
         article.get("pub_url"),
         article.get("eprint_url"),
+        article.get("raw_metadata"),
+        article.get("journal"),
+        article.get("conference"),
+        article.get("book"),
+        article.get("publisher"),
+        article.get("snippet"),
+        article.get("summary"),
     )
 
 

@@ -10,6 +10,9 @@ def test_blocks_repository_iiitd_links():
     assert article_has_blocked_repository_link(
         {"link": "https://repository.iiitd.edu.in/xmlui/handle/123"}
     )
+    assert article_has_blocked_repository_link(
+        {"raw_metadata": '{"eprint":"https://repository.iiitd.edu.in/xmlui/handle/999"}'}
+    )
     assert not has_blocked_repository_link("https://arxiv.org/abs/2601.07210")
 
 

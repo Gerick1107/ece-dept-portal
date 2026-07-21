@@ -81,6 +81,14 @@ async def lifespan(_app: FastAPI):
             await seed_documents_from_disk(db, docs_root)
         except Exception as exc:
             logger.warning("Document seeding skipped: %s", exc)
+        try:
+            from app.publications.services.publication_service import purge_repository_publications
+
+            removed = purge_repository_publications(db)
+            if removed:
+                logger.info("Purged %s repository.iiitd.edu.in publication(s) on startup", removed)
+        except Exception as exc:
+            logger.warning("Repository publication purge skipped: %s", exc)
     finally:
         db.close()
     if settings.enable_requirement_reminders:

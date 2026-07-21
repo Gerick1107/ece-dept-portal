@@ -186,6 +186,15 @@ def list_publications(
     category: str | None = None,
 ) -> tuple[list[Publication], int]:
     stmt = select(Publication)
+    # Hard exclude repository.iiitd.edu.in even if a prior purge missed a row.
+    # Use COALESCE so NULL link columns are not dropped by SQL three-valued logic.
+    repo_pat = "%repository.iiitd.edu.in%"
+    stmt = stmt.where(
+        ~func.lower(func.coalesce(Publication.link, "")).like(repo_pat),
+        ~func.lower(func.coalesce(Publication.scholar_url, "")).like(repo_pat),
+        ~func.lower(func.coalesce(Publication.pdf_url, "")).like(repo_pat),
+        ~func.lower(func.coalesce(Publication.raw_metadata, "")).like(repo_pat),
+    )
     if query:
         pattern = f"%{query.strip()}%"
         search_by_norm = (search_by or "title").strip().lower()

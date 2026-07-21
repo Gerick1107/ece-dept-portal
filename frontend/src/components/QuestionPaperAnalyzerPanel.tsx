@@ -82,7 +82,16 @@ export default function QuestionPaperAnalyzerPanel() {
         body: form,
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.detail ?? "Analysis failed");
+      if (!res.ok) {
+        const detail = data.detail;
+        const message =
+          typeof detail === "string"
+            ? detail
+            : Array.isArray(detail)
+              ? detail.map((d: { msg?: string }) => d?.msg).filter(Boolean).join("; ") || "Analysis failed"
+              : "Analysis failed";
+        throw new Error(message);
+      }
       const result = data as AnalysisResult;
       setAnalysis(result);
       if (!componentName.trim() && result.component_name) {

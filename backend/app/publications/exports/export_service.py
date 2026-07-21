@@ -6,7 +6,7 @@ from io import BytesIO
 from zipfile import ZIP_DEFLATED, ZipFile
 
 import pandas as pd
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.utils.docx_export import records_to_table_docx_bytes
@@ -69,6 +69,13 @@ def _query_publications(
     export_type: str = "both",
 ) -> list[Publication]:
     stmt = select(Publication)
+    repo_pat = "%repository.iiitd.edu.in%"
+    stmt = stmt.where(
+        ~func.lower(func.coalesce(Publication.link, "")).like(repo_pat),
+        ~func.lower(func.coalesce(Publication.scholar_url, "")).like(repo_pat),
+        ~func.lower(func.coalesce(Publication.pdf_url, "")).like(repo_pat),
+        ~func.lower(func.coalesce(Publication.raw_metadata, "")).like(repo_pat),
+    )
     resolved_faculty_ids: list[int] = []
     if faculty_ids:
         resolved_faculty_ids.extend(faculty_ids)
