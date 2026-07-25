@@ -238,15 +238,13 @@ export default function CourseAllocationPage() {
           onChange={(e) => setQuery(e.target.value)}
         />
         <select className="border rounded-lg px-3 py-2 text-sm" value={ugType} onChange={(e) => setUgType(e.target.value)}>
-          <option value="">All UG types</option>
-          <option value="ANY">Any UG</option>
+          <option value="">UG (all)</option>
           <option value="Core">UG Core</option>
           <option value="Elective">UG Elective</option>
           <option value="Core/Elective">UG Core/Elective</option>
         </select>
         <select className="border rounded-lg px-3 py-2 text-sm" value={pgType} onChange={(e) => setPgType(e.target.value)}>
-          <option value="">All PG types</option>
-          <option value="ANY">Any PG</option>
+          <option value="">PG (all)</option>
           <option value="Core">PG Core</option>
           <option value="Elective">PG Elective</option>
           <option value="Core/Elective">PG Core/Elective</option>
@@ -295,7 +293,7 @@ export default function CourseAllocationPage() {
                       <th className="px-4 py-2">Course</th>
                       <th className="px-4 py-2">UG</th>
                       <th className="px-4 py-2">PG</th>
-                      <th className="px-4 py-2">Registered</th>
+                      <th className="px-4 py-2">Number Of Registered Students</th>
                       {isAdmin && <th className="px-4 py-2 w-36">Actions</th>}
                     </tr>
                   </thead>

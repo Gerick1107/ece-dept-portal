@@ -146,7 +146,7 @@ export default function FacultyAllocationDetailPage() {
               <th className="px-4 py-2">Course</th>
               <th className="px-4 py-2">UG</th>
               <th className="px-4 py-2">PG</th>
-              <th className="px-4 py-2">Registered</th>
+              <th className="px-4 py-2">Number Of Registered Students</th>
             </tr>
           </thead>
           <tbody>

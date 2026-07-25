@@ -13,6 +13,12 @@ import { useAuth } from "../modules/auth/AuthContext";
 import { listFaculty } from "../modules/publications/services/publicationsApi";
 import type { Faculty } from "../modules/publications/types/publications";
 
+function roleLabel(role: User["role"]): string {
+  if (role === "hod") return "Faculty · HoD";
+  if (role === "admin") return "Admin";
+  return "Faculty";
+}
+
 export default function AdminUsersPage() {
   const { user } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
@@ -36,12 +42,28 @@ export default function AdminUsersPage() {
     }
   }
 
+  async function loadFacultyOptions() {
+    try {
+      // API enforces page_size <= 200; requesting more caused a silent 422 and empty dropdowns.
+      const first = await listFaculty({ page: 1, page_size: 200, include_inactive: false });
+      let items = [...first.items];
+      const total = first.pagination?.total ?? items.length;
+      if (total > items.length) {
+        const second = await listFaculty({ page: 2, page_size: 200, include_inactive: false });
+        items = items.concat(second.items);
+      }
+      items.sort((a, b) => a.name.localeCompare(b.name));
+      setFacultyOptions(items);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not load faculty directory for linking");
+      setFacultyOptions([]);
+    }
+  }
+
   useEffect(() => {
     if (user?.role === "admin") {
       refresh();
-      listFaculty({ page: 1, page_size: 300, include_inactive: false })
-        .then((r) => setFacultyOptions(r.items))
-        .catch(() => {});
+      loadFacultyOptions();
     }
   }, [user]);
 
@@ -52,6 +74,7 @@ export default function AdminUsersPage() {
     try {
       const payload = {
         ...form,
+        role: form.role === "admin" ? ("admin" as const) : ("faculty" as const),
         faculty_id: form.faculty_id || null,
       };
       const created = await createUser(payload);
@@ -73,8 +96,6 @@ export default function AdminUsersPage() {
     return <p className="text-red-700">Admin access only.</p>;
   }
 
-  const facultyNameById = Object.fromEntries(facultyOptions.map((f) => [f.id, f.name]));
-
   return (
     <div className="space-y-6 max-w-4xl">
       <section className="bg-white border rounded-xl p-6">
@@ -83,11 +104,13 @@ export default function AdminUsersPage() {
           <li>Add the person&apos;s institutional email and full name.</li>
           <li>
             Optionally link the account to an existing faculty directory record (recommended for faculty). Data scoping
-            uses this <code className="text-xs bg-slate-100 px-1 rounded">faculty_id</code> link — not the email or an
-            exact name match — so spelling differences in names do not matter once linked.
+            uses this link — not the email or an exact name match.
           </li>
           <li>Set a portal password (min. 8 characters) — separate from Gmail/Microsoft.</li>
-          <li>Only one user can be HoD at a time; marking someone as HoD demotes the previous HoD to faculty.</li>
+          <li>
+            Create accounts as Faculty or Admin only. Use <strong>Mark HoD</strong> in the list below to give a faculty
+            member the HoD designation (only one at a time; they remain a faculty account with HoD privileges).
+          </li>
         </ol>
       </section>
 
@@ -121,12 +144,11 @@ export default function AdminUsersPage() {
           className="w-full border rounded-lg px-3 py-2 text-sm"
         />
         <select
-          value={form.role}
-          onChange={(e) => setForm({ ...form, role: e.target.value as UserCreate["role"] })}
+          value={form.role === "admin" ? "admin" : "faculty"}
+          onChange={(e) => setForm({ ...form, role: e.target.value as "faculty" | "admin" })}
           className="w-full border rounded-lg px-3 py-2 text-sm"
         >
           <option value="faculty">Faculty</option>
-          <option value="hod">HoD (only one at a time)</option>
           <option value="admin">Admin</option>
         </select>
         <div>
@@ -146,6 +168,11 @@ export default function AdminUsersPage() {
               </option>
             ))}
           </select>
+          {!facultyOptions.length && (
+            <p className="text-xs text-amber-700 mt-1">
+              No faculty directory names loaded. Check Faculty Admin / CSV sync, then refresh this page.
+            </p>
+          )}
         </div>
         <label className="flex items-center gap-2 text-sm">
           <input
@@ -160,15 +187,15 @@ export default function AdminUsersPage() {
         </button>
       </form>
 
-      <section className="bg-white border rounded-xl p-6">
+      <section className="bg-white border rounded-xl p-6 overflow-x-auto">
         <h3 className="font-medium mb-3">Existing users</h3>
-        <table className="w-full text-sm">
+        <table className="w-full text-sm min-w-[720px]">
           <thead>
             <tr className="text-left border-b text-slate-500">
               <th className="py-1">Name</th>
               <th>Email</th>
               <th>Role</th>
-              <th>Faculty link</th>
+              <th className="min-w-[12rem]">Faculty link</th>
               <th>Status</th>
               <th />
             </tr>
@@ -178,81 +205,85 @@ export default function AdminUsersPage() {
               <tr key={u.id} className="border-b align-top">
                 <td className="py-2">{u.full_name}</td>
                 <td>{u.email}</td>
-                <td className="capitalize">{u.role}</td>
-                <td className="text-xs text-slate-600">
-                  {u.faculty_id ? facultyNameById[u.faculty_id] || `Faculty #${u.faculty_id}` : "—"}
+                <td>{roleLabel(u.role)}</td>
+                <td className="py-2">
+                  {u.id === user?.id ? (
+                    <span className="text-xs text-slate-400">—</span>
+                  ) : (
+                    <select
+                      className="border rounded px-2 py-1 text-xs w-full max-w-[14rem]"
+                      value={u.faculty_id ?? ""}
+                      onChange={async (e) => {
+                        setError("");
+                        try {
+                          if (!e.target.value) {
+                            await updateUser(u.id, { clear_faculty_id: true });
+                          } else {
+                            await updateUser(u.id, { faculty_id: Number(e.target.value) });
+                          }
+                          setSuccess(`Updated faculty link for ${u.email}.`);
+                          refresh();
+                        } catch (err) {
+                          setError(err instanceof Error ? err.message : "Link update failed");
+                        }
+                      }}
+                    >
+                      <option value="">No faculty link</option>
+                      {facultyOptions.map((f) => (
+                        <option key={f.id} value={f.id}>
+                          {f.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </td>
                 <td>{u.is_active ? "Active" : "Inactive"}</td>
                 <td className="py-2 text-right">
                   {u.id !== user?.id && (
                     <div className="flex flex-wrap justify-end gap-2">
-                      {u.role !== "hod" ? (
-                        <button
-                          type="button"
-                          className="text-indigo-700 text-xs hover:underline"
-                          onClick={async () => {
-                            if (
-                              !window.confirm(
-                                `Mark ${u.full_name} as HoD? Any existing HoD will be demoted to faculty.`
-                              )
-                            ) {
-                              return;
-                            }
-                            setError("");
-                            setSuccess("");
-                            try {
-                              await updateUser(u.id, { role: "hod" });
-                              setSuccess(`${u.full_name} is now HoD.`);
-                              refresh();
-                            } catch (err) {
-                              setError(err instanceof Error ? err.message : "Update failed");
-                            }
-                          }}
-                        >
-                          Mark HoD
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          className="text-slate-600 text-xs hover:underline"
-                          onClick={async () => {
-                            try {
-                              await updateUser(u.id, { role: "faculty" });
-                              setSuccess(`${u.full_name} demoted from HoD to faculty.`);
-                              refresh();
-                            } catch (err) {
-                              setError(err instanceof Error ? err.message : "Update failed");
-                            }
-                          }}
-                        >
-                          Clear HoD
-                        </button>
-                      )}
-                      <select
-                        className="text-xs border rounded px-1 py-0.5 max-w-[10rem]"
-                        value={u.faculty_id ?? ""}
-                        onChange={async (e) => {
-                          setError("");
-                          try {
-                            if (!e.target.value) {
-                              await updateUser(u.id, { clear_faculty_id: true });
-                            } else {
-                              await updateUser(u.id, { faculty_id: Number(e.target.value) });
-                            }
-                            setSuccess(`Updated faculty link for ${u.email}.`);
-                            refresh();
-                          } catch (err) {
-                            setError(err instanceof Error ? err.message : "Link update failed");
-                          }
-                        }}
-                      >
-                        <option value="">No faculty link</option>
-                        {facultyOptions.map((f) => (
-                          <option key={f.id} value={f.id}>
-                            {f.name}
-                          </option>
+                      {u.role !== "admin" &&
+                        (u.role !== "hod" ? (
+                          <button
+                            type="button"
+                            className="text-indigo-700 text-xs hover:underline"
+                            onClick={async () => {
+                              if (
+                                !window.confirm(
+                                  `Mark ${u.full_name} as HoD? They keep faculty access and gain HoD designation. Any existing HoD is cleared.`
+                                )
+                              ) {
+                                return;
+                              }
+                              setError("");
+                              setSuccess("");
+                              try {
+                                await updateUser(u.id, { role: "hod" });
+                                setSuccess(`${u.full_name} is now Faculty · HoD.`);
+                                refresh();
+                              } catch (err) {
+                                setError(err instanceof Error ? err.message : "Update failed");
+                              }
+                            }}
+                          >
+                            Mark HoD
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="text-slate-600 text-xs hover:underline"
+                            onClick={async () => {
+                              try {
+                                await updateUser(u.id, { role: "faculty" });
+                                setSuccess(`${u.full_name} is now Faculty only (HoD cleared).`);
+                                refresh();
+                              } catch (err) {
+                                setError(err instanceof Error ? err.message : "Update failed");
+                              }
+                            }}
+                          >
+                            Clear HoD
+                          </button>
                         ))}
-                      </select>
                       {u.is_active ? (
                         <button
                           type="button"

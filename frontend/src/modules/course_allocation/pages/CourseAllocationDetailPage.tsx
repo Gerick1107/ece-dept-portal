@@ -165,7 +165,7 @@ export default function CourseAllocationDetailPage() {
               <th className="px-4 py-2">Code</th>
               <th className="px-4 py-2">UG</th>
               <th className="px-4 py-2">PG</th>
-              <th className="px-4 py-2">Registered</th>
+              <th className="px-4 py-2">Number Of Registered Students</th>
             </tr>
           </thead>
           <tbody>

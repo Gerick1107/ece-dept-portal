@@ -7,7 +7,7 @@ Portal accounts are stored in the `users` table. CO-PO uploads and evaluation ru
 | Role | Access |
 |------|--------|
 | `faculty` | Own linked faculty data across modules; Feedback; Notifications |
-| `hod` | Same scoping as faculty for data views; only one HoD at a time; CC on feedback emails |
+| `hod` | Faculty account with HoD designation (`Faculty · HoD`). Marked from Users list only (not create dropdown). Only one at a time. CC on feedback emails; HoD privileges in budget/labs as configured |
 | `admin` | All modules + user management + feedback resolution |
 
 ## Faculty data scoping (important)
@@ -24,11 +24,11 @@ Accounts see personal teaching/project/publication slices through **`users.facul
 ### Create account
 
 - Set email, full name, portal password (min 8 characters).
-- Optional role: Faculty / HoD / Admin.
-- Optional **faculty directory link**.
+- Optional role: Faculty / Admin (HoD is assigned later via **Mark HoD** in the user list).
+- Optional **faculty directory link** (names load from the faculty directory; max 200 per page).
 - Optional welcome email (requires `SMTP_ENABLED=true`).
 - Faculty/HoD accounts are prompted to change password on first login (Profile).
-- Creating/marking HoD demotes any existing HoD to faculty.
+- **Mark HoD** designates a faculty user as HoD (displayed as Faculty · HoD); demotes any previous HoD back to Faculty.
 
 ### Update link / HoD
 

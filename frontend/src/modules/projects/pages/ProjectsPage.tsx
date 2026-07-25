@@ -564,12 +564,12 @@ export default function ProjectsPage() {
                 <th className="px-3 py-2 font-medium min-w-[14rem]">Title</th>
                 <th className="px-3 py-2 font-medium min-w-[8rem]">Guide</th>
                 {canReviewSdgs && <th className="px-3 py-2 font-medium min-w-[10rem]">Actions</th>}
+                <th className="px-3 py-2 font-medium min-w-[14rem]">SDGs</th>
                 <th className="px-3 py-2 font-medium whitespace-nowrap">Course Code</th>
                 <th className="px-3 py-2 font-medium min-w-[8rem]">Course Name</th>
                 <th className="px-3 py-2 font-medium min-w-[8rem]">Co-Guide</th>
                 <th className="px-3 py-2 font-medium min-w-[9rem]">Student Roll Number</th>
                 <th className="px-3 py-2 font-medium min-w-[9rem]">Student Name</th>
-                <th className="px-3 py-2 font-medium min-w-[14rem]">SDGs</th>
                 <th className="px-3 py-2 font-medium whitespace-nowrap">Credit</th>
               </tr>
             </thead>
@@ -633,6 +633,9 @@ export default function ProjectsPage() {
                       </div>
                     </td>
                   )}
+                  <td className="px-3 py-2 align-top min-w-[14rem] max-w-[18rem]">
+                    <SdgTableCell project={p} onReview={() => openSdgReview(p)} />
+                  </td>
                   <td className="px-3 py-2">{p.course_code || "—"}</td>
                   <td className="px-3 py-2">{p.course_name || "—"}</td>
                   <td className="px-3 py-2">{p.co_guide || "—"}</td>
@@ -641,9 +644,6 @@ export default function ProjectsPage() {
                   </td>
                   <td className="px-3 py-2">
                     <CommaCell value={p.student_names} />
-                  </td>
-                  <td className="px-3 py-2 align-top min-w-[14rem] max-w-[18rem]">
-                    <SdgTableCell project={p} onReview={() => openSdgReview(p)} />
                   </td>
                   <td className="px-3 py-2">{p.credit ?? "—"}</td>
                 </tr>
