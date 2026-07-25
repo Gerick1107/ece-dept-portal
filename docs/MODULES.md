@@ -208,7 +208,7 @@ Matrix of faculty × requirement types with colour states:
 | Yellow | Read / replied (text only) — pending admin review |
 | Green | Fulfilled (reply with attachment, or admin override) |
 
-Requirement types: upcoming semester courses, yearly report, new awards, new FDPs, verify SDGs, CO-PO attainment.
+Requirement types: upcoming semester courses, yearly report, new awards, new FDPs, verify SDGs, CO-PO attainment, plus any **custom templates** created under Admin → Send Notifications (each custom template adds a tracker column automatically).
 
 ### Faculty replies
 

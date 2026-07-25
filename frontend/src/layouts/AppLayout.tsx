@@ -163,10 +163,10 @@ export default function AppLayout() {
   const { user, logout } = useAuth();
   const location = useLocation();
   const isAdmin = user?.role === "admin";
-  const isFaculty = user?.role === "faculty";
+  const hideCourseCatalog = user?.role === "faculty" || user?.role === "hod";
 
   const visibleNavItems: NavItem[] = navItems.map((item) => {
-    if (item.kind !== "group" || item.label !== "Course Allocation" || !isFaculty) {
+    if (item.kind !== "group" || item.label !== "Course Allocation" || !hideCourseCatalog) {
       return item;
     }
     return {
