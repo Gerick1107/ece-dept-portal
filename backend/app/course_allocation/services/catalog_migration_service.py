@@ -37,9 +37,8 @@ def run_catalog_repoint_migration(db: Session) -> None:
             entry = CourseCatalogEntry(
                 course_code=collapse_repeated_dept_prefix(row["course_code"].strip()),
                 course_name=row["course_name"].strip(),
-                ug_pg=row["ug_pg"].strip(),
-                core_elective=row["core_elective"].strip(),
-                is_first_year=_yes_no(row.get("is_first_year")),
+                ug_type=(row.get("ug_type") or "").strip() or None,
+                pg_type=(row.get("pg_type") or "").strip() or None,
             )
             if row_id is not None:
                 entry.id = row_id
@@ -91,8 +90,7 @@ def run_catalog_repoint_migration(db: Session) -> None:
             alloc.course_catalog_id = catalog_entry.id
             alloc.course_code = catalog_entry.course_code
             alloc.course_name = catalog_entry.course_name
-            alloc.ug_pg = catalog_entry.ug_pg
-            alloc.core_elective = catalog_entry.core_elective
-            alloc.is_first_year = catalog_entry.is_first_year
+            alloc.ug_type = catalog_entry.ug_type
+            alloc.pg_type = catalog_entry.pg_type
 
     db.commit()

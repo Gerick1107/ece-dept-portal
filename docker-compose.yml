@@ -1,4 +1,4 @@
-# Full-stack Docker deployment for ECE Automation Portal (NPortal).
+# Full-stack Docker deployment for ECE Department Smart Portal (NPortal).
 # Use when the portal is ready for institute server hosting.
 
 services:

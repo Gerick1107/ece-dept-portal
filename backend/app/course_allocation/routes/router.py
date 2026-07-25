@@ -67,9 +67,8 @@ def list_view(
     faculty_scope: Annotated[FacultyScope, Depends(get_faculty_scope)],
     scope: str | None = None,
     query: str | None = None,
-    ug_pg: str | None = None,
-    core_elective: str | None = None,
-    first_year_only: bool = False,
+    ug_type: str | None = None,
+    pg_type: str | None = None,
 ):
     try:
         sync_all_course_allocation_csv(db)
@@ -81,9 +80,8 @@ def list_view(
         db,
         scope=scope,
         query=query,
-        ug_pg=ug_pg,
-        core_elective=core_elective,
-        first_year_only=first_year_only,
+        ug_type=ug_type,
+        pg_type=pg_type,
     )
     # Non-admins only see their own teaching rows.
     if not faculty_scope.see_all:
@@ -101,9 +99,8 @@ def export_view(
     faculty_scope: Annotated[FacultyScope, Depends(get_faculty_scope)],
     scope: str | None = None,
     query: str | None = None,
-    ug_pg: str | None = None,
-    core_elective: str | None = None,
-    first_year_only: bool = False,
+    ug_type: str | None = None,
+    pg_type: str | None = None,
 ):
     if not scope:
         scope = effective_current_semester()
@@ -114,9 +111,8 @@ def export_view(
         db,
         scope=scope,
         query=query,
-        ug_pg=ug_pg,
-        core_elective=core_elective,
-        first_year_only=first_year_only,
+        ug_type=ug_type,
+        pg_type=pg_type,
         scope_faculty_id=scope_faculty_id,
     )
     return Response(
@@ -157,9 +153,8 @@ def courses_list_view(
     faculty_scope: Annotated[FacultyScope, Depends(get_faculty_scope)],
     scope: str | None = None,
     query: str | None = None,
-    ug_pg: str | None = None,
-    core_elective: str | None = None,
-    first_year_only: bool = False,
+    ug_type: str | None = None,
+    pg_type: str | None = None,
 ):
     try:
         sync_all_course_allocation_csv(db)
@@ -174,9 +169,8 @@ def courses_list_view(
         db,
         scope=scope,
         query=query,
-        ug_pg=ug_pg,
-        core_elective=core_elective,
-        first_year_only=first_year_only,
+        ug_type=ug_type,
+        pg_type=pg_type,
         scope_faculty_id=scope_faculty_id,
     )
 
@@ -187,9 +181,8 @@ def courses_export_view(
     faculty_scope: Annotated[FacultyScope, Depends(get_faculty_scope)],
     scope: str | None = None,
     query: str | None = None,
-    ug_pg: str | None = None,
-    core_elective: str | None = None,
-    first_year_only: bool = False,
+    ug_type: str | None = None,
+    pg_type: str | None = None,
 ):
     if not scope:
         scope = effective_current_semester()
@@ -200,9 +193,8 @@ def courses_export_view(
         db,
         scope=scope,
         query=query,
-        ug_pg=ug_pg,
-        core_elective=core_elective,
-        first_year_only=first_year_only,
+        ug_type=ug_type,
+        pg_type=pg_type,
         scope_faculty_id=scope_faculty_id,
     )
     return Response(
@@ -240,9 +232,8 @@ def catalog_list(
                 "id": e.id,
                 "course_code": e.course_code,
                 "course_name": e.course_name,
-                "ug_pg": e.ug_pg,
-                "core_elective": e.core_elective,
-                "is_first_year": e.is_first_year,
+                "ug_type": e.ug_type,
+                "pg_type": e.pg_type,
             }
             for e in entries
         ]
@@ -269,9 +260,8 @@ def catalog_edit(
         "id": row.id,
         "course_code": row.course_code,
         "course_name": row.course_name,
-        "ug_pg": row.ug_pg,
-        "core_elective": row.core_elective,
-        "is_first_year": row.is_first_year,
+        "ug_type": row.ug_type,
+        "pg_type": row.pg_type,
     }
 
 

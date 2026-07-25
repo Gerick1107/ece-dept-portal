@@ -1,6 +1,8 @@
 # Portal modules reference
 
-Automation Portal (NPortal) is a modular departmental system. Each module has a UI route and API prefix under `/api/v1`.
+ECE Department Smart Portal (NPortal) is a modular departmental system. Each module has a UI route and API prefix under `/api/v1`.
+
+End-user guides: [USER_MANUAL_FACULTY.md](USER_MANUAL_FACULTY.md) · [USER_MANUAL_ADMIN.md](USER_MANUAL_ADMIN.md).
 
 ## Auth & users
 
@@ -52,7 +54,9 @@ Workflow: [WORKFLOW_A.md](WORKFLOW_A.md)
 - **Faculty-wise** and **course-wise** allocation views with expandable tables
 - Filters: **by semester**, **by academic year** (`YYYY-YYYY` or `YYYY-YY`), or **all data**
 - Semesters listed newest-first within each group
-- Dashboard summary widget (faculty teaching, UG/PG, core/elective, first-year counts)
+- Dashboard summary widget (faculty teaching, UG/PG type splits, registered-students reminder for Monsoon 2026+)
+- Columns: UG type, PG type, registered students (admin-editable; blank on Excel import)
+- Course catalog edit for UG/PG types
 - Faculty and course drill-in history / analytics pages
 - Admin: upload XLSX, resolve unmatched faculty names, **add / edit / delete** allocation rows (both views), edit catalog entries
 - Mutations write back to `course_allocations.csv`; both views read the same allocation rows

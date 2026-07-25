@@ -101,7 +101,7 @@ Multiple tabs under **Analytics → Faculty Contributions**. Each tab syncs from
 | File | Purpose |
 |------|---------|
 | `course_allocations.csv` | Semester-wise faculty–course assignments |
-| `course_catalog.csv` | Master course list (codes, names, UG/PG, core/elective) |
+| `course_catalog.csv` | Master course list (codes, names, UG type, PG type) |
 | `course_code_aliases.csv` | Alternate codes → canonical catalog entry |
 | `faculty_name_aliases.csv` | CSV spelling → faculty.id |
 | `non_faculty_placeholders.csv` | “Not offered”, “TBD”, etc. |

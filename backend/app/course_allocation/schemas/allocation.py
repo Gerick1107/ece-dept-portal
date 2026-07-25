@@ -3,8 +3,18 @@ from __future__ import annotations
 from pydantic import BaseModel, field_validator
 
 
-_UG_PG = {"UG", "PG", "UG/PG"}
-_CORE_ELECTIVE = {"Core", "Elective", "Core/Elective"}
+_COURSE_TYPES = {"Core", "Elective", "Core/Elective"}
+
+
+def _optional_type(value: str | None) -> str | None:
+    if value is None:
+        return None
+    cleaned = value.strip()
+    if not cleaned:
+        return None
+    if cleaned not in _COURSE_TYPES:
+        raise ValueError(f"type must be one of {sorted(_COURSE_TYPES)} or empty")
+    return cleaned
 
 
 class AllocationCreateRequest(BaseModel):
@@ -14,10 +24,9 @@ class AllocationCreateRequest(BaseModel):
     academic_year: str | None = None
     course_code: str
     course_name: str
-    ug_pg: str = "UG"
-    core_elective: str = "Core"
-    is_first_year: bool = False
-    first_year_course_name: str | None = None
+    ug_type: str | None = None
+    pg_type: str | None = None
+    registered_students: int | None = None
     course_catalog_id: int | None = None
     source: str = "manual"
     is_faculty_placeholder: bool | None = None
@@ -31,21 +40,19 @@ class AllocationCreateRequest(BaseModel):
             raise ValueError("Field cannot be empty")
         return cleaned
 
-    @field_validator("ug_pg")
+    @field_validator("ug_type", "pg_type")
     @classmethod
-    def _ug_pg(cls, value: str) -> str:
-        cleaned = (value or "").strip()
-        if cleaned not in _UG_PG:
-            raise ValueError(f"ug_pg must be one of {sorted(_UG_PG)}")
-        return cleaned
+    def _type_fields(cls, value: str | None) -> str | None:
+        return _optional_type(value)
 
-    @field_validator("core_elective")
+    @field_validator("registered_students")
     @classmethod
-    def _core_elective(cls, value: str) -> str:
-        cleaned = (value or "").strip()
-        if cleaned not in _CORE_ELECTIVE:
-            raise ValueError(f"core_elective must be one of {sorted(_CORE_ELECTIVE)}")
-        return cleaned
+    def _registered(cls, value: int | None) -> int | None:
+        if value is None:
+            return None
+        if value < 0:
+            raise ValueError("registered_students cannot be negative")
+        return value
 
 
 class AllocationUpdateRequest(BaseModel):
@@ -55,33 +62,27 @@ class AllocationUpdateRequest(BaseModel):
     academic_year: str | None = None
     course_code: str | None = None
     course_name: str | None = None
-    ug_pg: str | None = None
-    core_elective: str | None = None
-    is_first_year: bool | None = None
-    first_year_course_name: str | None = None
+    ug_type: str | None = None
+    pg_type: str | None = None
+    registered_students: int | None = None
+    clear_registered_students: bool = False
     course_catalog_id: int | None = None
     is_faculty_placeholder: bool | None = None
     clear_faculty: bool = False
 
-    @field_validator("ug_pg")
+    @field_validator("ug_type", "pg_type")
     @classmethod
-    def _ug_pg(cls, value: str | None) -> str | None:
-        if value is None:
-            return value
-        cleaned = value.strip()
-        if cleaned not in _UG_PG:
-            raise ValueError(f"ug_pg must be one of {sorted(_UG_PG)}")
-        return cleaned
+    def _type_fields(cls, value: str | None) -> str | None:
+        return _optional_type(value)
 
-    @field_validator("core_elective")
+    @field_validator("registered_students")
     @classmethod
-    def _core_elective(cls, value: str | None) -> str | None:
+    def _registered(cls, value: int | None) -> int | None:
         if value is None:
-            return value
-        cleaned = value.strip()
-        if cleaned not in _CORE_ELECTIVE:
-            raise ValueError(f"core_elective must be one of {sorted(_CORE_ELECTIVE)}")
-        return cleaned
+            return None
+        if value < 0:
+            raise ValueError("registered_students cannot be negative")
+        return value
 
 
 class AllocationResponse(BaseModel):
@@ -92,10 +93,9 @@ class AllocationResponse(BaseModel):
     academic_year: str
     course_code: str
     course_name: str
-    ug_pg: str
-    core_elective: str
-    is_first_year: bool
-    first_year_course_name: str | None = None
+    ug_type: str | None = None
+    pg_type: str | None = None
+    registered_students: int | None = None
     source: str
     is_faculty_placeholder: bool
     course_catalog_id: int | None = None

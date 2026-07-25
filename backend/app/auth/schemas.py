@@ -20,6 +20,14 @@ class UserCreate(BaseModel):
     password: str = Field(min_length=8, max_length=128)
     role: UserRole = UserRole.faculty
     send_welcome_email: bool = True
+    faculty_id: int | None = None
+
+
+class UserUpdate(BaseModel):
+    role: UserRole | None = None
+    faculty_id: int | None = None
+    clear_faculty_id: bool = False
+    full_name: str | None = Field(default=None, min_length=2, max_length=255)
 
 
 class UserResponse(BaseModel):

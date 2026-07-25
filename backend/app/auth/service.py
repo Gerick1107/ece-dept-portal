@@ -45,7 +45,14 @@ def create_user(
     faculty_id: int | None = None,
 ) -> tuple[User, bool]:
     if must_change_password is None:
-        must_change_password = role == UserRole.faculty
+        must_change_password = role in (UserRole.faculty, UserRole.hod)
+    if faculty_id is not None:
+        from app.publications.models.entities import Faculty
+
+        if db.get(Faculty, faculty_id) is None:
+            raise ValueError("Linked faculty record not found")
+    if role == UserRole.hod:
+        _demote_existing_hod(db)
     user = User(
         email=email.lower(),
         full_name=full_name,
@@ -67,6 +74,48 @@ def create_user(
             settings.portal_frontend_url,
         )
     return user, email_sent
+
+
+def _demote_existing_hod(db: Session, *, except_user_id: int | None = None) -> None:
+    """Ensure only one HoD exists at a time by demoting others to faculty."""
+    stmt = select(User).where(User.role == UserRole.hod, User.profile_removed.is_(False))
+    if except_user_id is not None:
+        stmt = stmt.where(User.id != except_user_id)
+    for existing in db.scalars(stmt).all():
+        existing.role = UserRole.faculty
+
+
+def update_user_account(
+    db: Session,
+    user_id: int,
+    actor: User,
+    *,
+    role: UserRole | None = None,
+    faculty_id: int | None = None,
+    clear_faculty_id: bool = False,
+    full_name: str | None = None,
+) -> User:
+    target = _get_manageable_user(db, user_id, actor)
+    if full_name is not None:
+        target.full_name = full_name.strip()
+    if clear_faculty_id:
+        target.faculty_id = None
+    elif faculty_id is not None:
+        from app.publications.models.entities import Faculty
+
+        if db.get(Faculty, faculty_id) is None:
+            raise ValueError("Linked faculty record not found")
+        target.faculty_id = faculty_id
+    if role is not None:
+        if role == UserRole.hod:
+            _demote_existing_hod(db, except_user_id=target.id)
+        # Prevent removing the last admin via role change
+        if target.role == UserRole.admin and role != UserRole.admin:
+            _ensure_not_last_admin(db, target)
+        target.role = role
+    db.commit()
+    db.refresh(target)
+    return target
 
 
 def change_password(db: Session, user: User, current_password: str, new_password: str) -> None:

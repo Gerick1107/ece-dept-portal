@@ -30,14 +30,14 @@ export default function CourseAllocationDetailPage() {
 
   const ugPgData = useMemo(() => {
     if (!data) return [];
-    return Object.entries(data.analytics.ug_pg_split)
+    return Object.entries(data.analytics.ug_type_split)
       .filter((entry): entry is [string, number] => typeof entry[1] === "number" && entry[1] > 0)
       .map(([name, value]) => ({ name, value }));
   }, [data]);
 
   const coreElectiveData = useMemo(() => {
     if (!data) return [];
-    return Object.entries(data.analytics.core_elective_split)
+    return Object.entries(data.analytics.pg_type_split)
       .filter((entry): entry is [string, number] => typeof entry[1] === "number" && entry[1] > 0)
       .map(([name, value]) => ({ name, value }));
   }, [data]);
@@ -163,9 +163,9 @@ export default function CourseAllocationDetailPage() {
               <th className="px-4 py-2">AY</th>
               <th className="px-4 py-2">Faculty</th>
               <th className="px-4 py-2">Code</th>
-              <th className="px-4 py-2">UG/PG</th>
-              <th className="px-4 py-2">Type</th>
-              <th className="px-4 py-2">FY</th>
+              <th className="px-4 py-2">UG</th>
+              <th className="px-4 py-2">PG</th>
+              <th className="px-4 py-2">Registered</th>
             </tr>
           </thead>
           <tbody>
@@ -175,9 +175,9 @@ export default function CourseAllocationDetailPage() {
                 <td className="px-4 py-2">{r.academic_year}</td>
                 <td className="px-4 py-2">{r.faculty_name}</td>
                 <td className="px-4 py-2">{r.course_code}</td>
-                <td className="px-4 py-2">{r.ug_pg}</td>
-                <td className="px-4 py-2">{r.core_elective}</td>
-                <td className="px-4 py-2">{r.is_first_year ? "Yes" : "—"}</td>
+                <td className="px-4 py-2">{r.ug_type || "—"}</td>
+                <td className="px-4 py-2">{r.pg_type || "—"}</td>
+                <td className="px-4 py-2">{r.registered_students ?? "—"}</td>
               </tr>
             ))}
           </tbody>

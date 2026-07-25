@@ -20,10 +20,11 @@ class CourseAllocation(Base):
     academic_year: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
     course_code: Mapped[str] = mapped_column(String(256), nullable=False)
     course_name: Mapped[str] = mapped_column(Text, nullable=False)
-    ug_pg: Mapped[str] = mapped_column(String(16), nullable=False)
-    core_elective: Mapped[str] = mapped_column(String(32), nullable=False)
-    is_first_year: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    first_year_course_name: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    # Programme type per level — Core / Elective / Core/Elective / null (not offered at that level).
+    ug_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    pg_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # Admin-maintained; not present in Excel imports.
+    registered_students: Mapped[int | None] = mapped_column(Integer, nullable=True)
     source: Mapped[str] = mapped_column(String(32), nullable=False, default="historical")
     is_faculty_placeholder: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     course_catalog_id: Mapped[int | None] = mapped_column(
@@ -41,9 +42,8 @@ class CourseCatalogEntry(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     course_code: Mapped[str] = mapped_column(String(256), nullable=False, unique=True, index=True)
     course_name: Mapped[str] = mapped_column(Text, nullable=False)
-    ug_pg: Mapped[str] = mapped_column(String(16), nullable=False)
-    core_elective: Mapped[str] = mapped_column(String(32), nullable=False)
-    is_first_year: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    ug_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    pg_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

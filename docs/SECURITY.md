@@ -1,6 +1,6 @@
 # Security (OWASP-aligned)
 
-This document summarizes how the ECE Automation Portal addresses common OWASP Top 10 risks. Use it for internal review and IT validation.
+This document summarizes how the ECE Department Smart Portal addresses common OWASP Top 10 risks. Use it for internal review and IT validation.
 
 ## Authentication & access control
 

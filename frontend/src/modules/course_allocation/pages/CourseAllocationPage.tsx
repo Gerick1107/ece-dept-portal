@@ -26,9 +26,8 @@ export default function CourseAllocationPage() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [data, setData] = useState<AllocationListResponse | null>(null);
   const [query, setQuery] = useState("");
-  const [ugPg, setUgPg] = useState("");
-  const [coreElective, setCoreElective] = useState("");
-  const [firstYearOnly, setFirstYearOnly] = useState(false);
+  const [ugType, setUgType] = useState("");
+  const [pgType, setPgType] = useState("");
   const [filterOptions, setFilterOptions] = useState<{ semesters: string[]; academic_years: string[] }>({
     semesters: [],
     academic_years: [],
@@ -62,9 +61,8 @@ export default function CourseAllocationPage() {
         listAllocations({
           scope: effectiveScope,
           query: query || undefined,
-          ug_pg: ugPg || undefined,
-          core_elective: coreElective || undefined,
-          first_year_only: firstYearOnly || undefined,
+          ug_type: ugType || undefined,
+          pg_type: pgType || undefined,
         }),
         getAllocationDashboardSummary(summarySemester),
       ]);
@@ -74,7 +72,7 @@ export default function CourseAllocationPage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load allocations");
     }
-  }, [effectiveScope, query, ugPg, coreElective, firstYearOnly, filterKind, filterValue, currentSemester]);
+  }, [effectiveScope, query, ugType, pgType, filterKind, filterValue, currentSemester]);
 
   useEffect(() => {
     load();
@@ -156,6 +154,13 @@ export default function CourseAllocationPage() {
         <p className="text-sm text-teal-800 bg-teal-50 border border-teal-200 rounded-lg px-3 py-2">{message}</p>
       )}
 
+      {isAdmin && summary && summary.missing_registered_students > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-950">
+          <strong>{summary.missing_registered_students}</strong> course(s) in {summary.semester} still need{" "}
+          <em>No. of registered students</em> filled in. Excel imports leave this blank — edit each allocation to add it.
+        </div>
+      )}
+
       {summary && (
         <section className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
           <h3 className="font-medium text-slate-800 mb-3">Summary — {summary.semester}</h3>
@@ -172,15 +177,13 @@ export default function CourseAllocationPage() {
               <p className="text-2xl font-semibold text-teal-800">
                 {summary.ug_courses} UG · {summary.pg_courses} PG
               </p>
-              <p className="text-xs text-slate-600 mt-1">UG vs PG</p>
+              <p className="text-xs text-slate-600 mt-1">
+                UG / PG · {summary.ug_and_pg_courses} both
+              </p>
             </div>
             <div className="rounded-lg bg-slate-50 border border-slate-100 p-3">
-              <p className="text-2xl font-semibold text-teal-800">
-                {summary.core_courses} core · {summary.elective_courses} elective
-              </p>
-              <p className="text-xs text-slate-600 mt-1">
-                Core vs elective · {summary.first_year_courses} first-year
-              </p>
+              <p className="text-2xl font-semibold text-teal-800">{summary.unassigned}</p>
+              <p className="text-xs text-slate-600 mt-1">Unassigned / not offered</p>
             </div>
           </div>
         </section>
@@ -234,26 +237,20 @@ export default function CourseAllocationPage() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        <select className="border rounded-lg px-3 py-2 text-sm" value={ugPg} onChange={(e) => setUgPg(e.target.value)}>
-          <option value="">All UG/PG</option>
-          <option value="UG">UG</option>
-          <option value="PG">PG</option>
-          <option value="UG/PG">UG/PG</option>
+        <select className="border rounded-lg px-3 py-2 text-sm" value={ugType} onChange={(e) => setUgType(e.target.value)}>
+          <option value="">All UG types</option>
+          <option value="ANY">Any UG</option>
+          <option value="Core">UG Core</option>
+          <option value="Elective">UG Elective</option>
+          <option value="Core/Elective">UG Core/Elective</option>
         </select>
-        <select
-          className="border rounded-lg px-3 py-2 text-sm"
-          value={coreElective}
-          onChange={(e) => setCoreElective(e.target.value)}
-        >
-          <option value="">All Core/Elective</option>
-          <option value="Core">Core</option>
-          <option value="Elective">Elective</option>
-          <option value="Core/Elective">Core/Elective</option>
+        <select className="border rounded-lg px-3 py-2 text-sm" value={pgType} onChange={(e) => setPgType(e.target.value)}>
+          <option value="">All PG types</option>
+          <option value="ANY">Any PG</option>
+          <option value="Core">PG Core</option>
+          <option value="Elective">PG Elective</option>
+          <option value="Core/Elective">PG Core/Elective</option>
         </select>
-        <label className="flex items-center gap-2 text-sm lg:col-span-full">
-          <input type="checkbox" checked={firstYearOnly} onChange={(e) => setFirstYearOnly(e.target.checked)} />
-          First-year courses only
-        </label>
       </section>
 
       <div className="space-y-4">
@@ -296,9 +293,9 @@ export default function CourseAllocationPage() {
                       <th className="px-4 py-2">Semester</th>
                       <th className="px-4 py-2">Code</th>
                       <th className="px-4 py-2">Course</th>
-                      <th className="px-4 py-2">UG/PG</th>
-                      <th className="px-4 py-2">Type</th>
-                      <th className="px-4 py-2">FY</th>
+                      <th className="px-4 py-2">UG</th>
+                      <th className="px-4 py-2">PG</th>
+                      <th className="px-4 py-2">Registered</th>
                       {isAdmin && <th className="px-4 py-2 w-36">Actions</th>}
                     </tr>
                   </thead>
@@ -308,9 +305,9 @@ export default function CourseAllocationPage() {
                         <td className="px-4 py-2">{c.semester}</td>
                         <td className="px-4 py-2">{c.course_code}</td>
                         <td className="px-4 py-2">{c.course_name}</td>
-                        <td className="px-4 py-2">{c.ug_pg}</td>
-                        <td className="px-4 py-2">{c.core_elective}</td>
-                        <td className="px-4 py-2">{c.is_first_year ? "Yes" : "—"}</td>
+                        <td className="px-4 py-2">{c.ug_type || "—"}</td>
+                        <td className="px-4 py-2">{c.pg_type || "—"}</td>
+                        <td className="px-4 py-2">{c.registered_students ?? "—"}</td>
                         {isAdmin && (
                           <td className="px-4 py-2 whitespace-nowrap">
                             <button

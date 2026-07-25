@@ -1,6 +1,6 @@
-# Automation Portal (NPortal)
+# ECE Department Smart Portal (NPortal)
 
-Unified departmental automation platform for the ECE Department at IIIT-D.
+Unified departmental platform for the ECE Department at IIIT-D.
 
 **Modules:** CO-PO attainment · Publications · Projects and Theses & ECE/EVE projects · Course allocation · Faculty contributions · Meeting minutes · Budget · Notifications & requirement tracker · Analytics · LLM insights · Faculty awards
 

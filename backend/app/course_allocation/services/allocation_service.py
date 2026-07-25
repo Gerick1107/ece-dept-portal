@@ -36,9 +36,8 @@ def list_allocations_view(
     *,
     scope: str | None = None,
     query: str | None = None,
-    ug_pg: str | None = None,
-    core_elective: str | None = None,
-    first_year_only: bool = False,
+    ug_type: str | None = None,
+    pg_type: str | None = None,
     scope_faculty_id: int | None = None,
 ) -> dict:
     semesters = scope_semesters(scope)
@@ -47,12 +46,16 @@ def list_allocations_view(
         stmt = stmt.where(CourseAllocation.faculty_id == scope_faculty_id)
     if semesters:
         stmt = stmt.where(CourseAllocation.semester.in_(semesters))
-    if ug_pg and ug_pg.upper() != "ALL":
-        stmt = stmt.where(CourseAllocation.ug_pg == ug_pg)
-    if core_elective and core_elective.upper() != "ALL":
-        stmt = stmt.where(CourseAllocation.core_elective == core_elective)
-    if first_year_only:
-        stmt = stmt.where(CourseAllocation.is_first_year.is_(True))
+    if ug_type and ug_type.upper() != "ALL":
+        if ug_type.upper() == "ANY":
+            stmt = stmt.where(CourseAllocation.ug_type.is_not(None))
+        else:
+            stmt = stmt.where(CourseAllocation.ug_type == ug_type)
+    if pg_type and pg_type.upper() != "ALL":
+        if pg_type.upper() == "ANY":
+            stmt = stmt.where(CourseAllocation.pg_type.is_not(None))
+        else:
+            stmt = stmt.where(CourseAllocation.pg_type == pg_type)
     if query:
         q = f"%{query.strip()}%"
         stmt = stmt.where(
@@ -124,14 +127,45 @@ def _allocation_dict(row: CourseAllocation) -> dict:
         "academic_year": row.academic_year,
         "course_code": row.course_code,
         "course_name": row.course_name,
-        "ug_pg": row.ug_pg,
-        "core_elective": row.core_elective,
-        "is_first_year": row.is_first_year,
-        "first_year_course_name": row.first_year_course_name,
+        "ug_type": row.ug_type,
+        "pg_type": row.pg_type,
+        "registered_students": row.registered_students,
         "source": row.source,
         "is_faculty_placeholder": row.is_faculty_placeholder,
         "course_catalog_id": row.course_catalog_id,
     }
+
+
+def _type_analytics(rows: list[CourseAllocation]) -> dict:
+    ug_split = {"Core": 0, "Elective": 0, "Core/Elective": 0}
+    pg_split = {"Core": 0, "Elective": 0, "Core/Elective": 0}
+    for r in rows:
+        if r.ug_type in ug_split:
+            ug_split[r.ug_type] += 1
+        if r.pg_type in pg_split:
+            pg_split[r.pg_type] += 1
+    return {
+        "ug_type_split": ug_split,
+        "pg_type_split": pg_split,
+        "ug_courses": sum(1 for r in rows if r.ug_type),
+        "pg_courses": sum(1 for r in rows if r.pg_type),
+        "ug_and_pg_courses": sum(1 for r in rows if r.ug_type and r.pg_type),
+    }
+
+
+def missing_registered_students_count(db: Session, semester: str) -> int:
+    """Count allocations in ``semester`` with no registered_students (Monsoon 2026+ only)."""
+    if semester_sort_key(semester) < semester_sort_key("Monsoon 2026"):
+        return 0
+    rows = list(
+        db.scalars(
+            select(CourseAllocation).where(
+                CourseAllocation.semester == semester,
+                CourseAllocation.is_faculty_placeholder.is_(False),
+            )
+        ).all()
+    )
+    return sum(1 for r in rows if r.registered_students is None)
 
 
 def dashboard_summary(db: Session, semester: str) -> dict:
@@ -140,17 +174,18 @@ def dashboard_summary(db: Session, semester: str) -> dict:
     )
     real = [r for r in rows if not r.is_faculty_placeholder and r.faculty_id]
     faculty_ids = {r.faculty_id for r in real}
+    types = _type_analytics(rows)
     return {
         "semester": semester,
         "faculty_teaching": len(faculty_ids),
         "total_courses": len(rows),
-        "ug_courses": sum(1 for r in rows if r.ug_pg == "UG"),
-        "pg_courses": sum(1 for r in rows if r.ug_pg == "PG"),
-        "ug_pg_courses": sum(1 for r in rows if r.ug_pg == "UG/PG"),
-        "core_courses": sum(1 for r in rows if r.core_elective == "Core"),
-        "elective_courses": sum(1 for r in rows if r.core_elective == "Elective"),
-        "first_year_courses": sum(1 for r in rows if r.is_first_year),
+        "ug_courses": types["ug_courses"],
+        "pg_courses": types["pg_courses"],
+        "ug_and_pg_courses": types["ug_and_pg_courses"],
+        "ug_type_split": types["ug_type_split"],
+        "pg_type_split": types["pg_type_split"],
         "unassigned": sum(1 for r in rows if r.is_faculty_placeholder),
+        "missing_registered_students": missing_registered_students_count(db, semester),
     }
 
 
@@ -190,21 +225,10 @@ def faculty_history(db: Session, faculty_id: int) -> dict | None:
         if semester_sort_key(r.semester) >= semester_sort_key(entry["most_recent_semester"]):
             entry["most_recent_semester"] = r.semester
 
-    first_year: dict[str, int] = {}
-    for r in rows:
-        if r.is_first_year:
-            label = r.first_year_course_name or r.course_name
-            first_year[label] = first_year.get(label, 0) + 1
-
     by_semester: dict[str, int] = {}
-    ug_pg = {"UG": 0, "PG": 0, "UG/PG": 0}
-    core_elective = {"Core": 0, "Elective": 0, "Core/Elective": 0}
     for r in rows:
         by_semester[r.semester] = by_semester.get(r.semester, 0) + 1
-        if r.ug_pg in ug_pg:
-            ug_pg[r.ug_pg] += 1
-        if r.core_elective in core_elective:
-            core_elective[r.core_elective] += 1
+    types = _type_analytics(rows)
 
     for entry in course_counts.values():
         entry["semesters"] = sorted(entry["semesters"], key=semester_sort_key)
@@ -213,14 +237,13 @@ def faculty_history(db: Session, faculty_id: int) -> dict | None:
         "faculty": {"id": faculty.id, "name": faculty.name},
         "history": history,
         "course_counts": list(course_counts.values()),
-        "first_year_counts": [{"name": k, "count": v} for k, v in sorted(first_year.items())],
         "analytics": {
             "courses_per_semester": [
                 {"semester": k, "count": v}
                 for k, v in sorted(by_semester.items(), key=lambda x: semester_sort_key(x[0]))
             ],
-            "ug_pg_split": ug_pg,
-            "core_elective_split": core_elective,
+            "ug_type_split": types["ug_type_split"],
+            "pg_type_split": types["pg_type_split"],
         },
     }
 
@@ -297,9 +320,8 @@ def list_courses_view(
     *,
     scope: str | None = None,
     query: str | None = None,
-    ug_pg: str | None = None,
-    core_elective: str | None = None,
-    first_year_only: bool = False,
+    ug_type: str | None = None,
+    pg_type: str | None = None,
     scope_faculty_id: int | None = None,
 ) -> dict:
     semesters = scope_semesters(scope)
@@ -308,12 +330,16 @@ def list_courses_view(
         stmt = stmt.where(CourseAllocation.faculty_id == scope_faculty_id)
     if semesters:
         stmt = stmt.where(CourseAllocation.semester.in_(semesters))
-    if ug_pg and ug_pg.upper() != "ALL":
-        stmt = stmt.where(CourseAllocation.ug_pg == ug_pg)
-    if core_elective and core_elective.upper() != "ALL":
-        stmt = stmt.where(CourseAllocation.core_elective == core_elective)
-    if first_year_only:
-        stmt = stmt.where(CourseAllocation.is_first_year.is_(True))
+    if ug_type and ug_type.upper() != "ALL":
+        if ug_type.upper() == "ANY":
+            stmt = stmt.where(CourseAllocation.ug_type.is_not(None))
+        else:
+            stmt = stmt.where(CourseAllocation.ug_type == ug_type)
+    if pg_type and pg_type.upper() != "ALL":
+        if pg_type.upper() == "ANY":
+            stmt = stmt.where(CourseAllocation.pg_type.is_not(None))
+        else:
+            stmt = stmt.where(CourseAllocation.pg_type == pg_type)
     allocations = list(db.scalars(stmt).all())
 
     variant_to_course, token_to_course = _build_catalog_lookup(db)
@@ -394,16 +420,17 @@ def courses_dashboard_summary(db: Session, semester: str) -> dict:
         course_groups.add(_course_group_id(r, variant_to_course, token_to_course, db))
         if r.faculty_id:
             faculty_ids.add(r.faculty_id)
+    types = _type_analytics(rows)
     return {
         "semester": semester,
         "total_courses": len(course_groups),
         "faculty_involved": len(faculty_ids),
-        "ug_courses": sum(1 for r in rows if r.ug_pg == "UG"),
-        "pg_courses": sum(1 for r in rows if r.ug_pg == "PG"),
-        "ug_pg_courses": sum(1 for r in rows if r.ug_pg == "UG/PG"),
-        "core_courses": sum(1 for r in rows if r.core_elective == "Core"),
-        "elective_courses": sum(1 for r in rows if r.core_elective == "Elective"),
-        "first_year_courses": sum(1 for r in rows if r.is_first_year),
+        "ug_courses": types["ug_courses"],
+        "pg_courses": types["pg_courses"],
+        "ug_and_pg_courses": types["ug_and_pg_courses"],
+        "ug_type_split": types["ug_type_split"],
+        "pg_type_split": types["pg_type_split"],
+        "missing_registered_students": missing_registered_students_count(db, semester),
     }
 
 
@@ -452,14 +479,9 @@ def course_history(db: Session, course_catalog_id: int) -> dict | None:
         fentry["semesters"] = sorted(fentry["semesters"], key=semester_sort_key)
 
     by_semester: dict[str, int] = {}
-    ug_pg = {"UG": 0, "PG": 0, "UG/PG": 0}
-    core_elective = {"Core": 0, "Elective": 0, "Core/Elective": 0}
     for r in rows:
         by_semester[r.semester] = by_semester.get(r.semester, 0) + 1
-        if r.ug_pg in ug_pg:
-            ug_pg[r.ug_pg] += 1
-        if r.core_elective in core_elective:
-            core_elective[r.core_elective] += 1
+    types = _type_analytics(rows)
 
     return {
         "course": {
@@ -474,8 +496,8 @@ def course_history(db: Session, course_catalog_id: int) -> dict | None:
                 {"semester": k, "count": v}
                 for k, v in sorted(by_semester.items(), key=lambda x: semester_sort_key(x[0]))
             ],
-            "ug_pg_split": ug_pg,
-            "core_elective_split": core_elective,
+            "ug_type_split": types["ug_type_split"],
+            "pg_type_split": types["pg_type_split"],
         },
     }
 
@@ -521,10 +543,8 @@ def _apply_course_fields(
     course_catalog_id: int | None,
     course_code: str,
     course_name: str,
-    ug_pg: str,
-    core_elective: str,
-    is_first_year: bool,
-    first_year_course_name: str | None,
+    ug_type: str | None,
+    pg_type: str | None,
 ) -> dict:
     """Link catalog when possible and keep denormalized course fields consistent."""
     entry: CourseCatalogEntry | None = None
@@ -540,15 +560,19 @@ def _apply_course_fields(
                 code, None, variant_to_course, token_to_course, db
             )
 
+    def _clean_type(value: str | None, fallback: str | None = None) -> str | None:
+        cleaned = (value or "").strip() or None
+        if cleaned:
+            return cleaned
+        return (fallback or "").strip() or None
+
     if entry:
         return {
             "course_catalog_id": entry.id,
             "course_code": entry.course_code,
             "course_name": (course_name or "").strip() or entry.course_name,
-            "ug_pg": (ug_pg or "").strip() or entry.ug_pg,
-            "core_elective": (core_elective or "").strip() or entry.core_elective,
-            "is_first_year": bool(is_first_year) if is_first_year is not None else entry.is_first_year,
-            "first_year_course_name": (first_year_course_name or "").strip() or None,
+            "ug_type": _clean_type(ug_type, entry.ug_type),
+            "pg_type": _clean_type(pg_type, entry.pg_type),
         }
 
     code = (course_code or "").strip()
@@ -559,10 +583,8 @@ def _apply_course_fields(
         "course_catalog_id": None,
         "course_code": code,
         "course_name": name,
-        "ug_pg": (ug_pg or "").strip() or "UG",
-        "core_elective": (core_elective or "").strip() or "Core",
-        "is_first_year": bool(is_first_year),
-        "first_year_course_name": (first_year_course_name or "").strip() or None,
+        "ug_type": _clean_type(ug_type),
+        "pg_type": _clean_type(pg_type),
     }
 
 
@@ -583,11 +605,10 @@ def create_allocation(db: Session, data: dict) -> CourseAllocation:
         course_catalog_id=data.get("course_catalog_id"),
         course_code=(data.get("course_code") or "").strip(),
         course_name=(data.get("course_name") or "").strip(),
-        ug_pg=(data.get("ug_pg") or "UG").strip(),
-        core_elective=(data.get("core_elective") or "Core").strip(),
-        is_first_year=bool(data.get("is_first_year")),
-        first_year_course_name=(data.get("first_year_course_name") or "").strip() or None,
+        ug_type=data.get("ug_type"),
+        pg_type=data.get("pg_type"),
     )
+    registered = data.get("registered_students")
     row = CourseAllocation(
         faculty_name=faculty_name,
         faculty_id=faculty_id,
@@ -595,10 +616,9 @@ def create_allocation(db: Session, data: dict) -> CourseAllocation:
         academic_year=academic_year,
         course_code=course["course_code"],
         course_name=course["course_name"],
-        ug_pg=course["ug_pg"],
-        core_elective=course["core_elective"],
-        is_first_year=course["is_first_year"],
-        first_year_course_name=course["first_year_course_name"],
+        ug_type=course["ug_type"],
+        pg_type=course["pg_type"],
+        registered_students=int(registered) if registered is not None else None,
         source=(data.get("source") or "manual").strip(),
         is_faculty_placeholder=placeholder,
         course_catalog_id=course["course_catalog_id"],
@@ -636,17 +656,8 @@ def update_allocation(db: Session, row: CourseAllocation, data: dict) -> CourseA
         ),
         course_code=(data.get("course_code") if "course_code" in data else row.course_code) or "",
         course_name=(data.get("course_name") if "course_name" in data else row.course_name) or "",
-        ug_pg=(data.get("ug_pg") if "ug_pg" in data else row.ug_pg) or "UG",
-        core_elective=(data.get("core_elective") if "core_elective" in data else row.core_elective)
-        or "Core",
-        is_first_year=bool(
-            data.get("is_first_year") if "is_first_year" in data else row.is_first_year
-        ),
-        first_year_course_name=(
-            data.get("first_year_course_name")
-            if "first_year_course_name" in data
-            else row.first_year_course_name
-        ),
+        ug_type=data.get("ug_type") if "ug_type" in data else row.ug_type,
+        pg_type=data.get("pg_type") if "pg_type" in data else row.pg_type,
     )
 
     row.faculty_name = faculty_name
@@ -656,11 +667,14 @@ def update_allocation(db: Session, row: CourseAllocation, data: dict) -> CourseA
     row.academic_year = academic_year
     row.course_code = course["course_code"]
     row.course_name = course["course_name"]
-    row.ug_pg = course["ug_pg"]
-    row.core_elective = course["core_elective"]
-    row.is_first_year = course["is_first_year"]
-    row.first_year_course_name = course["first_year_course_name"]
+    row.ug_type = course["ug_type"]
+    row.pg_type = course["pg_type"]
     row.course_catalog_id = course["course_catalog_id"]
+    if data.get("clear_registered_students"):
+        row.registered_students = None
+    elif "registered_students" in data:
+        val = data.get("registered_students")
+        row.registered_students = int(val) if val is not None else None
     row.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(row)
@@ -702,9 +716,10 @@ def update_catalog_entry(db: Session, entry: CourseCatalogEntry, data: dict) -> 
     old_code = entry.course_code
     entry.course_code = data.get("course_code", entry.course_code).strip()
     entry.course_name = data.get("course_name", entry.course_name).strip()
-    entry.ug_pg = data.get("ug_pg", entry.ug_pg).strip()
-    entry.core_elective = data.get("core_elective", entry.core_elective).strip()
-    entry.is_first_year = bool(data.get("is_first_year", entry.is_first_year))
+    if "ug_type" in data:
+        entry.ug_type = (data.get("ug_type") or "").strip() or None
+    if "pg_type" in data:
+        entry.pg_type = (data.get("pg_type") or "").strip() or None
     entry.updated_at = datetime.utcnow()
     rows = list(
         db.scalars(
@@ -720,9 +735,8 @@ def update_catalog_entry(db: Session, entry: CourseCatalogEntry, data: dict) -> 
         r.course_catalog_id = entry.id
         r.course_code = entry.course_code
         r.course_name = entry.course_name
-        r.ug_pg = entry.ug_pg
-        r.core_elective = entry.core_elective
-        r.is_first_year = entry.is_first_year
+        r.ug_type = entry.ug_type
+        r.pg_type = entry.pg_type
     db.commit()
     db.refresh(entry)
     write_catalog_csv(db)

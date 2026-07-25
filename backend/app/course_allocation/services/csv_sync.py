@@ -37,10 +37,9 @@ ALLOCATION_FIELDS = [
     "academic_year",
     "course_code",
     "course_name",
-    "ug_pg",
-    "core_elective",
-    "is_first_year",
-    "first_year_course_name",
+    "ug_type",
+    "pg_type",
+    "registered_students",
     "source",
     "is_faculty_placeholder",
     "created_at",
@@ -51,9 +50,8 @@ CATALOG_FIELDS = [
     "id",
     "course_code",
     "course_name",
-    "ug_pg",
-    "core_elective",
-    "is_first_year",
+    "ug_type",
+    "pg_type",
     "created_at",
     "updated_at",
 ]
@@ -129,9 +127,8 @@ def sync_course_catalog_csv(db: Session) -> None:
         entity = CourseCatalogEntry(
             course_code=row["course_code"].strip(),
             course_name=row["course_name"].strip(),
-            ug_pg=row["ug_pg"].strip(),
-            core_elective=row["core_elective"].strip(),
-            is_first_year=_yes_no(row.get("is_first_year")),
+            ug_type=(row.get("ug_type") or "").strip() or None,
+            pg_type=(row.get("pg_type") or "").strip() or None,
         )
         if row_id is not None:
             entity.id = row_id
@@ -139,15 +136,15 @@ def sync_course_catalog_csv(db: Session) -> None:
 
     def apply_row(existing: CourseCatalogEntry, row: dict[str, str]) -> bool:
         changed = False
-        for attr in ("course_name", "ug_pg", "core_elective"):
-            val = row[attr].strip()
+        name = row["course_name"].strip()
+        if existing.course_name != name:
+            existing.course_name = name
+            changed = True
+        for attr in ("ug_type", "pg_type"):
+            val = (row.get(attr) or "").strip() or None
             if getattr(existing, attr) != val:
                 setattr(existing, attr, val)
                 changed = True
-        fy = _yes_no(row.get("is_first_year"))
-        if existing.is_first_year != fy:
-            existing.is_first_year = fy
-            changed = True
         return changed
 
     sync_csv_rows(
@@ -252,9 +249,8 @@ def repoint_allocations_to_catalog(db: Session) -> None:
                 alloc.course_catalog_id = entry.id
                 alloc.course_code = entry.course_code
                 alloc.course_name = entry.course_name
-                alloc.ug_pg = entry.ug_pg
-                alloc.core_elective = entry.core_elective
-                alloc.is_first_year = entry.is_first_year
+                alloc.ug_type = entry.ug_type
+                alloc.pg_type = entry.pg_type
                 changed = True
     if changed:
         db.commit()
@@ -299,16 +295,16 @@ def sync_course_allocations_csv(db: Session) -> None:
         row_id = _parse_optional_int(row.get("id"))
         faculty_name = (row.get("faculty_name") or "").strip()
         placeholder = _yes_no(row.get("is_faculty_placeholder")) or is_placeholder_name(faculty_name)
+        reg = (row.get("registered_students") or "").strip()
         entity = CourseAllocation(
             faculty_name=faculty_name,
             semester=row["semester"].strip(),
             academic_year=row["academic_year"].strip(),
             course_code=row["course_code"].strip(),
             course_name=row["course_name"].strip(),
-            ug_pg=row["ug_pg"].strip(),
-            core_elective=row["core_elective"].strip(),
-            is_first_year=_yes_no(row.get("is_first_year")),
-            first_year_course_name=(row.get("first_year_course_name") or "").strip() or None,
+            ug_type=(row.get("ug_type") or "").strip() or None,
+            pg_type=(row.get("pg_type") or "").strip() or None,
+            registered_students=int(reg) if reg.isdigit() else None,
             source=(row.get("source") or "historical").strip(),
             is_faculty_placeholder=placeholder,
         )
@@ -326,21 +322,21 @@ def sync_course_allocations_csv(db: Session) -> None:
             "academic_year",
             "course_code",
             "course_name",
-            "ug_pg",
-            "core_elective",
             "source",
         ):
             val = row[attr].strip()
             if getattr(existing, attr) != val:
                 setattr(existing, attr, val)
                 changed = True
-        fy = _yes_no(row.get("is_first_year"))
-        if existing.is_first_year != fy:
-            existing.is_first_year = fy
-            changed = True
-        fycn = (row.get("first_year_course_name") or "").strip() or None
-        if existing.first_year_course_name != fycn:
-            existing.first_year_course_name = fycn
+        for attr in ("ug_type", "pg_type"):
+            val = (row.get(attr) or "").strip() or None
+            if getattr(existing, attr) != val:
+                setattr(existing, attr, val)
+                changed = True
+        reg_raw = (row.get("registered_students") or "").strip()
+        reg = int(reg_raw) if reg_raw.isdigit() else None
+        if existing.registered_students != reg:
+            existing.registered_students = reg
             changed = True
         if existing.faculty_name != faculty_name:
             existing.faculty_name = faculty_name
@@ -384,10 +380,9 @@ def write_allocations_csv(db: Session) -> None:
             "academic_year": r.academic_year,
             "course_code": r.course_code,
             "course_name": r.course_name,
-            "ug_pg": r.ug_pg,
-            "core_elective": r.core_elective,
-            "is_first_year": "Yes" if r.is_first_year else "No",
-            "first_year_course_name": r.first_year_course_name or "",
+            "ug_type": r.ug_type or "",
+            "pg_type": r.pg_type or "",
+            "registered_students": "" if r.registered_students is None else str(r.registered_students),
             "source": r.source,
             "is_faculty_placeholder": "Yes" if r.is_faculty_placeholder else "No",
             "created_at": "",
@@ -405,9 +400,8 @@ def write_catalog_csv(db: Session) -> None:
             "id": str(r.id),
             "course_code": r.course_code,
             "course_name": r.course_name,
-            "ug_pg": r.ug_pg,
-            "core_elective": r.core_elective,
-            "is_first_year": "Yes" if r.is_first_year else "No",
+            "ug_type": r.ug_type or "",
+            "pg_type": r.pg_type or "",
             "created_at": "",
             "updated_at": "",
         }

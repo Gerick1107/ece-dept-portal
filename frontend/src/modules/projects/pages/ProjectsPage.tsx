@@ -359,9 +359,9 @@ export default function ProjectsPage() {
         <>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-xl font-semibold">Projects and Theses Repository</h2>
+          <h2 className="text-xl font-semibold">Projects and Theses Listing</h2>
           <p className="text-sm text-slate-600 mt-1">
-            Import department Excel sheets, filter ECE projects, and manage SDG tags.
+            Import department Excel sheets, filter ECE projects, and manage SDG tags. (SDGs associated with each project should be reviewed by it's associated faculty. Once reviewed, the colour changes to blue.)
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -562,15 +562,15 @@ export default function ProjectsPage() {
                 <th className="px-3 py-2 font-medium whitespace-nowrap">Serial Number</th>
                 <th className="px-3 py-2 font-medium min-w-[9rem]">Semester</th>
                 <th className="px-3 py-2 font-medium min-w-[14rem]">Title</th>
+                <th className="px-3 py-2 font-medium min-w-[8rem]">Guide</th>
+                {canReviewSdgs && <th className="px-3 py-2 font-medium min-w-[10rem]">Actions</th>}
                 <th className="px-3 py-2 font-medium whitespace-nowrap">Course Code</th>
                 <th className="px-3 py-2 font-medium min-w-[8rem]">Course Name</th>
-                <th className="px-3 py-2 font-medium min-w-[8rem]">Guide</th>
                 <th className="px-3 py-2 font-medium min-w-[8rem]">Co-Guide</th>
                 <th className="px-3 py-2 font-medium min-w-[9rem]">Student Roll Number</th>
                 <th className="px-3 py-2 font-medium min-w-[9rem]">Student Name</th>
                 <th className="px-3 py-2 font-medium min-w-[14rem]">SDGs</th>
                 <th className="px-3 py-2 font-medium whitespace-nowrap">Credit</th>
-                {canReviewSdgs && <th className="px-3 py-2 font-medium min-w-[10rem]">Actions</th>}
               </tr>
             </thead>
             <tbody>
@@ -588,20 +588,7 @@ export default function ProjectsPage() {
                     <CommaCell value={p.semesters} />
                   </td>
                   <td className="px-3 py-2 font-medium text-slate-800 max-w-xs">{p.project_title}</td>
-                  <td className="px-3 py-2">{p.course_code || "—"}</td>
-                  <td className="px-3 py-2">{p.course_name || "—"}</td>
                   <td className="px-3 py-2">{p.faculty_name}</td>
-                  <td className="px-3 py-2">{p.co_guide || "—"}</td>
-                  <td className="px-3 py-2">
-                    <CommaCell value={p.student_roll_nos} />
-                  </td>
-                  <td className="px-3 py-2">
-                    <CommaCell value={p.student_names} />
-                  </td>
-                  <td className="px-3 py-2 align-top min-w-[14rem] max-w-[18rem]">
-                    <SdgTableCell project={p} onReview={() => openSdgReview(p)} />
-                  </td>
-                  <td className="px-3 py-2">{p.credit ?? "—"}</td>
                   {canReviewSdgs && (
                     <td className="px-3 py-2 whitespace-nowrap">
                       <div className="flex flex-wrap items-center gap-2">
@@ -646,6 +633,19 @@ export default function ProjectsPage() {
                       </div>
                     </td>
                   )}
+                  <td className="px-3 py-2">{p.course_code || "—"}</td>
+                  <td className="px-3 py-2">{p.course_name || "—"}</td>
+                  <td className="px-3 py-2">{p.co_guide || "—"}</td>
+                  <td className="px-3 py-2">
+                    <CommaCell value={p.student_roll_nos} />
+                  </td>
+                  <td className="px-3 py-2">
+                    <CommaCell value={p.student_names} />
+                  </td>
+                  <td className="px-3 py-2 align-top min-w-[14rem] max-w-[18rem]">
+                    <SdgTableCell project={p} onReview={() => openSdgReview(p)} />
+                  </td>
+                  <td className="px-3 py-2">{p.credit ?? "—"}</td>
                 </tr>
               ))}
               {!projects.length && (

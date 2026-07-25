@@ -1,4 +1,4 @@
-# Architecture — Automation Portal
+# Architecture — ECE Department Smart Portal
 
 ## Vision
 

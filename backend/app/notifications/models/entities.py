@@ -100,6 +100,26 @@ REQUIREMENT_TYPES = (
 REQUIREMENT_STATUSES = ("grey", "red", "yellow", "green")
 
 
+class NotificationTemplate(Base):
+    """Admin-defined custom notification templates (synced to requirement tracker)."""
+
+    __tablename__ = "notification_templates"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    slug: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    label: Mapped[str] = mapped_column(String(256), nullable=False)
+    requirement_type: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    subject: Mapped[str] = mapped_column(String(512), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class FacultyRequirement(Base):
     __tablename__ = "faculty_requirements"
     __table_args__ = (UniqueConstraint("faculty_user_id", "requirement_type", name="uq_faculty_requirement"),)

@@ -1,4 +1,4 @@
-import { apiGet, apiPostForm } from "../../../services/api";
+import { apiGet, apiPostForm, apiPostJson } from "../../../services/api";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "/api/v1";
 
@@ -164,3 +164,29 @@ export async function sendAdminNotification(form: {
     title: string;
   }>("/notifications/admin/send", fd);
 }
+
+export type CustomNotificationTemplate = {
+  id: number | null;
+  slug: string;
+  label: string;
+  requirement_type: string;
+  subject: string;
+  body: string;
+  is_builtin: boolean;
+};
+
+export function fetchNotificationTemplates() {
+  return apiGet<{ custom: CustomNotificationTemplate[]; items: CustomNotificationTemplate[] }>(
+    "/notifications/admin/templates"
+  );
+}
+
+export function createNotificationTemplate(body: {
+  label: string;
+  subject: string;
+  body: string;
+  requirement_type?: string;
+}) {
+  return apiPostJson<CustomNotificationTemplate>("/notifications/admin/templates", body);
+}
+

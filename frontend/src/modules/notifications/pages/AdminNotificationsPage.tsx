@@ -6,8 +6,11 @@ import {
   fetchAdminNotificationDetail,
   fetchAdminNotifications,
   fetchAdminRecipientOptions,
+  fetchNotificationTemplates,
+  createNotificationTemplate,
   sendAdminNotification,
   type AdminNotificationSummary,
+  type CustomNotificationTemplate,
 } from "../services/notificationsApi";
 import { NOTIFICATION_TEMPLATES, MAX_REMINDER_DAYS, REMINDER_QUICK_PICKS, REMINDER_UNITS, minutesFromCustom } from "../notificationTemplates";
 
@@ -15,6 +18,7 @@ export default function AdminNotificationsPage() {
   const { user } = useAuth();
   const [items, setItems] = useState<AdminNotificationSummary[]>([]);
   const [users, setUsers] = useState<Array<{ id: number; full_name: string; email: string }>>([]);
+  const [customTemplates, setCustomTemplates] = useState<CustomNotificationTemplate[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<number[]>([]);
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
@@ -33,6 +37,10 @@ export default function AdminNotificationsPage() {
   const [extraEmails, setExtraEmails] = useState("");
   const [recipientExcel, setRecipientExcel] = useState<File | null>(null);
   const [skipPortalRecipients, setSkipPortalRecipients] = useState(false);
+  const [showNewTemplate, setShowNewTemplate] = useState(false);
+  const [newTplLabel, setNewTplLabel] = useState("");
+  const [newTplSubject, setNewTplSubject] = useState("");
+  const [newTplBody, setNewTplBody] = useState("");
 
   const resolvedReminderMinutes = useMemo(() => {
     if (reminderMode === "custom") {
@@ -48,9 +56,14 @@ export default function AdminNotificationsPage() {
   const reminderInvalid = reminderMode === "custom" && (resolvedReminderMinutes <= 0 || resolvedReminderMinutes === -1);
 
   const load = useCallback(async () => {
-    const [list, opts] = await Promise.all([fetchAdminNotifications(), fetchAdminRecipientOptions()]);
+    const [list, opts, tpls] = await Promise.all([
+      fetchAdminNotifications(),
+      fetchAdminRecipientOptions(),
+      fetchNotificationTemplates(),
+    ]);
     setItems(list.items);
     setUsers(opts.users);
+    setCustomTemplates(tpls.custom ?? []);
   }, []);
 
   useEffect(() => {
@@ -139,7 +152,80 @@ export default function AdminNotificationsPage() {
                 {tpl.label}
               </button>
             ))}
+            {customTemplates.map((tpl) => (
+              <button
+                key={tpl.requirement_type}
+                type="button"
+                className="text-xs px-2 py-1.5 rounded-lg border border-teal-200 bg-teal-50 hover:bg-teal-100"
+                onClick={() => {
+                  setTitle(tpl.subject);
+                  setMessage(tpl.body);
+                  setRequirementType(tpl.requirement_type);
+                }}
+              >
+                {tpl.label}
+              </button>
+            ))}
+            <button
+              type="button"
+              className="text-xs px-2 py-1.5 rounded-lg border border-dashed border-slate-300 text-slate-600 hover:bg-slate-50"
+              onClick={() => setShowNewTemplate((v) => !v)}
+            >
+              + Custom template
+            </button>
           </div>
+          {showNewTemplate && (
+            <div className="mt-3 border border-slate-200 rounded-lg p-3 space-y-2 bg-slate-50">
+              <p className="text-xs text-slate-600">
+                Creating a custom template also adds a new Requirement Tracker column automatically.
+              </p>
+              <input
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+                placeholder="Template label (tracker column name)"
+                value={newTplLabel}
+                onChange={(e) => setNewTplLabel(e.target.value)}
+              />
+              <input
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+                placeholder="Default subject"
+                value={newTplSubject}
+                onChange={(e) => setNewTplSubject(e.target.value)}
+              />
+              <textarea
+                className="w-full border rounded-lg px-3 py-2 text-sm min-h-[100px]"
+                placeholder="Default message body"
+                value={newTplBody}
+                onChange={(e) => setNewTplBody(e.target.value)}
+              />
+              <button
+                type="button"
+                className="text-xs px-3 py-1.5 rounded-lg bg-teal-700 text-white"
+                onClick={async () => {
+                  setError("");
+                  try {
+                    const created = await createNotificationTemplate({
+                      label: newTplLabel,
+                      subject: newTplSubject,
+                      body: newTplBody,
+                    });
+                    setCustomTemplates((prev) => [...prev, created]);
+                    setTitle(created.subject);
+                    setMessage(created.body);
+                    setRequirementType(created.requirement_type);
+                    setNewTplLabel("");
+                    setNewTplSubject("");
+                    setNewTplBody("");
+                    setShowNewTemplate(false);
+                    setMessageOk(`Custom template “${created.label}” created and linked to the Requirement Tracker.`);
+                  } catch (e) {
+                    setError(e instanceof Error ? e.message : "Could not create template");
+                  }
+                }}
+              >
+                Save template
+              </button>
+            </div>
+          )}
           <p className="text-xs text-slate-500 mt-2">
             Placeholders like <span className="font-mono bg-amber-50 px-1 rounded">[Faculty Name]</span> and{" "}
             <span className="font-mono bg-amber-50 px-1 rounded">[Date]</span> are shown in brackets — replace them before sending.

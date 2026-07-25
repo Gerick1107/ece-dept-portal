@@ -1,6 +1,6 @@
 # Deployment guide (IT / server hosting)
 
-This document describes how to host **Automation Portal** (NPortal) on a departmental server. The stack is **FastAPI + MySQL + React (Vite)**.
+This document describes how to host the **ECE Department Smart Portal** (NPortal) on a departmental server. The stack is **FastAPI + MySQL + React (Vite)**.
 
 For containerized deployment, see **[DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md)** (recommended when Python/Node versions on the host must not affect the portal).
 

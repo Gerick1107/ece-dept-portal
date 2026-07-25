@@ -149,9 +149,9 @@ export default function StudentPublicationsPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-xl font-semibold">Student Publications</h2>
+          <h2 className="text-xl font-semibold">Student Publications (Not Published with ECE Faculty)</h2>
           <p className="text-sm text-slate-600 mt-1">
-            Shared department list (not tied to faculty Scholar sync). Search by title or authors;
+            Shared department list (not published with ECE Faculty). Search by title or authors;
             filter and sort by year. Extra Excel columns appear automatically after import.
           </p>
         </div>

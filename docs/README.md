@@ -19,7 +19,9 @@
 | [LOCAL_DATABASE.md](LOCAL_DATABASE.md) | Windows MySQL setup, migrations, bootstrap admin |
 | [STORAGE.md](STORAGE.md) | Upload, result, and archive directories |
 | [WORKFLOW_A.md](WORKFLOW_A.md) | CO-PO Workflow A (end-of-semester) |
-| [USER_MANAGEMENT.md](USER_MANAGEMENT.md) | Admin accounts, deactivate, remove profile, forgot password |
+| [USER_MANAGEMENT.md](USER_MANAGEMENT.md) | Admin accounts, faculty links, HoD, deactivate, remove profile, forgot password |
+| [USER_MANUAL_FACULTY.md](USER_MANUAL_FACULTY.md) | **Faculty how-to** for every portal feature |
+| [USER_MANUAL_ADMIN.md](USER_MANUAL_ADMIN.md) | **Admin how-to** for every portal feature |
 | [MAINTENANCE.md](MAINTENANCE.md) | Publications sync, CSV assets, meeting PDFs, reminders |
 | [DATA_ASSETS.md](DATA_ASSETS.md) | `data/assets/` file list (not in Git) |
 | [CODE_FLOW.md](CODE_FLOW.md) | Legacy Flask CO-PO flow (historical reference) |

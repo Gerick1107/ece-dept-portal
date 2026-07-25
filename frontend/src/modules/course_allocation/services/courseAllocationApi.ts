@@ -8,10 +8,9 @@ export type AllocationCourse = {
   academic_year: string;
   course_code: string;
   course_name: string;
-  ug_pg: string;
-  core_elective: string;
-  is_first_year: boolean;
-  first_year_course_name: string | null;
+  ug_type: string | null;
+  pg_type: string | null;
+  registered_students: number | null;
   source?: string;
   is_faculty_placeholder?: boolean;
   course_catalog_id?: number | null;
@@ -24,10 +23,10 @@ export type AllocationWritePayload = {
   academic_year?: string;
   course_code: string;
   course_name: string;
-  ug_pg: string;
-  core_elective: string;
-  is_first_year?: boolean;
-  first_year_course_name?: string | null;
+  ug_type?: string | null;
+  pg_type?: string | null;
+  registered_students?: number | null;
+  clear_registered_students?: boolean;
   course_catalog_id?: number | null;
   source?: string;
   is_faculty_placeholder?: boolean;
@@ -38,9 +37,8 @@ export type CatalogEntry = {
   id: number;
   course_code: string;
   course_name: string;
-  ug_pg: string;
-  core_elective: string;
-  is_first_year: boolean;
+  ug_type: string | null;
+  pg_type: string | null;
 };
 
 export type FacultyAllocationRow = {
@@ -64,11 +62,11 @@ export type DashboardSummary = {
   total_courses: number;
   ug_courses: number;
   pg_courses: number;
-  ug_pg_courses: number;
-  core_courses: number;
-  elective_courses: number;
-  first_year_courses: number;
+  ug_and_pg_courses: number;
+  ug_type_split: Record<string, number>;
+  pg_type_split: Record<string, number>;
   unassigned: number;
+  missing_registered_students: number;
 };
 
 export function getCurrentSemester() {
@@ -83,16 +81,14 @@ export function getAllocationDashboardSummary(semester?: string) {
 export function listAllocations(params?: {
   scope?: string;
   query?: string;
-  ug_pg?: string;
-  core_elective?: string;
-  first_year_only?: boolean;
+  ug_type?: string;
+  pg_type?: string;
 }) {
   const q = new URLSearchParams();
   if (params?.scope) q.set("scope", params.scope);
   if (params?.query) q.set("query", params.query);
-  if (params?.ug_pg) q.set("ug_pg", params.ug_pg);
-  if (params?.core_elective) q.set("core_elective", params.core_elective);
-  if (params?.first_year_only) q.set("first_year_only", "true");
+  if (params?.ug_type) q.set("ug_type", params.ug_type);
+  if (params?.pg_type) q.set("pg_type", params.pg_type);
   const s = q.toString();
   return apiGet<AllocationListResponse>(`/course-allocation${s ? `?${s}` : ""}`);
 }
@@ -107,11 +103,10 @@ export type FacultyAllocationHistory = {
     semesters: string[];
     most_recent_semester: string;
   }>;
-  first_year_counts: Array<{ name: string; count: number }>;
   analytics: {
     courses_per_semester: Array<{ semester: string; count: number }>;
-    ug_pg_split: Record<string, number>;
-    core_elective_split: Record<string, number>;
+    ug_type_split: Record<string, number>;
+    pg_type_split: Record<string, number>;
   };
 };
 
@@ -140,10 +135,10 @@ export type CoursesDashboardSummary = {
   faculty_involved: number;
   ug_courses: number;
   pg_courses: number;
-  ug_pg_courses: number;
-  core_courses: number;
-  elective_courses: number;
-  first_year_courses: number;
+  ug_and_pg_courses: number;
+  ug_type_split: Record<string, number>;
+  pg_type_split: Record<string, number>;
+  missing_registered_students: number;
 };
 
 export type CourseAllocationHistory = {
@@ -158,24 +153,22 @@ export type CourseAllocationHistory = {
   }>;
   analytics: {
     instances_per_semester: Array<{ semester: string; count: number }>;
-    ug_pg_split: Record<string, number>;
-    core_elective_split: Record<string, number>;
+    ug_type_split: Record<string, number>;
+    pg_type_split: Record<string, number>;
   };
 };
 
 export function listCoursesAllocations(params?: {
   scope?: string;
   query?: string;
-  ug_pg?: string;
-  core_elective?: string;
-  first_year_only?: boolean;
+  ug_type?: string;
+  pg_type?: string;
 }) {
   const q = new URLSearchParams();
   if (params?.scope) q.set("scope", params.scope);
   if (params?.query) q.set("query", params.query);
-  if (params?.ug_pg) q.set("ug_pg", params.ug_pg);
-  if (params?.core_elective) q.set("core_elective", params.core_elective);
-  if (params?.first_year_only) q.set("first_year_only", "true");
+  if (params?.ug_type) q.set("ug_type", params.ug_type);
+  if (params?.pg_type) q.set("pg_type", params.pg_type);
   const s = q.toString();
   return apiGet<CourseListResponse>(`/course-allocation/courses${s ? `?${s}` : ""}`);
 }
@@ -243,4 +236,8 @@ export function deleteAllocation(rowId: number) {
 
 export function listCourseCatalog() {
   return apiGet<{ items: CatalogEntry[] }>("/course-allocation/catalog");
+}
+
+export function updateCatalogEntry(entryId: number, payload: Partial<CatalogEntry>) {
+  return apiPutJson<CatalogEntry>(`/course-allocation/catalog/${entryId}`, payload);
 }

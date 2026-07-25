@@ -223,7 +223,7 @@ export default function QuestionPaperAnalyzerPanel() {
             />
           </label>
           <label className="text-sm block">
-            <span className="text-slate-600">Final weightage (%)</span>
+            <span className="text-slate-600">(%) weightage in overall grade (out of 100)</span>
             <input
               type="number"
               min={0.1}

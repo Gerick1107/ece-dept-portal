@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database.models.user import User, UserRole
-from app.notifications.models.entities import REQUIREMENT_TYPES, FacultyRequirement
+from app.notifications.models.entities import REQUIREMENT_TYPES, FacultyRequirement, NotificationTemplate
 
 REQUIREMENT_LABELS = {
     "course_upcoming_sem": "Upcoming semester course(s)",
@@ -16,6 +16,25 @@ REQUIREMENT_LABELS = {
     "verify_sdgs": "Verify SDGs (Projects and Theses)",
     "copo_attainment": "CO-PO attainment (prev. semester)",
 }
+
+
+def all_requirement_types(db: Session) -> list[str]:
+    custom = list(db.scalars(select(NotificationTemplate.requirement_type).order_by(NotificationTemplate.id)).all())
+    seen = set(REQUIREMENT_TYPES)
+    out = list(REQUIREMENT_TYPES)
+    for rt in custom:
+        if rt not in seen:
+            out.append(rt)
+            seen.add(rt)
+    return out
+
+
+def all_requirement_labels(db: Session) -> dict[str, str]:
+    labels = dict(REQUIREMENT_LABELS)
+    for tpl in db.scalars(select(NotificationTemplate)).all():
+        labels[tpl.requirement_type] = tpl.label
+    return labels
+
 
 
 def upsert_requirement_on_send(
@@ -126,10 +145,11 @@ def list_requirement_matrix(db: Session) -> list[dict]:
         (r.faculty_user_id, r.requirement_type): r
         for r in db.scalars(select(FacultyRequirement)).all()
     }
+    types = all_requirement_types(db)
     out = []
     for user in users:
         cells = {}
-        for rt in REQUIREMENT_TYPES:
+        for rt in types:
             row = reqs.get((user.id, rt))
             cells[rt] = {
                 "status": row.status if row else "grey",

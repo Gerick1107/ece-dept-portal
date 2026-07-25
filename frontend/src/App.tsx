@@ -36,6 +36,7 @@ import InventoryPage from "./modules/budget/pages/InventoryPage";
 import LlmInsightsPage from "./modules/llm/pages/LlmInsightsPage";
 import NotificationsPage from "./modules/notifications/pages/NotificationsPage";
 import AdminNotificationsPage from "./modules/notifications/pages/AdminNotificationsPage";
+import FeedbackPage from "./pages/FeedbackPage";
 import AdminDataPage from "./pages/AdminDataPage";
 import AdminUsersPage from "./pages/AdminUsersPage";
 import DashboardPage from "./pages/DashboardPage";
@@ -214,6 +215,7 @@ export default function App() {
         <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="/llm-insights" element={<LlmInsightsPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
+        <Route path="/feedback" element={<FeedbackPage />} />
         <Route path="/admin/notifications" element={<AdminNotificationsPage />} />
         <Route path="/admin/requirement-tracker" element={<RequirementTrackerPage />} />
         <Route path="/admin/users" element={<AdminUsersPage />} />

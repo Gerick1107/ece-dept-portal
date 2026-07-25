@@ -1,1 +1,1 @@
-"""Automation Portal — backend application package."""
+"""ECE Department Smart Portal — backend application package."""

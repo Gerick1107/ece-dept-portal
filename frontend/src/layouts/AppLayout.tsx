@@ -10,6 +10,7 @@ type NavItem =
 
 const navItems: NavItem[] = [
   { kind: "link", to: "/dashboard", label: "Dashboard", exact: true },
+  { kind: "link", to: "/feedback", label: "Feedback", exact: true },
   {
     kind: "group",
     label: "CO-PO Attainment",
@@ -192,7 +193,7 @@ export default function AppLayout() {
             />
             <div className="min-w-0">
               <p className="text-xs uppercase tracking-wide text-teal-100">ECE Department</p>
-              <h1 className="text-lg font-semibold truncate">Automation Portal</h1>
+              <h1 className="text-lg font-semibold truncate">Smart Portal</h1>
             </div>
           </div>
           <div className="flex items-center gap-3 text-sm shrink-0">

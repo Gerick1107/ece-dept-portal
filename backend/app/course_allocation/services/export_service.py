@@ -32,9 +32,9 @@ def export_allocations_xlsx(db: Session, **filters) -> bytes:
         "academic_year",
         "course_code",
         "course_name",
-        "ug_pg",
-        "core_elective",
-        "is_first_year",
+        "ug_type",
+        "pg_type",
+        "registered_students",
     ]
     df = pd.DataFrame(rows)
     for c in cols:
@@ -68,9 +68,9 @@ def export_courses_xlsx(db: Session, **filters) -> bytes:
         "faculty_name",
         "semester",
         "academic_year",
-        "ug_pg",
-        "core_elective",
-        "is_first_year",
+        "ug_type",
+        "pg_type",
+        "registered_students",
     ]
     df = pd.DataFrame(rows)
     for c in cols:

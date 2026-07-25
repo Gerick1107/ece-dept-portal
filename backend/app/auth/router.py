@@ -13,6 +13,7 @@ from app.auth.schemas import (
     UserCreate,
     UserCreateResponse,
     UserResponse,
+    UserUpdate,
 )
 from app.auth.security import create_access_token
 from app.auth.service import (
@@ -24,6 +25,7 @@ from app.auth.service import (
     get_user_by_email,
     purge_user_profile,
     send_forgot_password_email,
+    update_user_account,
 )
 from app.database.models.user import User, UserRole
 from app.database.session import get_db
@@ -107,14 +109,18 @@ def register_user(
 ):
     if get_user_by_email(db, body.email):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
-    user, email_sent = create_user(
-        db,
-        body.email,
-        body.full_name,
-        body.password,
-        body.role,
-        send_welcome_email=body.send_welcome_email,
-    )
+    try:
+        user, email_sent = create_user(
+            db,
+            body.email,
+            body.full_name,
+            body.password,
+            body.role,
+            send_welcome_email=body.send_welcome_email,
+            faculty_id=body.faculty_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return UserCreateResponse(
         id=user.id,
         email=user.email,
@@ -122,8 +128,31 @@ def register_user(
         role=user.role,
         is_active=user.is_active,
         must_change_password=user.must_change_password,
+        faculty_id=user.faculty_id,
         welcome_email_sent=email_sent,
     )
+
+
+@router.patch("/users/{user_id}", response_model=UserResponse)
+def patch_user(
+    user_id: int,
+    body: UserUpdate,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_roles(UserRole.admin))],
+):
+    try:
+        user = update_user_account(
+            db,
+            user_id,
+            current_user,
+            role=body.role,
+            faculty_id=body.faculty_id,
+            clear_faculty_id=body.clear_faculty_id,
+            full_name=body.full_name,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return user
 
 
 @router.post("/users/{user_id}/deactivate", status_code=status.HTTP_204_NO_CONTENT)

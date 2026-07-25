@@ -73,7 +73,7 @@ def send_faculty_welcome_email(
     subject = "ECE Department Portal — Your login credentials"
     text = f"""Dear {full_name},
 
-An account has been created for you on the Automation Portal.
+An account has been created for you on the ECE Department Smart Portal.
 
 Login URL: {portal_url}
 Email: {to_email}
@@ -84,7 +84,7 @@ Please sign in and change your password from Profile / Settings.
 This is a portal password — not your institutional email password.
 
 Regards,
-ECE Department Portal
+ECE Department Smart Portal
 """
     html = f"""
 <p>Dear {full_name},</p>
@@ -124,7 +124,7 @@ Temporary password: {temporary_password}
 Please sign in and immediately change your password from Profile / Settings.
 
 Regards,
-ECE Department Portal
+ECE Department Smart Portal
 """
     html = f"""
 <p>Dear {full_name},</p>

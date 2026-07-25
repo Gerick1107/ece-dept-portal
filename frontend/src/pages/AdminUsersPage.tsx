@@ -5,14 +5,18 @@ import {
   deactivateUser,
   listUsers,
   removeUserProfile,
+  updateUser,
   type User,
   type UserCreate,
 } from "../services/api";
 import { useAuth } from "../modules/auth/AuthContext";
+import { listFaculty } from "../modules/publications/services/publicationsApi";
+import type { Faculty } from "../modules/publications/types/publications";
 
 export default function AdminUsersPage() {
   const { user } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
+  const [facultyOptions, setFacultyOptions] = useState<Faculty[]>([]);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [form, setForm] = useState<UserCreate>({
@@ -21,6 +25,7 @@ export default function AdminUsersPage() {
     password: "",
     role: "faculty",
     send_welcome_email: true,
+    faculty_id: null,
   });
 
   async function refresh() {
@@ -32,7 +37,12 @@ export default function AdminUsersPage() {
   }
 
   useEffect(() => {
-    if (user?.role === "admin") refresh();
+    if (user?.role === "admin") {
+      refresh();
+      listFaculty({ page: 1, page_size: 300, include_inactive: false })
+        .then((r) => setFacultyOptions(r.items))
+        .catch(() => {});
+    }
   }, [user]);
 
   async function onSubmit(e: FormEvent) {
@@ -40,12 +50,19 @@ export default function AdminUsersPage() {
     setError("");
     setSuccess("");
     try {
-      const created = await createUser(form);
+      const payload = {
+        ...form,
+        faculty_id: form.faculty_id || null,
+      };
+      const created = await createUser(payload);
       const emailNote = created.welcome_email_sent
         ? "Welcome email sent with temporary password."
         : "Welcome email not sent (SMTP disabled or failed) — share password manually.";
-      setSuccess(`Created account for ${form.email}. ${emailNote}`);
-      setForm({ email: "", full_name: "", password: "", role: "faculty", send_welcome_email: true });
+      const linkNote = form.faculty_id
+        ? " Linked to faculty directory for data scoping."
+        : " No faculty link — they will not see personal teaching/project data until linked.";
+      setSuccess(`Created account for ${form.email}. ${emailNote}${linkNote}`);
+      setForm({ email: "", full_name: "", password: "", role: "faculty", send_welcome_email: true, faculty_id: null });
       refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Create failed");
@@ -56,22 +73,21 @@ export default function AdminUsersPage() {
     return <p className="text-red-700">Admin access only.</p>;
   }
 
+  const facultyNameById = Object.fromEntries(facultyOptions.map((f) => [f.id, f.name]));
+
   return (
     <div className="space-y-6 max-w-4xl">
       <section className="bg-white border rounded-xl p-6">
-        <h2 className="text-xl font-semibold">Faculty accounts</h2>
+        <h2 className="text-xl font-semibold">Portal accounts</h2>
         <ol className="text-sm text-slate-600 mt-2 leading-relaxed list-decimal list-inside space-y-1">
-          <li>Add the faculty member&apos;s institutional email and full name.</li>
-          <li>Set a portal password here (min. 8 characters) — this is separate from Gmail/Microsoft.</li>
+          <li>Add the person&apos;s institutional email and full name.</li>
           <li>
-            Tick &quot;Send welcome email&quot; if SMTP is configured in <code className="text-xs bg-slate-100 px-1 rounded">.env</code>;
-            otherwise note the password and share it with them manually.
+            Optionally link the account to an existing faculty directory record (recommended for faculty). Data scoping
+            uses this <code className="text-xs bg-slate-100 px-1 rounded">faculty_id</code> link — not the email or an
+            exact name match — so spelling differences in names do not matter once linked.
           </li>
-          <li>On first login, faculty accounts are asked to change this password under Profile.</li>
-          <li>
-            <strong>Deactivate</strong> blocks login but keeps the account visible. <strong>Remove profile</strong> deletes
-            name/email from the portal (CO-PO data is kept) so the same email can be registered again.
-          </li>
+          <li>Set a portal password (min. 8 characters) — separate from Gmail/Microsoft.</li>
+          <li>Only one user can be HoD at a time; marking someone as HoD demotes the previous HoD to faculty.</li>
         </ol>
       </section>
 
@@ -110,8 +126,27 @@ export default function AdminUsersPage() {
           className="w-full border rounded-lg px-3 py-2 text-sm"
         >
           <option value="faculty">Faculty</option>
+          <option value="hod">HoD (only one at a time)</option>
           <option value="admin">Admin</option>
         </select>
+        <div>
+          <label className="text-xs text-slate-500">Link to faculty directory (optional)</label>
+          <select
+            value={form.faculty_id ?? ""}
+            onChange={(e) =>
+              setForm({ ...form, faculty_id: e.target.value ? Number(e.target.value) : null })
+            }
+            className="w-full border rounded-lg px-3 py-2 text-sm"
+          >
+            <option value="">— Not linked (staff / other access) —</option>
+            {facultyOptions.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.name}
+                {f.department ? ` · ${f.department}` : ""}
+              </option>
+            ))}
+          </select>
+        </div>
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"
@@ -133,20 +168,91 @@ export default function AdminUsersPage() {
               <th className="py-1">Name</th>
               <th>Email</th>
               <th>Role</th>
+              <th>Faculty link</th>
               <th>Status</th>
               <th />
             </tr>
           </thead>
           <tbody>
             {users.map((u) => (
-              <tr key={u.id} className="border-b">
+              <tr key={u.id} className="border-b align-top">
                 <td className="py-2">{u.full_name}</td>
                 <td>{u.email}</td>
                 <td className="capitalize">{u.role}</td>
+                <td className="text-xs text-slate-600">
+                  {u.faculty_id ? facultyNameById[u.faculty_id] || `Faculty #${u.faculty_id}` : "—"}
+                </td>
                 <td>{u.is_active ? "Active" : "Inactive"}</td>
                 <td className="py-2 text-right">
                   {u.id !== user?.id && (
                     <div className="flex flex-wrap justify-end gap-2">
+                      {u.role !== "hod" ? (
+                        <button
+                          type="button"
+                          className="text-indigo-700 text-xs hover:underline"
+                          onClick={async () => {
+                            if (
+                              !window.confirm(
+                                `Mark ${u.full_name} as HoD? Any existing HoD will be demoted to faculty.`
+                              )
+                            ) {
+                              return;
+                            }
+                            setError("");
+                            setSuccess("");
+                            try {
+                              await updateUser(u.id, { role: "hod" });
+                              setSuccess(`${u.full_name} is now HoD.`);
+                              refresh();
+                            } catch (err) {
+                              setError(err instanceof Error ? err.message : "Update failed");
+                            }
+                          }}
+                        >
+                          Mark HoD
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="text-slate-600 text-xs hover:underline"
+                          onClick={async () => {
+                            try {
+                              await updateUser(u.id, { role: "faculty" });
+                              setSuccess(`${u.full_name} demoted from HoD to faculty.`);
+                              refresh();
+                            } catch (err) {
+                              setError(err instanceof Error ? err.message : "Update failed");
+                            }
+                          }}
+                        >
+                          Clear HoD
+                        </button>
+                      )}
+                      <select
+                        className="text-xs border rounded px-1 py-0.5 max-w-[10rem]"
+                        value={u.faculty_id ?? ""}
+                        onChange={async (e) => {
+                          setError("");
+                          try {
+                            if (!e.target.value) {
+                              await updateUser(u.id, { clear_faculty_id: true });
+                            } else {
+                              await updateUser(u.id, { faculty_id: Number(e.target.value) });
+                            }
+                            setSuccess(`Updated faculty link for ${u.email}.`);
+                            refresh();
+                          } catch (err) {
+                            setError(err instanceof Error ? err.message : "Link update failed");
+                          }
+                        }}
+                      >
+                        <option value="">No faculty link</option>
+                        {facultyOptions.map((f) => (
+                          <option key={f.id} value={f.id}>
+                            {f.name}
+                          </option>
+                        ))}
+                      </select>
                       {u.is_active ? (
                         <button
                           type="button"
@@ -202,14 +308,14 @@ export default function AdminUsersPage() {
                           setSuccess("");
                           try {
                             await removeUserProfile(u.id);
-                            setSuccess(`Removed profile for ${u.email}. CO-PO data was retained.`);
+                            setSuccess(`Removed profile for ${u.email}.`);
                             refresh();
                           } catch (err) {
-                            setError(err instanceof Error ? err.message : "Remove profile failed");
+                            setError(err instanceof Error ? err.message : "Remove failed");
                           }
                         }}
                       >
-                        Remove profile
+                        Remove
                       </button>
                     </div>
                   )}

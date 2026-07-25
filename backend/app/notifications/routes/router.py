@@ -29,6 +29,7 @@ from app.notifications.services.notification_service import (
 from app.utils.email_parse import parse_emails_from_excel, parse_emails_from_text
 from app.notifications.services.requirement_service import (
     REQUIREMENT_LABELS,
+    all_requirement_labels,
     list_requirement_matrix,
     set_requirement_status,
 )
@@ -163,7 +164,95 @@ def admin_requirements_matrix(
     db: Annotated[Session, Depends(get_db)],
     _: Annotated[User, Depends(require_roles(UserRole.admin))],
 ):
-    return {"labels": REQUIREMENT_LABELS, "rows": list_requirement_matrix(db)}
+    return {"labels": all_requirement_labels(db), "rows": list_requirement_matrix(db)}
+
+
+@router.get("/admin/templates")
+def admin_list_templates(
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[User, Depends(require_roles(UserRole.admin))],
+):
+    from app.notifications.models.entities import NotificationTemplate
+    from app.notifications.services.requirement_service import REQUIREMENT_LABELS
+
+    builtin = [
+        {
+            "id": None,
+            "slug": key,
+            "label": label,
+            "requirement_type": key,
+            "subject": "",
+            "body": "",
+            "is_builtin": True,
+        }
+        for key, label in REQUIREMENT_LABELS.items()
+    ]
+    # Prefer frontend-provided built-in bodies; API mainly exposes custom ones + keys.
+    custom = [
+        {
+            "id": t.id,
+            "slug": t.slug,
+            "label": t.label,
+            "requirement_type": t.requirement_type,
+            "subject": t.subject,
+            "body": t.body,
+            "is_builtin": False,
+        }
+        for t in db.scalars(select(NotificationTemplate).order_by(NotificationTemplate.label)).all()
+    ]
+    return {"builtin_keys": list(REQUIREMENT_LABELS.keys()), "custom": custom, "items": builtin + custom}
+
+
+class CustomTemplateCreate(BaseModel):
+    label: str = Field(min_length=2, max_length=256)
+    subject: str = Field(min_length=2, max_length=512)
+    body: str = Field(min_length=2, max_length=20000)
+    requirement_type: str | None = Field(default=None, max_length=64)
+
+
+@router.post("/admin/templates", status_code=201)
+def admin_create_template(
+    body: CustomTemplateCreate,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_roles(UserRole.admin))],
+):
+    import re
+
+    from app.notifications.models.entities import REQUIREMENT_TYPES, NotificationTemplate
+
+    label = body.label.strip()
+    slug_base = re.sub(r"[^a-z0-9]+", "_", label.lower()).strip("_") or "custom"
+    req_type = (body.requirement_type or f"custom_{slug_base}").strip().lower()
+    req_type = re.sub(r"[^a-z0-9_]+", "_", req_type).strip("_")
+    if not req_type:
+        raise HTTPException(status_code=400, detail="Invalid requirement_type")
+    if req_type in REQUIREMENT_TYPES:
+        raise HTTPException(status_code=400, detail="That requirement type is reserved for a built-in template")
+    existing = db.scalar(select(NotificationTemplate).where(NotificationTemplate.requirement_type == req_type))
+    if existing:
+        raise HTTPException(status_code=409, detail="A template with this requirement_type already exists")
+
+    slug = req_type
+    row = NotificationTemplate(
+        slug=slug,
+        label=label,
+        requirement_type=req_type,
+        subject=body.subject.strip(),
+        body=body.body.strip(),
+        created_by_user_id=current_user.id,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return {
+        "id": row.id,
+        "slug": row.slug,
+        "label": row.label,
+        "requirement_type": row.requirement_type,
+        "subject": row.subject,
+        "body": row.body,
+        "is_builtin": False,
+    }
 
 
 @router.put("/admin/requirements/{user_id}/{requirement_type}")

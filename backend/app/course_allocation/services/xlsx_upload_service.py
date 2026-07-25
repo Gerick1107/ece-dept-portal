@@ -20,19 +20,12 @@ _SEMESTER_BANNER_RE = re.compile(r"^(Monsoon|Winter)\s+(\d{4})\s+Semester", re.I
 _HEADER_MARKERS = ("course code", "course name", "faculty")
 
 
-def _derive_ug_pg_core(label: str) -> tuple[str, str]:
+def _derive_ug_pg_types(label: str) -> tuple[str | None, str | None]:
+    """Return (ug_type, pg_type) from an Excel Core/Elective label column."""
     text = (label or "").strip()
     upper = text.upper()
     ug = "UG" in upper or "B.TECH" in upper or "BTECH" in upper
     pg = "PG" in upper or "M.TECH" in upper or "MTECH" in upper or "M. TECH" in upper
-    if ug and pg:
-        ug_pg = "UG/PG"
-    elif pg:
-        ug_pg = "PG"
-    elif ug:
-        ug_pg = "UG"
-    else:
-        ug_pg = "UG/PG"
     core = "CORE" in upper
     elective = "ELECTIVE" in upper
     if core and elective:
@@ -43,31 +36,14 @@ def _derive_ug_pg_core(label: str) -> tuple[str, str]:
         ce = "Elective"
     else:
         ce = "Elective"
-    return ug_pg, ce
-
-
-_FIRST_YEAR_KEYWORDS = [
-    ("introduction to programming", "Introduction to Programming"),
-    ("data structures", "Data Structures and Algorithms"),
-    ("digital circuits", "Digital Circuits"),
-    ("basic electronics", "Basic Electronics"),
-    ("linear algebra", "Maths I (Linear Algebra)"),
-    ("probability", "Maths II (Probability & Statistics)"),
-    ("hci", "Introduction to HCI"),
-    ("computer organisation", "Computer Organization"),
-    ("computer organization", "Computer Organization"),
-    ("communication skills", "Communication Skills"),
-]
-
-
-def _detect_first_year(course_name: str) -> tuple[bool, str | None]:
-    lower = course_name.lower()
-    if "internet of things" in lower or ("iot" in lower and "introduction to programming" in lower):
-        return False, None
-    for keyword, canonical in _FIRST_YEAR_KEYWORDS:
-        if keyword in lower:
-            return True, canonical
-    return False, None
+    if ug and pg:
+        return ce, ce
+    if pg:
+        return None, ce
+    if ug:
+        return ce, None
+    # Ambiguous label — apply type to both levels so data is not dropped.
+    return ce, ce
 
 
 def parse_allocation_xlsx(path: Path) -> list[dict]:
@@ -112,8 +88,7 @@ def parse_allocation_xlsx(path: Path) -> list[dict]:
         label = cells[header_map.get("label", 3)] if header_map.get("label") is not None else ""
         if not code or code.lower() == "course code":
             continue
-        ug_pg, core_elective = _derive_ug_pg_core(label)
-        is_fy, fy_name = _detect_first_year(name)
+        ug_type, pg_type = _derive_ug_pg_types(label)
         placeholder = is_placeholder_name(faculty)
         rows_out.append(
             {
@@ -122,10 +97,9 @@ def parse_allocation_xlsx(path: Path) -> list[dict]:
                 "academic_year": academic_year_for_semester(current_semester),
                 "course_code": code,
                 "course_name": name,
-                "ug_pg": ug_pg,
-                "core_elective": core_elective,
-                "is_first_year": is_fy,
-                "first_year_course_name": fy_name,
+                "ug_type": ug_type,
+                "pg_type": pg_type,
+                "registered_students": None,
                 "source": "new",
                 "is_faculty_placeholder": placeholder,
             }

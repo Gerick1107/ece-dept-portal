@@ -6,62 +6,61 @@ Portal accounts are stored in the `users` table. CO-PO uploads and evaluation ru
 
 | Role | Access |
 |------|--------|
-| `faculty` | CO-PO, publications (own views), Projects and Theses |
-| `hod` | Same as faculty (department views as configured) |
-| `admin` | All modules + user management |
+| `faculty` | Own linked faculty data across modules; Feedback; Notifications |
+| `hod` | Same scoping as faculty for data views; only one HoD at a time; CC on feedback emails |
+| `admin` | All modules + user management + feedback resolution |
+
+## Faculty data scoping (important)
+
+Accounts see personal teaching/project/publication slices through **`users.faculty_id`** (FK to `faculty.id`), resolved in `get_faculty_scope`.
+
+- Email is only for login identity.
+- Display name is not used for scoping.
+- When migrating from temporary emails to institutional emails, **link the new account to the correct faculty directory row** (Users UI dropdown). Name spelling differences do not matter once `faculty_id` is set.
+- Leave `faculty_id` empty for non-faculty portal users.
 
 ## Admin actions (UI: Admin → Users)
 
 ### Create account
 
 - Set email, full name, portal password (min 8 characters).
-- Optional welcome email (requires `SMTP_ENABLED=true` in `backend/.env`).
-- Faculty accounts are prompted to change password on first login (Profile).
+- Optional role: Faculty / HoD / Admin.
+- Optional **faculty directory link**.
+- Optional welcome email (requires `SMTP_ENABLED=true`).
+- Faculty/HoD accounts are prompted to change password on first login (Profile).
+- Creating/marking HoD demotes any existing HoD to faculty.
 
-### Deactivate
+### Update link / HoD
 
-- Sets `is_active=false`.
-- User cannot log in; name and email remain in the user list.
-- **Activate** restores login with the same password.
+- Per-user dropdown to set or clear faculty link.
+- **Mark HoD** / **Clear HoD** actions.
 
-### Remove profile
+### Deactivate / Remove profile
 
-- Permanently removes personal data from the portal account:
-  - Email replaced with an internal `removed.{id}.*@portal.removed` address (frees the original email).
-  - Full name set to `Removed user`.
-  - Password invalidated; account hidden from the user list.
-- **CO-PO uploads, runs, and files are retained** (linked by the same internal `user_id`).
-- The same institutional email and name can be used to **create a new account** later.
+Unchanged: deactivate blocks login; remove anonymizes personal fields while retaining CO-PO history by `user_id`.
 
-### Restrictions
+## Feedback
 
-- Admins cannot deactivate, activate, or remove **their own** account.
-- The **only remaining admin** cannot be deactivated or removed.
-
-## Forgot password (login page)
-
-1. User enters a **valid email** (browser validation, same as sign-in).
-2. Clicks **Forgot password?**
-3. If the account exists and is active, the API sets a temporary password and emails it (SMTP required).
-4. Response is always generic: *"If the account exists, a temporary password has been sent to email."*
-5. User signs in with the temporary password and changes it under **Profile**.
+Faculty submit under `/feedback`. Admins resolve items. SMTP notifies admins + HoD.
 
 ## API reference
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/api/v1/auth/users` | Create user (admin) |
+| `POST` | `/api/v1/auth/users` | Create user (admin); accepts `faculty_id` |
+| `PATCH` | `/api/v1/auth/users/{id}` | Update role / faculty link / name |
 | `GET` | `/api/v1/auth/users` | List active portal accounts (admin) |
 | `POST` | `/api/v1/auth/users/{id}/deactivate` | Deactivate |
 | `POST` | `/api/v1/auth/users/{id}/activate` | Activate |
 | `DELETE` | `/api/v1/auth/users/{id}` | Remove profile (anonymize) |
 | `POST` | `/api/v1/auth/forgot-password` | Email temporary password |
+| `GET/POST/PATCH` | `/api/v1/feedback` | Feedback list / submit / resolve |
 
-## Database migration
-
-User removal tracking uses column `users.profile_removed` (migration **005**).
+## Database migrations
 
 ```powershell
 cd backend
 alembic upgrade head
 ```
+
+User–faculty link: migration **034**. Feedback + custom notification templates: **046**.

@@ -76,7 +76,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    app_name: str = "Automation Portal"
+    app_name: str = "ECE Department Smart Portal"
     app_env: str = "development"
     debug: bool = True
     api_v1_prefix: str = "/api/v1"

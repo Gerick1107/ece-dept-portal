@@ -18,6 +18,8 @@ type Props = {
   onError: (message: string) => void;
 };
 
+const TYPE_OPTIONS = ["", "Core", "Elective", "Core/Elective"] as const;
+
 type FormState = {
   faculty_id: string;
   faculty_name: string;
@@ -27,10 +29,9 @@ type FormState = {
   course_catalog_id: string;
   course_code: string;
   course_name: string;
-  ug_pg: string;
-  core_elective: string;
-  is_first_year: boolean;
-  first_year_course_name: string;
+  ug_type: string;
+  pg_type: string;
+  registered_students: string;
 };
 
 function toForm(initial?: AllocationCourse | null, defaults?: Partial<AllocationCourse>): FormState {
@@ -45,10 +46,9 @@ function toForm(initial?: AllocationCourse | null, defaults?: Partial<Allocation
     course_catalog_id: base.course_catalog_id != null ? String(base.course_catalog_id) : "",
     course_code: base.course_code ?? "",
     course_name: base.course_name ?? "",
-    ug_pg: base.ug_pg ?? "UG",
-    core_elective: base.core_elective ?? "Core",
-    is_first_year: Boolean(base.is_first_year),
-    first_year_course_name: base.first_year_course_name ?? "",
+    ug_type: base.ug_type ?? "",
+    pg_type: base.pg_type ?? "",
+    registered_students: base.registered_students != null ? String(base.registered_students) : "",
   };
 }
 
@@ -79,9 +79,8 @@ export default function AllocationFormModal({ initial, defaults, onClose, onSave
       course_catalog_id: String(entry.id),
       course_code: entry.course_code,
       course_name: entry.course_name,
-      ug_pg: entry.ug_pg,
-      core_elective: entry.core_elective,
-      is_first_year: entry.is_first_year,
+      ug_type: entry.ug_type ?? "",
+      pg_type: entry.pg_type ?? "",
     }));
   }
 
@@ -98,15 +97,22 @@ export default function AllocationFormModal({ initial, defaults, onClose, onSave
     const selected = eceFaculty.find((f) => String(f.id) === form.faculty_id);
     const academicYear =
       form.academic_year.trim() || academicYearForSemester(form.semester.trim()) || form.academic_year;
+    const regRaw = form.registered_students.trim();
+    const registeredStudents = regRaw === "" ? null : Number(regRaw);
+    if (regRaw !== "" && (!Number.isFinite(registeredStudents) || (registeredStudents ?? 0) < 0)) {
+      onError("Registered students must be a non-negative number.");
+      return;
+    }
+
     const payload = {
       semester: form.semester.trim(),
       academic_year: academicYear,
       course_code: form.course_code.trim(),
       course_name: form.course_name.trim(),
-      ug_pg: form.ug_pg,
-      core_elective: form.core_elective,
-      is_first_year: form.is_first_year,
-      first_year_course_name: form.first_year_course_name.trim() || null,
+      ug_type: form.ug_type || null,
+      pg_type: form.pg_type || null,
+      registered_students: registeredStudents,
+      clear_registered_students: regRaw === "",
       course_catalog_id: form.course_catalog_id ? Number(form.course_catalog_id) : null,
       faculty_id: form.unassigned ? null : Number(form.faculty_id),
       faculty_name: form.unassigned
@@ -231,42 +237,47 @@ export default function AllocationFormModal({ initial, defaults, onClose, onSave
         />
 
         <div className="grid grid-cols-2 gap-2">
-          <select
-            className="border rounded-lg px-3 py-2 text-sm"
-            value={form.ug_pg}
-            onChange={(e) => setForm((prev) => ({ ...prev, ug_pg: e.target.value }))}
-          >
-            <option value="UG">UG</option>
-            <option value="PG">PG</option>
-            <option value="UG/PG">UG/PG</option>
-          </select>
-          <select
-            className="border rounded-lg px-3 py-2 text-sm"
-            value={form.core_elective}
-            onChange={(e) => setForm((prev) => ({ ...prev, core_elective: e.target.value }))}
-          >
-            <option value="Core">Core</option>
-            <option value="Elective">Elective</option>
-            <option value="Core/Elective">Core/Elective</option>
-          </select>
+          <div>
+            <label className="text-xs text-slate-500">UG type</label>
+            <select
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+              value={form.ug_type}
+              onChange={(e) => setForm((prev) => ({ ...prev, ug_type: e.target.value }))}
+            >
+              {TYPE_OPTIONS.map((t) => (
+                <option key={t || "none"} value={t}>
+                  {t || "— (not UG)"}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-slate-500">PG type</label>
+            <select
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+              value={form.pg_type}
+              onChange={(e) => setForm((prev) => ({ ...prev, pg_type: e.target.value }))}
+            >
+              {TYPE_OPTIONS.map((t) => (
+                <option key={t || "none"} value={t}>
+                  {t || "— (not PG)"}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
-        <label className="flex items-center gap-2 text-sm">
+        <div>
+          <label className="text-xs text-slate-500">No. of registered students</label>
           <input
-            type="checkbox"
-            checked={form.is_first_year}
-            onChange={(e) => setForm((prev) => ({ ...prev, is_first_year: e.target.checked }))}
-          />
-          First-year course
-        </label>
-        {form.is_first_year && (
-          <input
+            type="number"
+            min={0}
             className="w-full border rounded-lg px-3 py-2 text-sm"
-            placeholder="First-year course label (optional)"
-            value={form.first_year_course_name}
-            onChange={(e) => setForm((prev) => ({ ...prev, first_year_course_name: e.target.value }))}
+            placeholder="Leave blank if unknown"
+            value={form.registered_students}
+            onChange={(e) => setForm((prev) => ({ ...prev, registered_students: e.target.value }))}
           />
-        )}
+        </div>
 
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" className="px-3 py-2 text-sm border rounded-lg" onClick={onClose} disabled={busy}>

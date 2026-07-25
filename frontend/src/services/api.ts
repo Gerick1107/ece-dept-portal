@@ -16,6 +16,14 @@ export type UserCreate = {
   password: string;
   role: "faculty" | "hod" | "admin";
   send_welcome_email?: boolean;
+  faculty_id?: number | null;
+};
+
+export type UserUpdate = {
+  role?: "faculty" | "hod" | "admin";
+  faculty_id?: number | null;
+  clear_faculty_id?: boolean;
+  full_name?: string;
 };
 
 export type UserCreateResponse = User & { welcome_email_sent?: boolean };
@@ -176,6 +184,10 @@ export async function downloadCopoFile(token: string, filename = "results.xlsx")
 
 export async function createUser(body: UserCreate): Promise<UserCreateResponse> {
   return apiPostJson<UserCreateResponse>("/auth/users", body);
+}
+
+export async function updateUser(userId: number, body: UserUpdate): Promise<User> {
+  return apiPatchJson<User>(`/auth/users/${userId}`, body);
 }
 
 export async function listUsers(): Promise<User[]> {

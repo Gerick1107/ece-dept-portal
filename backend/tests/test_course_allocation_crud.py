@@ -18,14 +18,14 @@ def test_allocation_create_schema_requires_core_fields():
         )
 
 
-def test_allocation_create_schema_validates_enums():
+def test_allocation_create_schema_validates_types():
     row = AllocationCreateRequest(
         faculty_id=1,
         semester="Monsoon 2026",
         course_code="ECE101",
         course_name="Intro",
-        ug_pg="UG",
-        core_elective="Core",
+        ug_type="Core",
+        pg_type=None,
     )
     assert row.source == "manual"
     assert academic_year_for_semester(row.semester) == "2026-27"
@@ -35,7 +35,7 @@ def test_allocation_create_schema_validates_enums():
             semester="Monsoon 2026",
             course_code="ECE101",
             course_name="Intro",
-            ug_pg="XYZ",
+            ug_type="XYZ",
         )
 
 
