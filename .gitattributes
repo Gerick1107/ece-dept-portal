@@ -1,11 +1,2 @@
-# Auto detect text files and perform LF normalization
-* text=auto
-
-# Files that MUST stay LF (they run inside Linux Docker containers).
-# Without this, Windows checkouts get CRLF and the shebang breaks:
-#   exec /app/docker-entrypoint.sh: no such file or directory
+# Force LF for shell scripts so Linux containers don't choke on Windows CRLF.
 *.sh text eol=lf
-Dockerfile text eol=lf
-*.Dockerfile text eol=lf
-docker-entrypoint.sh text eol=lf
-nginx.conf text eol=lf

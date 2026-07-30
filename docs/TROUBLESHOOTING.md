@@ -25,7 +25,9 @@ The UI sanitizes large/HTML 500 bodies in `frontend/src/services/api.ts`. Check 
 ## SDG generate fails only on server
 
 - Confirm Ollama is reachable from the API host (`LOCAL_LLM_BASE_URL`).
-- In Docker, Ollama usually runs on the host → `http://host.docker.internal:11434/v1`.
+- **Host Ollama:** In Docker, use `http://host.docker.internal:11434/v1` and `LOCAL_LLM_MTLS_ENABLED=false`.
+- **Compose Ollama:** Start `docker-compose.ollama.yml`, set `LOCAL_LLM_BASE_URL=https://ollama-proxy:8443/v1` and `LOCAL_LLM_MTLS_ENABLED=true` (certs via `scripts/generate_mtls_certs.*`). Both stacks must share the `portal-shared` network.
+- See [SETUP.md](SETUP.md) for the dual-compose flow.
 - Check project SDG queue / background thread exceptions in API logs.
 
 ## Student Excel import fails

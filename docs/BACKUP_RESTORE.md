@@ -1,36 +1,173 @@
-# Backup and restore
+# Backup and restore (restic)
 
-## What to back up
+The portal uses **restic** for encrypted, incremental backups of:
 
-1. **MySQL database** (required) — all portal state.
-2. **`data/assets/`** — CSV/Excel mirrors and templates (gitignored).
-3. **`storage/`** — uploaded files, generated exports, document blobs.
-4. **`backend/documents/`** — meeting PDF trees if used outside DB storage.
-5. **Env files** — `backend/.env` / `.env.docker` stored securely offline (never in Git).
+| What | Restic repo under `BACKUP_TARGET_PATH` |
+|------|----------------------------------------|
+| `backend/storage/` | `storage/` |
+| `backend/documents/` | `documents/` |
+| `data/assets/` | `assets/` |
+| `data/templates/` | `templates/` |
+| MySQL logical dump (`mysqldump`) | `mysql/` |
 
-## MySQL dump (example)
+Snapshots are AES-encrypted with `RESTIC_PASSWORD`. Without that password,
+backups cannot be restored.
+
+Implementation lives in `ops/backup/` (Dockerfile, loop script, restore script,
+Compose file). The temporary `backup/` folder at the repo root (if present) is
+reference-only and is gitignored — do not rely on it.
+
+---
+
+## 1. One-time setup
 
 ```bash
-mysqldump -u USER -p DATABASE > ece_portal_$(date +%F).sql
+cd ops/backup
+cp bac.env.example bac.env
+cp db.env.example db.env
+```
+
+Edit:
+
+1. **`bac.env`**
+   - `RESTIC_PASSWORD` — long random secret (`openssl rand -base64 48`). Store offline.
+   - `BACKUP_TARGET_PATH` — durable host path (NAS / large disk). Example:
+     - Linux: `/mnt/nas/ece-portal/backup`
+     - Windows: `C:\ece-portal-backup` (use forward slashes or quoted paths in Compose)
+   - `BACKUP_START_TIME` / `BACKUP_INTERVAL_DAYS` — schedule (default 23:00 daily)
+2. **`db.env`**
+   - `MYSQL_PASSWORD` (and optionally `MYSQL_ROOT_PASSWORD`) must match `.env.docker`
+
+The backup container joins Docker networks `portal-app` (to reach MySQL) and
+`portal-shared`. Start the **main portal stack first** so those networks exist.
+
+### Start the backup service
+
+**Linux / macOS / Git Bash**
+
+```bash
+cd ops/backup
+docker compose -f docker-compose.backup.yml --env-file bac.env up -d --build
+docker compose -f docker-compose.backup.yml logs -f backup
+```
+
+**Windows (PowerShell)**
+
+```powershell
+cd ops\backup
+docker compose -f docker-compose.backup.yml --env-file bac.env up -d --build
+docker compose -f docker-compose.backup.yml logs -f backup
+```
+
+On first start the service runs an **immediate initial backup**, then waits for
+the scheduled window.
+
+---
+
+## 2. How to know it is working
+
+| Check | Expected |
+|-------|----------|
+| Container running | `docker ps` shows `ece-portal-backup` |
+| Logs | `Initializing encrypted restic repository` then `Completed backup for storage/documents/assets/templates/mysql-logical` |
+| Activity CSV | `$BACKUP_TARGET_PATH/logs/backup_activity.csv` gains a row each cycle |
+| Snapshots exist | See commands below |
+| Repos on disk | `$BACKUP_TARGET_PATH/{storage,documents,assets,templates,mysql}/` contain restic data |
+
+List snapshots (example for storage):
+
+```bash
+docker run --rm --env-file ops/backup/bac.env \
+  -v "${BACKUP_TARGET_PATH}:/backup-root:ro" \
+  restic/restic:0.18.1 \
+  -r /backup-root/storage snapshots
+```
+
+PowerShell: set `$env:BACKUP_TARGET_PATH` first, or substitute the path literally.
+
+A healthy install has **at least one snapshot** in `storage` and `mysql` after
+the initial cycle.
+
+---
+
+## 3. Restore after a crash
+
+> Stop the portal stack before overwriting live data, or restore onto a fresh
+> machine / empty directories.
+
+```bash
+# From ops/backup/
+sh restore_from_backup.sh \
+  --base-dir ../../backend/storage \
+  --documents-dir ../../backend/documents \
+  --assets-dir ../../data/assets \
+  --templates-dir ../../data/templates \
+  --force
+```
+
+This:
+
+1. Restores the latest restic snapshots for storage / documents / assets / templates
+2. Validates the MySQL logical dump and writes `ops/backup/restored_<db>.sql`
+
+Import into the live Docker MySQL volume:
+
+```bash
+# from repo root, with portal mysql running
+docker compose --env-file .env.docker exec -T mysql \
+  mysql -u root -p"$MYSQL_ROOT_PASSWORD" < ops/backup/restored_ece_dept_portal.sql
+
+docker compose --env-file .env.docker exec backend alembic upgrade head
+```
+
+Then verify:
+
+1. `/health` returns ok
+2. Admin login works
+3. Faculty directory counts look sane
+4. Spot-check one CO-PO result, one project, one allocation semester
+5. Open a meeting minutes document that has an attachment
+
+---
+
+## 4. Manual mysqldump (without restic)
+
+Still useful for quick one-off dumps:
+
+```bash
+docker compose --env-file .env.docker exec -T mysql \
+  mysqldump -u root -p"$MYSQL_ROOT_PASSWORD" --single-transaction --routines --triggers \
+  ece_dept_portal > ece_portal_$(date +%F).sql
 ```
 
 Restore:
 
 ```bash
-mysql -u USER -p DATABASE < ece_portal_YYYY-MM-DD.sql
-cd backend && alembic upgrade head
+docker compose --env-file .env.docker exec -T mysql \
+  mysql -u root -p"$MYSQL_ROOT_PASSWORD" ece_dept_portal < ece_portal_YYYY-MM-DD.sql
+docker compose --env-file .env.docker exec backend alembic upgrade head
 ```
 
-After restore, confirm `alembic current` matches the code revision you deployed.
+---
 
-## Docker volume note
+## 5. Operational notes
 
-Compose setups usually persist MySQL and bind-mount `data/assets` + `storage`. Back up those volumes/bind mounts with the SQL dump.
+- **Never commit** `bac.env`, `db.env`, `RESTIC_PASSWORD`, or `backup-data/`.
+- Keep a **printed / offline copy** of `RESTIC_PASSWORD`. Loss = unrecoverable backups.
+- The MySQL Docker **named volume** (`mysql_data`) is covered via logical dumps,
+  not by copying the volume files directly.
+- `hf_cache` (embedding models) is optional to back up; models re-download on demand.
+- Env files (`.env.docker`) should be backed up **offline**, not inside the restic
+  repo on the same disk if you can avoid it.
 
-## Verification after restore
+---
 
-1. `/health` returns ok.
-2. Admin login works.
-3. Faculty directory counts look sane.
-4. Spot-check one CO-PO result, one project, one allocation semester.
-5. Open a meeting minutes document that has an attachment.
+## 6. Troubleshooting
+
+| Symptom | Fix |
+|---------|-----|
+| Cannot connect to MySQL | Ensure main compose is up; backup joins `portal-app`; `MYSQL_HOST=mysql` |
+| Network not found | `docker compose --env-file .env.docker up -d` first (creates `portal-app` / `portal-shared`) |
+| Wrong password | Align `ops/backup/db.env` with `.env.docker` |
+| No snapshots after hours | Check logs; confirm initial cycle finished; clock / `BACKUP_START_TIME` |
+| Restore refuses non-empty dirs | Pass `--force` (destructive) |

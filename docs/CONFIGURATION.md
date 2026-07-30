@@ -39,9 +39,21 @@ Primary env file: `backend/.env` (see `backend/.env.example` if present). Docker
 
 | Variable | Purpose |
 |----------|---------|
-| `LOCAL_LLM_BASE_URL` | Default `http://localhost:11434/v1` |
+| `LOCAL_LLM_BASE_URL` | Default `http://localhost:11434/v1` (host) or `https://ollama-proxy:8443/v1` (compose mTLS) |
 | `LOCAL_LLM_MODEL` | Default `llama3.2:3b` |
 | `LOCAL_LLM_WARMUP_ON_STARTUP` | Prefetch model weights |
+| `LOCAL_LLM_MTLS_ENABLED` | Use client certs when talking to `ollama-proxy` |
+| `LOCAL_LLM_MTLS_CA_FILE` | CA that signed the proxy cert (default `/certs/mtls/ca.crt`) |
+| `LOCAL_LLM_MTLS_CERT_FILE` | Backend client certificate |
+| `LOCAL_LLM_MTLS_KEY_FILE` | Backend client private key |
+
+## Security hardening
+
+| Variable | Purpose |
+|----------|---------|
+| `BLOCK_AUTOMATION_AGENTS` | Reject curl/wget/postman/etc. on `/api/*` (default true) |
+| `RATE_LIMIT_ENABLED` | Per-IP API rate limits |
+| `LOGIN_MAX_ATTEMPTS` / `LOGIN_WINDOW_SECONDS` | Login brute-force window |
 
 ## Storage / mail / reminders
 

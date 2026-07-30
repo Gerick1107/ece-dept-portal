@@ -10,6 +10,9 @@ This is a step-by-step runbook for putting the portal on the server you were giv
 5. Giving `admin-ece` admin access
 6. What your collaborator does to work the same way
 
+For a single consolidated Windows+Linux checklist (app + Ollama + restic
+backups), prefer **[SETUP.md](SETUP.md)**.
+
 > Throughout, replace `SERVER_IP`, `USERNAME`, and paths with your real values.
 > The shell examples are for the server (Linux). Run the "from your laptop"
 > commands in PowerShell on Windows.

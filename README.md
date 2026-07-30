@@ -73,30 +73,33 @@ provider. Backed by [Ollama](https://ollama.com).
 
 ### Set up the local model (Ollama)
 
+**Host install (testing servers):**
+
 ```bash
 # 1. Install Ollama from https://ollama.com (runs a background service on :11434)
 # 2. Pull a small, CPU-friendly model (recommended default ~2 GB):
 ollama pull llama3.2:3b
-# Alternatives to benchmark:
-#   ollama pull phi3:mini
-#   ollama pull mistral:7b-instruct-q4_K_M   # heavier; MUST be the Q4 quant for CPU speed
-# 3. Verify it answers in seconds, not minutes:
+# 3. Verify:
 curl http://localhost:11434/v1/chat/completions \
   -d '{"model":"llama3.2:3b","messages":[{"role":"user","content":"Hello"}]}'
 ```
 
-Config (`backend/.env` or `.env.docker`): `LOCAL_LLM_MODEL` (default
-`llama3.2:3b`), `LOCAL_LLM_BASE_URL` (default `http://localhost:11434/v1`).
+Config: `LOCAL_LLM_MODEL` (default `llama3.2:3b`),
+`LOCAL_LLM_BASE_URL=http://host.docker.internal:11434/v1` inside Docker.
 
-> Docker note: Ollama runs on the **host**, so the backend container reaches it
-> via `http://host.docker.internal:11434/v1` (already wired in `docker-compose.yml`).
+**Separate Docker stack (institute server without host Ollama):**
 
-Each LLM action (Generate Insights, Ask about minutes) shows a status dot for
-whether the local model is currently reachable. `GET /api/v1/llm-insights/providers`
-reports availability.
+```bash
+./scripts/generate_mtls_certs.sh   # or .\scripts\generate_mtls_certs.ps1
+docker compose -f docker-compose.ollama.yml up -d
+docker compose -f docker-compose.ollama.yml exec ollama ollama pull llama3.2:3b
+# Then set LOCAL_LLM_BASE_URL=https://ollama-proxy:8443/v1 and LOCAL_LLM_MTLS_ENABLED=true
+```
 
-A 3B–7B local model is weaker than a large cloud model on hard reasoning —
-expected tradeoff for zero-cost / offline, not a bug.
+See [docs/SETUP.md](docs/SETUP.md) for the full dual-compose + mTLS flow.
+
+Each LLM action shows a status dot for whether the local model is reachable.
+`GET /api/v1/llm-insights/providers` reports availability.
 
 ## Modules (summary)
 
@@ -123,32 +126,40 @@ Full reference: [docs/MODULES.md](docs/MODULES.md).
 
 | Method | Guide |
 |--------|--------|
+| **Full setup (start here)** | [docs/SETUP.md](docs/SETUP.md) |
 | Native (PM2 + Nginx) | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) |
 | Docker (recommended for institute) | [docs/DOCKER_DEPLOYMENT.md](docs/DOCKER_DEPLOYMENT.md) |
+| Backup / restore (restic) | [docs/BACKUP_RESTORE.md](docs/BACKUP_RESTORE.md) |
 | Security review | [docs/SECURITY.md](docs/SECURITY.md) |
 
 ```bash
-# Native
-cd backend && pip install -r requirements.txt && alembic upgrade head
-cd ../frontend && npm ci && npm run build
-pm2 start deploy/ecosystem.config.cjs
-
-# Docker
+# Docker — app stack
 cp .env.docker.example .env.docker   # edit secrets
 docker compose --env-file .env.docker up -d --build
+
+# Docker — optional Ollama stack (shared network + mTLS)
+./scripts/generate_mtls_certs.sh
+docker compose -f docker-compose.ollama.yml up -d
+
+# Docker — encrypted backups
+cd ops/backup && cp bac.env.example bac.env && cp db.env.example db.env
+# edit passwords, then:
+docker compose -f docker-compose.backup.yml --env-file bac.env up -d --build
 ```
 
 ## Documentation
 
 | Document | Purpose |
 |----------|---------|
+| [docs/SETUP.md](docs/SETUP.md) | **Start-to-finish setup (Windows + Linux)** |
 | [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) | Handoff entry point |
 | [docs/MODULES.md](docs/MODULES.md) | Feature reference |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | How to change code safely |
 | [docs/FILE_INVENTORY.md](docs/FILE_INVENTORY.md) | Per-file purpose list |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Server hosting (native) |
 | [docs/DOCKER_DEPLOYMENT.md](docs/DOCKER_DEPLOYMENT.md) | Docker hosting |
-| [docs/SECURITY.md](docs/SECURITY.md) | OWASP checklist |
+| [docs/BACKUP_RESTORE.md](docs/BACKUP_RESTORE.md) | Restic encrypted backup / restore |
+| [docs/SECURITY.md](docs/SECURITY.md) | OWASP checklist + blackbox probes |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design |
 | [docs/LOCAL_DATABASE.md](docs/LOCAL_DATABASE.md) | MySQL setup |
 | [docs/DATA_ASSETS.md](docs/DATA_ASSETS.md) | `data/assets/` setup (not in Git) |

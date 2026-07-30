@@ -169,6 +169,18 @@ class Settings(BaseSettings):
     local_llm_insights_temperature: float = Field(
         default=0.35, validation_alias="LOCAL_LLM_INSIGHTS_TEMPERATURE"
     )
+    # mTLS to the Ollama nginx proxy (docker-compose.ollama.yml). Off by default
+    # so host-installed Ollama (http://host.docker.internal:11434) still works.
+    local_llm_mtls_enabled: bool = Field(default=False, validation_alias="LOCAL_LLM_MTLS_ENABLED")
+    local_llm_mtls_ca_file: str = Field(
+        default="/certs/mtls/ca.crt", validation_alias="LOCAL_LLM_MTLS_CA_FILE"
+    )
+    local_llm_mtls_cert_file: str = Field(
+        default="/certs/mtls/client.crt", validation_alias="LOCAL_LLM_MTLS_CERT_FILE"
+    )
+    local_llm_mtls_key_file: str = Field(
+        default="/certs/mtls/client.key", validation_alias="LOCAL_LLM_MTLS_KEY_FILE"
+    )
 
     # Embeddings: auto | cuda | cpu
     embedding_device: str = Field(default="auto", validation_alias="EMBEDDING_DEVICE")

@@ -1,6 +1,16 @@
 # Docker deployment (institute server)
 
-When the portal is feature-complete, deploy the **entire stack** (MySQL + API + frontend) with Docker. This pins Python 3.11, Node 20, and MySQL 8.0 so host Python/Node upgrades cannot break the portal.
+When the portal is feature-complete, deploy with **two Compose files**:
+
+| File | Stack |
+|------|--------|
+| `docker-compose.yml` | MySQL + backend + frontend (`portal-app` + `portal-shared` networks) |
+| `docker-compose.ollama.yml` | Ollama + mTLS nginx proxy (`portal-shared` only) |
+| `ops/backup/docker-compose.backup.yml` | Encrypted restic backups (optional ops) |
+
+This pins Python 3.11, Node 20, and MySQL 8.0 so host Python/Node upgrades cannot break the portal.
+
+Full start-to-finish: [SETUP.md](SETUP.md). Backups: [BACKUP_RESTORE.md](BACKUP_RESTORE.md).
 
 ## Prerequisites
 
@@ -52,6 +62,20 @@ Default bootstrap admin comes from `BOOTSTRAP_ADMIN_EMAIL` / `BOOTSTRAP_ADMIN_PA
 | `mysql` | MySQL 8.0 database (persistent volume `mysql_data`) |
 | `backend` | FastAPI on port 8000 (internal); runs `alembic upgrade head` on start |
 | `frontend` | Nginx serving the React build; proxies `/api/` to backend |
+| `ollama` + `ollama-proxy` | Optional LLM stack (`docker-compose.ollama.yml`) on `portal-shared` |
+| `backup` | Optional restic loop (`ops/backup/`) |
+
+### Networks
+
+| Network | Purpose |
+|---------|---------|
+| `portal-app` | mysql ↔ backend ↔ frontend |
+| `portal-shared` | backend ↔ ollama-proxy (mTLS) / ollama |
+
+### Ollama modes
+
+1. **Host Ollama** (testing): `LOCAL_LLM_BASE_URL=http://host.docker.internal:11434/v1`, `LOCAL_LLM_MTLS_ENABLED=false`
+2. **Compose Ollama + mTLS** (institute): generate certs, start `docker-compose.ollama.yml`, set `LOCAL_LLM_BASE_URL=https://ollama-proxy:8443/v1` and `LOCAL_LLM_MTLS_ENABLED=true`
 
 ## Environment variables (backend / `.env.docker`)
 
@@ -61,6 +85,7 @@ Default bootstrap admin comes from `BOOTSTRAP_ADMIN_EMAIL` / `BOOTSTRAP_ADMIN_PA
 | `REQUIREMENT_REMINDER_POLL_MINUTES` | `1` | How often due reminders are checked |
 | `ENABLE_SCHEDULER` | `false` | Monthly publication gap-fill only |
 | `SMTP_ENABLED` | `false` | Required for email reminders in production |
+| `LOCAL_LLM_MTLS_ENABLED` | `false` | Client certs for ollama-proxy |
 
 ## Production hardening checklist
 
@@ -71,9 +96,11 @@ Before IT security review:
 3. Set `APP_ENV=production` and `DEBUG=false` (already in compose)
 4. Set `PORTAL_FRONTEND_URL` and `CORS_ORIGINS` to the real HTTPS URL
 5. Put **TLS** in front (institute reverse proxy / load balancer terminating HTTPS)
-6. Restrict MySQL port — do **not** publish 3306 to the internet (compose does not expose it)
+6. Restrict MySQL port — do **not** publish 3306 to the internet (compose binds `127.0.0.1:3307` only)
 7. Enable SMTP for password reset emails if required
-8. Review [SECURITY.md](SECURITY.md)
+8. Enable restic backups ([BACKUP_RESTORE.md](BACKUP_RESTORE.md))
+9. Prefer mTLS Ollama on servers that do not already trust the host network
+10. Review [SECURITY.md](SECURITY.md)
 
 ## Useful commands
 

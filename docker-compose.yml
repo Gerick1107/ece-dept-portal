@@ -1,5 +1,12 @@
 # Full-stack Docker deployment for ECE Department Smart Portal (NPortal).
-# Use when the portal is ready for institute server hosting.
+# App stack: MySQL + backend + frontend.
+# LLM stack (optional, separate file): docker-compose.ollama.yml
+# Both stacks share the fixed Docker network `portal-shared` so the backend can
+# call Ollama (preferably via the mTLS proxy at https://ollama-proxy:8443).
+#
+#   docker network create portal-shared   # only if it does not already exist
+#   docker compose --env-file .env.docker up -d --build
+#   docker compose -f docker-compose.ollama.yml up -d
 
 services:
   mysql:
@@ -54,8 +61,14 @@ services:
       LOCAL_LLM_NUM_CTX: ${LOCAL_LLM_NUM_CTX:-4096}
       LOCAL_LLM_KEEP_ALIVE: ${LOCAL_LLM_KEEP_ALIVE:-10m}
       LOCAL_LLM_WARMUP_ON_STARTUP: ${LOCAL_LLM_WARMUP_ON_STARTUP:-true}
+      # Host Ollama (testing): http://host.docker.internal:11434/v1
+      # Compose Ollama + mTLS: https://ollama-proxy:8443/v1  (+ LOCAL_LLM_MTLS_*=true)
       LOCAL_LLM_BASE_URL: ${LOCAL_LLM_BASE_URL:-http://host.docker.internal:11434/v1}
       LOCAL_LLM_MODEL: ${LOCAL_LLM_MODEL:-llama3.2:3b}
+      LOCAL_LLM_MTLS_ENABLED: ${LOCAL_LLM_MTLS_ENABLED:-false}
+      LOCAL_LLM_MTLS_CA_FILE: ${LOCAL_LLM_MTLS_CA_FILE:-/certs/mtls/ca.crt}
+      LOCAL_LLM_MTLS_CERT_FILE: ${LOCAL_LLM_MTLS_CERT_FILE:-/certs/mtls/client.crt}
+      LOCAL_LLM_MTLS_KEY_FILE: ${LOCAL_LLM_MTLS_KEY_FILE:-/certs/mtls/client.key}
       # SDG auto-tagging for Projects and Theses (local embeddings, no API key).
       ENABLE_SDG_LLM: ${ENABLE_SDG_LLM:-true}
       SDG_EMBEDDING_MODEL: ${SDG_EMBEDDING_MODEL:-BAAI/bge-large-en-v1.5}
@@ -89,8 +102,11 @@ services:
       - ./data/templates:/data/templates
       # Persist downloaded embedding models (SDG + RAG) across rebuilds.
       - hf_cache:/root/.cache
+      # Client certs for mTLS to docker-compose.ollama.yml (ollama-proxy).
+      - ./certs/mtls:/certs/mtls:ro
     networks:
       - portal
+      - portal-shared
 
   frontend:
     build:
@@ -112,4 +128,8 @@ volumes:
 
 networks:
   portal:
+    name: portal-app
+    driver: bridge
+  portal-shared:
+    name: portal-shared
     driver: bridge

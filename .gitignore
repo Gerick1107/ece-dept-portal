@@ -64,6 +64,20 @@ dump.sql
 # Docker local overrides (compose secrets stay in .env.docker, gitignored above)
 docker-compose.override.yml
 
+# Restic backup local data + secrets (ops/backup)
+ops/backup/bac.env
+ops/backup/db.env
+ops/backup/restored_*.sql
+backup-data/
+backup/
+
+# mTLS materials for Ollama proxy (regenerate with scripts/generate_mtls_certs.*)
+certs/mtls/*.crt
+certs/mtls/*.key
+certs/mtls/*.srl
+certs/*.pem
+!certs/mtls/.gitkeep
+
 # Department data assets (CSVs, mapping Excel, Links.txt) — NOT in Git; share via SQL dump / secure copy
 data/assets/*
 !data/assets/.gitkeep

@@ -5,11 +5,16 @@ Everything runs on the local machine — no API key, no cost, fully offline.
 
 GPU use is controlled via Ollama ``options.num_gpu`` (set ``LOCAL_LLM_NUM_GPU=-1``
 to offload all layers when a GPU is available on the Ollama host).
+
+When ``LOCAL_LLM_MTLS_ENABLED=true``, requests present a client certificate to the
+nginx mTLS proxy in front of the containerized Ollama stack.
 """
 from __future__ import annotations
 
 import asyncio
 import logging
+import ssl
+from pathlib import Path
 
 import httpx
 from openai import APIConnectionError, APIError, AuthenticationError, NotFoundError, OpenAI
@@ -36,11 +41,53 @@ def _ollama_root(base_url: str) -> str:
     return root or "http://localhost:11434"
 
 
+def _mtls_ssl_context() -> ssl.SSLContext:
+    """Build an SSL context that presents the backend client certificate.
+
+    httpx's ``cert=(cert, key)`` path form does not reliably send the client
+    certificate against nginx ``ssl_verify_client on``; an explicit SSLContext
+    does.
+    """
+    settings = get_settings()
+    ca = Path(settings.local_llm_mtls_ca_file)
+    cert = Path(settings.local_llm_mtls_cert_file)
+    key = Path(settings.local_llm_mtls_key_file)
+    missing = [str(p) for p in (ca, cert, key) if not p.is_file()]
+    if missing:
+        raise LlmError(
+            "LOCAL_LLM_MTLS_ENABLED is true but certificate files are missing: "
+            + ", ".join(missing),
+            status_code=503,
+            code="local_llm_unavailable",
+        )
+
+    ctx = ssl.create_default_context(cafile=str(ca))
+    ctx.load_cert_chain(certfile=str(cert), keyfile=str(key))
+    return ctx
+
+
+def _mtls_httpx_client(*, timeout: float) -> httpx.Client | None:
+    """Build an httpx client with mTLS when enabled and cert files exist."""
+    settings = get_settings()
+    if not settings.local_llm_mtls_enabled:
+        return None
+    return httpx.Client(verify=_mtls_ssl_context(), timeout=timeout)
+
+
 def _build_client() -> tuple[OpenAI, str]:
     settings = get_settings()
     base_url = (settings.local_llm_base_url or "").strip() or "http://localhost:11434/v1"
     model = (settings.local_llm_model or "").strip() or "llama3.2:3b"
-    client = OpenAI(base_url=base_url, api_key=_API_KEY, timeout=_REQUEST_TIMEOUT)
+    http_client = _mtls_httpx_client(timeout=_REQUEST_TIMEOUT)
+    if http_client is not None:
+        client = OpenAI(
+            base_url=base_url,
+            api_key=_API_KEY,
+            timeout=_REQUEST_TIMEOUT,
+            http_client=http_client,
+        )
+    else:
+        client = OpenAI(base_url=base_url, api_key=_API_KEY, timeout=_REQUEST_TIMEOUT)
     return client, model
 
 
@@ -139,10 +186,19 @@ async def generate_local_text(
     )
 
 
+def _httpx_get(url: str, *, timeout: float = 3.0) -> httpx.Response:
+    settings = get_settings()
+    if settings.local_llm_mtls_enabled:
+        with _mtls_httpx_client(timeout=timeout) as client:
+            assert client is not None
+            return client.get(url)
+    return httpx.get(url, timeout=timeout)
+
+
 def _gpu_status_message(base_url: str, model: str) -> str:
     """Best-effort GPU layer info from Ollama's running-process API."""
     try:
-        resp = httpx.get(f"{_ollama_root(base_url)}/api/ps", timeout=3.0)
+        resp = _httpx_get(f"{_ollama_root(base_url)}/api/ps", timeout=3.0)
         resp.raise_for_status()
         for proc in resp.json().get("models") or []:
             name = proc.get("name") or proc.get("model") or ""
@@ -179,7 +235,7 @@ def local_available() -> tuple[bool, str]:
     model = (settings.local_llm_model or "").strip() or "llama3.2:3b"
     tags_url = f"{_ollama_root(base_url)}/api/tags"
     try:
-        resp = httpx.get(tags_url, timeout=3.0)
+        resp = _httpx_get(tags_url, timeout=3.0)
         resp.raise_for_status()
         models = [m.get("name", "") for m in resp.json().get("models", [])]
     except Exception:
