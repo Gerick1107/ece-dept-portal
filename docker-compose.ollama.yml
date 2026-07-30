@@ -37,14 +37,10 @@ services:
     #   - "127.0.0.1:11434:11434"
     networks:
       - portal-shared
-    # GPU (NVIDIA): uncomment when the host has nvidia-container-toolkit.
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: all
-    #           capabilities: [gpu]
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+    # Needs nvidia-container-toolkit on the host (your testing server already has GPUs).
+    gpus: all
 
   ollama-proxy:
     image: nginx:1.27-alpine
