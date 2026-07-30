@@ -1,0 +1,46 @@
+# Encrypted incremental backups (restic) for the ECE Portal.
+# Joins the same Docker network as the main portal stack so it can reach MySQL.
+#
+# Prerequisites:
+#   1. Main stack running: docker compose --env-file .env.docker up -d
+#   2. cp bac.env.example bac.env && cp db.env.example db.env  (edit passwords)
+#   3. Ensure RESTIC_PASSWORD and MYSQL_PASSWORD match production secrets
+#   4. External network portal-shared must exist (created by main compose or ollama)
+#
+# Usage:
+#   docker compose -f docker-compose.backup.yml --env-file bac.env up -d --build
+#   # force an immediate cycle by restarting after first start:
+#   docker compose -f docker-compose.backup.yml logs -f backup
+
+services:
+  backup:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ece-portal-backup
+    restart: unless-stopped
+    env_file:
+      - db.env
+      - bac.env
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+    volumes:
+      - ../../backend/storage:/source/storage:ro
+      - ../../backend/documents:/source/documents:ro
+      - ../../data/assets:/source/assets:ro
+      - ../../data/templates:/source/templates:ro
+      - ${BACKUP_TARGET_PATH:-../../backup-data}:/backup-root
+      - ./restic_backup_loop.sh:/opt/backup/restic_backup_loop.sh:ro
+    networks:
+      - portal-app
+      - portal-shared
+    entrypoint: ["/bin/sh", "/opt/backup/restic_backup_loop.sh"]
+
+networks:
+  portal-app:
+    external: true
+    name: portal-app
+  portal-shared:
+    external: true
+    name: portal-shared

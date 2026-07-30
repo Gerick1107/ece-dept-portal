@@ -69,7 +69,8 @@ ops/backup/bac.env
 ops/backup/db.env
 ops/backup/restored_*.sql
 backup-data/
-backup/
+# Temporary reference backup tree at repo root only (not ops/backup)
+/backup/
 
 # mTLS materials for Ollama proxy (regenerate with scripts/generate_mtls_certs.*)
 certs/mtls/*.crt
