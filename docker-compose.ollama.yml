@@ -39,8 +39,11 @@ services:
       - portal-shared
     environment:
       NVIDIA_VISIBLE_DEVICES: all
-    # Needs nvidia-container-toolkit on the host (your testing server already has GPUs).
-    gpus: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+    # Prefer legacy nvidia runtime (avoids CDI "no known GPU vendor" on some hosts).
+    # Requires: nvidia-container-toolkit + Docker configured with runtime "nvidia".
+    # If this still fails, use host Ollama instead (see docs/SETUP.md).
+    runtime: nvidia
 
   ollama-proxy:
     image: nginx:1.27-alpine
