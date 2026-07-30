@@ -29,7 +29,7 @@ services:
       timeout: 5s
       retries: 10
     networks:
-      - portal
+      - portal-app
 
   backend:
     build:
@@ -105,7 +105,7 @@ services:
       # Client certs for mTLS to docker-compose.ollama.yml (ollama-proxy).
       - ./certs/mtls:/certs/mtls:ro
     networks:
-      - portal
+      - portal-app
       - portal-shared
 
   frontend:
@@ -120,14 +120,14 @@ services:
     ports:
       - "${PORTAL_HTTP_PORT:-8080}:80"
     networks:
-      - portal
+      - portal-app
 
 volumes:
   mysql_data:
   hf_cache:
 
 networks:
-  portal:
+  portal-app:
     name: portal-app
     driver: bridge
   portal-shared:
