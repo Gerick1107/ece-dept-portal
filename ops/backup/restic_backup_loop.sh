@@ -52,7 +52,7 @@ validate_port_number() {
 : "${MYSQL_USER:=portal_user}"
 : "${MYSQL_DATABASE:=ece_dept_portal}"
 : "${BACKUP_INTERVAL_DAYS:=1}"
-: "${BACKUP_START_TIME:=23:00}"
+: "${BACKUP_START_TIME:=13:00}"
 : "${BACKUP_HOST_LABEL:=ece-portal}"
 
 validate_positive_integer "$BACKUP_INTERVAL_DAYS" "BACKUP_INTERVAL_DAYS"

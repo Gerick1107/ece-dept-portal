@@ -34,7 +34,7 @@ Edit:
    - `BACKUP_TARGET_PATH` — durable host path (NAS / large disk). Example:
      - Linux: `/mnt/nas/ece-portal/backup`
      - Windows: `C:\ece-portal-backup` (use forward slashes or quoted paths in Compose)
-   - `BACKUP_START_TIME` / `BACKUP_INTERVAL_DAYS` — schedule (default 23:00 daily)
+   - `BACKUP_START_TIME` / `BACKUP_INTERVAL_DAYS` — schedule (default 13:00 daily)
 2. **`db.env`**
    - `MYSQL_PASSWORD` (and optionally `MYSQL_ROOT_PASSWORD`) must match `.env.docker`
 
