@@ -90,27 +90,32 @@ the initial cycle.
 
 ---
 
-## 3. Restore after a crash
+## 3. Restore after a crash (pick a version)
 
 > Stop the portal stack before overwriting live data, or restore onto a fresh
 > machine / empty directories.
 
+### Recommended: interactive version picker
+
+Lists the newest backups **5 at a time** with date/time. Enter `1`–`5` to
+choose, `n` for older pages, `p` for newer, `q` to quit. Confirms before
+restoring.
+
 ```bash
-# From ops/backup/
-sh restore_from_backup.sh \
-  --base-dir ../../backend/storage \
-  --documents-dir ../../backend/documents \
-  --assets-dir ../../data/assets \
-  --templates-dir ../../data/templates \
-  --force
+cd ops/backup
+chmod +x interactive_restore.sh   # once
+./interactive_restore.sh --force
 ```
 
-This:
+What it does:
 
-1. Restores the latest restic snapshots for storage / documents / assets / templates
-2. Validates the MySQL logical dump and writes `ops/backup/restored_<db>.sql`
+1. Reads snapshot times from the **storage** restic repo (each backup cycle)
+2. Lets you pick a version by number
+3. Restores **storage / documents / assets / templates / MySQL** to the
+   snapshots closest to that time (`--as-of`)
+4. Writes `ops/backup/restored_<db>.sql` for MySQL import
 
-Import into the live Docker MySQL volume:
+Then import MySQL into the live container:
 
 ```bash
 # from repo root, with portal mysql running
@@ -120,7 +125,31 @@ docker compose --env-file .env.docker exec -T mysql \
 docker compose --env-file .env.docker exec backend alembic upgrade head
 ```
 
-Then verify:
+### Non-interactive (always latest)
+
+```bash
+cd ops/backup
+sh restore_from_backup.sh \
+  --base-dir ../../backend/storage \
+  --documents-dir ../../backend/documents \
+  --assets-dir ../../data/assets \
+  --templates-dir ../../data/templates \
+  --force
+```
+
+Or restore a known timestamp:
+
+```bash
+sh restore_from_backup.sh \
+  --base-dir ../../backend/storage \
+  --documents-dir ../../backend/documents \
+  --assets-dir ../../data/assets \
+  --templates-dir ../../data/templates \
+  --as-of "2026-07-29T16:24:28.000000000Z" \
+  --force
+```
+
+### After restore — verify
 
 1. `/health` returns ok
 2. Admin login works

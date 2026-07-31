@@ -14,6 +14,7 @@ DB_ENV_FILE="$OPS_BACKUP_DIR/db.env"
 MYSQL_IMAGE="mysql:8.0"
 FORCE="0"
 RESTORE_MYSQL="1"
+SNAPSHOT_AS_OF=""
 
 RESTORE_CONTAINER_NAME=""
 TEMP_ROOT=""
@@ -43,9 +44,14 @@ Optional:
   --bac-env-file <path>     Path to bac.env (default: ./bac.env)
   --db-env-file <path>      Path to db.env (default: ./db.env)
   --mysql-image <image>     Temporary image used for restore (default: mysql:8.0)
+  --as-of <timestamp>       Restore snapshot at/near this time (ISO8601 from restic)
+                            Default: latest. Prefer interactive_restore.sh to pick.
   --skip-mysql              Restore files only (no database import)
   --force                   Allow deleting existing content in target directories
   -h, --help                Show this message
+
+Interactive version picker (recommended):
+  ./interactive_restore.sh --force
 
 Example:
   sh restore_from_backup.sh \
@@ -183,13 +189,69 @@ restic_has_snapshots() {
 restore_latest_snapshot() {
   repo_path="$1"
   target_dir="$2"
+  snapshot_ref="${3:-latest}"
 
   docker run --rm \
     --env-file "$BAC_ENV_FILE" \
     -v "$BACKUP_ROOT:/backup-root:ro" \
     -v "$target_dir:/restore-target" \
     restic/restic:0.18.1 \
-    -r "$repo_path" restore latest --target /restore-target
+    -r "$repo_path" restore "$snapshot_ref" --target /restore-target
+}
+
+# Pick the snapshot in a repo closest to SNAPSHOT_AS_OF (prefer at-or-before).
+resolve_snapshot_ref() {
+  repo_path="$1"
+
+  if [ -z "$SNAPSHOT_AS_OF" ]; then
+    printf '%s' "latest"
+    return
+  fi
+
+  snapshot_json="$(docker run --rm \
+    --env-file "$BAC_ENV_FILE" \
+    -v "$BACKUP_ROOT:/backup-root:ro" \
+    restic/restic:0.18.1 \
+    -r "$repo_path" snapshots --json 2>/dev/null || true)"
+
+  if [ -z "$snapshot_json" ] || [ "$snapshot_json" = "[]" ]; then
+    fail "No snapshots in $repo_path to match --as-of $SNAPSHOT_AS_OF"
+  fi
+
+  if ! command -v python3 >/dev/null 2>&1; then
+    fail "python3 is required for --as-of snapshot matching"
+  fi
+
+  printf '%s' "$snapshot_json" | python3 -c '
+import json, sys
+from datetime import datetime
+
+def parse(t):
+    t = (t or "").strip()
+    if t.endswith("Z"):
+        t = t[:-1] + "+00:00"
+    return datetime.fromisoformat(t)
+
+want = parse(sys.argv[1])
+snaps = json.load(sys.stdin)
+parsed = []
+for s in snaps:
+    try:
+        parsed.append((parse(s.get("time")), s.get("id") or ""))
+    except Exception:
+        continue
+
+if not parsed:
+    raise SystemExit("no parseable snapshots")
+
+before = [(dt, sid) for dt, sid in parsed if dt <= want]
+if before:
+    before.sort(key=lambda x: x[0], reverse=True)
+    print(before[0][1])
+else:
+    parsed.sort(key=lambda x: abs((x[0] - want).total_seconds()))
+    print(parsed[0][1])
+' "$SNAPSHOT_AS_OF"
 }
 
 find_restored_leaf() {
@@ -274,6 +336,11 @@ while [ $# -gt 0 ]; do
     --skip-mysql)
       RESTORE_MYSQL="0"
       shift
+      ;;
+    --as-of)
+      [ $# -ge 2 ] || fail "Missing value for --as-of"
+      SNAPSHOT_AS_OF="$2"
+      shift 2
       ;;
     --force)
       FORCE="1"
@@ -394,31 +461,37 @@ copy_restored_tree() {
   log "$label restore completed: $dest"
 }
 
-log "Restoring latest storage snapshot"
-restore_latest_snapshot "/backup-root/storage" "$STORAGE_RESTORE_DIR"
+log "Restoring storage snapshot (as-of: ${SNAPSHOT_AS_OF:-latest})"
+STORAGE_REF="$(resolve_snapshot_ref "/backup-root/storage")"
+log "Using storage snapshot ref: $STORAGE_REF"
+restore_latest_snapshot "/backup-root/storage" "$STORAGE_RESTORE_DIR" "$STORAGE_REF"
 copy_restored_tree "$STORAGE_RESTORE_DIR" '*/source/storage' "$BASE_DIR" "Storage"
 
 if [ -n "$DOCUMENTS_DIR" ] && restic_has_snapshots "/backup-root/documents"; then
-  log "Restoring latest documents snapshot"
-  restore_latest_snapshot "/backup-root/documents" "$DOCUMENTS_RESTORE_DIR"
+  DOC_REF="$(resolve_snapshot_ref "/backup-root/documents")"
+  log "Restoring documents snapshot ref: $DOC_REF"
+  restore_latest_snapshot "/backup-root/documents" "$DOCUMENTS_RESTORE_DIR" "$DOC_REF"
   copy_restored_tree "$DOCUMENTS_RESTORE_DIR" '*/source/documents' "$DOCUMENTS_DIR" "Documents"
 fi
 
 if [ -n "$ASSETS_DIR" ] && restic_has_snapshots "/backup-root/assets"; then
-  log "Restoring latest assets snapshot"
-  restore_latest_snapshot "/backup-root/assets" "$ASSETS_RESTORE_DIR"
+  ASSETS_REF="$(resolve_snapshot_ref "/backup-root/assets")"
+  log "Restoring assets snapshot ref: $ASSETS_REF"
+  restore_latest_snapshot "/backup-root/assets" "$ASSETS_RESTORE_DIR" "$ASSETS_REF"
   copy_restored_tree "$ASSETS_RESTORE_DIR" '*/source/assets' "$ASSETS_DIR" "Assets"
 fi
 
 if [ -n "$TEMPLATES_DIR" ] && restic_has_snapshots "/backup-root/templates"; then
-  log "Restoring latest templates snapshot"
-  restore_latest_snapshot "/backup-root/templates" "$TEMPLATES_RESTORE_DIR"
+  TEMPLATES_REF="$(resolve_snapshot_ref "/backup-root/templates")"
+  log "Restoring templates snapshot ref: $TEMPLATES_REF"
+  restore_latest_snapshot "/backup-root/templates" "$TEMPLATES_RESTORE_DIR" "$TEMPLATES_REF"
   copy_restored_tree "$TEMPLATES_RESTORE_DIR" '*/source/templates' "$TEMPLATES_DIR" "Templates"
 fi
 
 if [ "$RESTORE_MYSQL" = "1" ]; then
-  log "Restoring latest MySQL logical snapshot"
-  restore_latest_snapshot "/backup-root/mysql" "$MYSQL_RESTORE_DIR"
+  MYSQL_REF="$(resolve_snapshot_ref "/backup-root/mysql")"
+  log "Restoring MySQL logical snapshot ref: $MYSQL_REF"
+  restore_latest_snapshot "/backup-root/mysql" "$MYSQL_RESTORE_DIR" "$MYSQL_REF"
 
   DATABASE_MAP_FILE="$(find "$MYSQL_RESTORE_DIR" -type f -name 'database_map.tsv' | head -n 1 || true)"
   [ -n "$DATABASE_MAP_FILE" ] || fail "database_map.tsv not found in restored MySQL logical backup."
