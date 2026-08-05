@@ -1,5 +1,6 @@
 import { FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import PasswordField from "../components/PasswordField";
 import { apiPostJson } from "../services/api";
 import { useAuth } from "../modules/auth/AuthContext";
 
@@ -55,31 +56,31 @@ export default function ProfilePage() {
         <h3 className="font-medium">Change password</h3>
         {error && <p className="text-sm text-red-700 bg-red-50 rounded px-3 py-2">{error}</p>}
         {success && <p className="text-sm text-green-800 bg-green-50 rounded px-3 py-2">{success}</p>}
-        <input
-          type="password"
+        <PasswordField
           required
           placeholder="Current password"
           value={current}
           onChange={(e) => setCurrent(e.target.value)}
-          className="w-full border rounded-lg px-3 py-2 text-sm"
+          className="text-sm"
+          autoComplete="current-password"
         />
-        <input
-          type="password"
+        <PasswordField
           required
           minLength={8}
           placeholder="New password (min 8 characters)"
           value={newPass}
           onChange={(e) => setNewPass(e.target.value)}
-          className="w-full border rounded-lg px-3 py-2 text-sm"
+          className="text-sm"
+          autoComplete="new-password"
         />
-        <input
-          type="password"
+        <PasswordField
           required
           minLength={8}
           placeholder="Confirm new password"
           value={confirm}
           onChange={(e) => setConfirm(e.target.value)}
-          className="w-full border rounded-lg px-3 py-2 text-sm"
+          className="text-sm"
+          autoComplete="new-password"
         />
         <button type="submit" className="rounded bg-indigo-700 text-white px-4 py-2 text-sm font-medium">
           Update password

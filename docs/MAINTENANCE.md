@@ -47,7 +47,7 @@ Keep `ENABLE_SCHEDULER=false` and run Admin → Publications → Sync All Public
 ### SerpAPI
 
 - Free tier: 250 searches/month.
-- Update `SERP_API_KEY` in `backend/.env` as needed.
+- Update `SERP_API_KEYS` (preferred) or `SERP_API_KEY` in `backend/.env` / `.env.docker` as needed.
 
 ### Gap-fill CLI
 

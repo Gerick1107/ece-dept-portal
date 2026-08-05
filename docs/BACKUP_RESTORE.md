@@ -27,16 +27,20 @@ cp bac.env.example bac.env
 cp db.env.example db.env
 ```
 
-Edit:
+You edit **two** env files here (in addition to the app’s `.env.docker` at the repo root).
 
-1. **`bac.env`**
-   - `RESTIC_PASSWORD` — long random secret (`openssl rand -base64 48`). Store offline.
-   - `BACKUP_TARGET_PATH` — durable host path (NAS / large disk). Example:
-     - Linux: `/mnt/nas/ece-portal/backup`
-     - Windows: `C:\ece-portal-backup` (use forward slashes or quoted paths in Compose)
-   - `BACKUP_START_TIME` / `BACKUP_INTERVAL_DAYS` — schedule (default 13:00 daily)
-2. **`db.env`**
-   - `MYSQL_PASSWORD` (and optionally `MYSQL_ROOT_PASSWORD`) must match `.env.docker`
+### What to change in each file
+
+| File | Variables you must set | Notes |
+|------|------------------------|--------|
+| **`bac.env`** | `RESTIC_PASSWORD` | Long random secret (`openssl rand -base64 48`). **Store offline** — without it you cannot restore. |
+| **`bac.env`** | `BACKUP_TARGET_PATH` | Durable host path (NAS / large disk). Linux: `/mnt/nas/ece-portal/backup`. Windows: `C:\ece-portal-backup`. |
+| **`bac.env`** | `BACKUP_START_TIME`, `BACKUP_INTERVAL_DAYS` | Optional schedule (default `13:00` daily) |
+| **`db.env`** | `MYSQL_PASSWORD` | **Must match** `MYSQL_PASSWORD` in `.env.docker` |
+| **`db.env`** | `MYSQL_ROOT_PASSWORD` | **Must match** `MYSQL_ROOT_PASSWORD` in `.env.docker` |
+| **`db.env`** | `MYSQL_USER`, `MYSQL_DATABASE` | Usually leave as in the example (`portal_user` / `ece_dept_portal`) |
+
+Do **not** put SerpAPI keys or `SECRET_KEY` in these backup files — those belong only in `.env.docker` / `backend/.env`.
 
 The backup container joins Docker networks `portal-app` (to reach MySQL) and
 `portal-shared`. Start the **main portal stack first** so those networks exist.

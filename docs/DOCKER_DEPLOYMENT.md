@@ -46,14 +46,52 @@ If two developers want to use Docker **now** (not only on the institute server) 
 ```bash
 cd /opt/automation-portal   # or your clone path
 cp .env.docker.example .env.docker
-# Edit .env.docker — set SECRET_KEY, passwords, PORTAL_FRONTEND_URL, CORS_ORIGINS
+# Edit .env.docker — see “Variables you must change” below
 
 docker compose --env-file .env.docker up -d --build
 ```
 
 Open `http://<server>:8080` (or the port set in `PORTAL_HTTP_PORT`).
 
-Default bootstrap admin comes from `BOOTSTRAP_ADMIN_EMAIL` / `BOOTSTRAP_ADMIN_PASSWORD` in `.env.docker` (created on first API startup if no admin exists). **Change the password immediately after first login.**
+### Default bootstrap admin
+
+Created on first API startup **only if no admin user exists yet**:
+
+```env
+BOOTSTRAP_ADMIN_EMAIL=admin@ece.iiitd.ac.in
+BOOTSTRAP_ADMIN_PASSWORD=ChangeMeOnFirstLogin!
+```
+
+**Change the password immediately after first login.** If login fails with these values, an admin was likely created earlier with a different password — use User Management, forgot-password (SMTP), or `backend/scripts/reset_admin_password.py`.
+
+### Variables you must change in `.env.docker`
+
+Copy from `.env.docker.example`. **Never commit** the filled file.
+
+| Variable | Required? | Notes |
+|----------|-----------|--------|
+| `MYSQL_ROOT_PASSWORD` | Yes | Strong password for MySQL root |
+| `MYSQL_PASSWORD` | Yes | Strong password for `portal_user` |
+| `SECRET_KEY` | Yes | `openssl rand -hex 32` |
+| `BOOTSTRAP_ADMIN_EMAIL` | Yes | Default `admin@ece.iiitd.ac.in` |
+| `BOOTSTRAP_ADMIN_PASSWORD` | Yes | Default `ChangeMeOnFirstLogin!` |
+| `PORTAL_FRONTEND_URL` | Yes | Public URL of the portal |
+| `CORS_ORIGINS` | Yes | Must match the browser origin(s) |
+| `SERP_API_KEYS` | For scraping | Comma-separated keys — see [CONFIGURATION.md](CONFIGURATION.md#serpapi-keys) |
+| `SERP_API_KEY` | Fallback only | Used only if `SERP_API_KEYS` is empty |
+| `SCRAPER_BACKEND` | Docker | Keep `serpapi` |
+| `SMTP_*` | Recommended | Enable for password reset / reminders |
+
+### Backup env files (`ops/backup/`)
+
+These are **separate** from `.env.docker`:
+
+| File | Copy from | Change |
+|------|-----------|--------|
+| `bac.env` | `bac.env.example` | `RESTIC_PASSWORD`, `BACKUP_TARGET_PATH`, schedule |
+| `db.env` | `db.env.example` | `MYSQL_PASSWORD` / `MYSQL_ROOT_PASSWORD` = same as `.env.docker` |
+
+Details: [BACKUP_RESTORE.md](BACKUP_RESTORE.md).
 
 ## Services
 
@@ -86,21 +124,25 @@ Default bootstrap admin comes from `BOOTSTRAP_ADMIN_EMAIL` / `BOOTSTRAP_ADMIN_PA
 | `ENABLE_SCHEDULER` | `false` | Monthly publication gap-fill only |
 | `SMTP_ENABLED` | `false` | Required for email reminders in production |
 | `LOCAL_LLM_MTLS_ENABLED` | `false` | Client certs for ollama-proxy |
+| `SERP_API_KEYS` | _(empty)_ | Preferred: comma-separated SerpAPI keys for Scholar scrape |
+| `SERP_API_KEY` | _(empty)_ | Single-key fallback if `SERP_API_KEYS` is unset |
 
 ## Production hardening checklist
 
-Before IT security review:
+Before IT security review / institute handoff:
 
-1. Set strong `SECRET_KEY` (`openssl rand -hex 32`)
+1. Set strong `SECRET_KEY` (`openssl rand -hex 32`) in `.env.docker`
 2. Set strong `MYSQL_ROOT_PASSWORD` and `MYSQL_PASSWORD`
 3. Set `APP_ENV=production` and `DEBUG=false` (already in compose)
 4. Set `PORTAL_FRONTEND_URL` and `CORS_ORIGINS` to the real HTTPS URL
 5. Put **TLS** in front (institute reverse proxy / load balancer terminating HTTPS)
 6. Restrict MySQL port — do **not** publish 3306 to the internet (compose binds `127.0.0.1:3307` only)
 7. Enable SMTP for password reset emails if required
-8. Enable restic backups ([BACKUP_RESTORE.md](BACKUP_RESTORE.md))
-9. Prefer mTLS Ollama on servers that do not already trust the host network
-10. Review [SECURITY.md](SECURITY.md)
+8. Set `SERP_API_KEYS` (comma-separated) for publications scraping — [CONFIGURATION.md](CONFIGURATION.md#serpapi-keys)
+9. Enable restic backups ([BACKUP_RESTORE.md](BACKUP_RESTORE.md)) — fill `bac.env` + `db.env`
+10. Prefer mTLS Ollama on servers that do not already trust the host network
+11. Change bootstrap admin password after first login (`ChangeMeOnFirstLogin!` → a strong password)
+12. Review [SECURITY.md](SECURITY.md)
 
 ## Useful commands
 

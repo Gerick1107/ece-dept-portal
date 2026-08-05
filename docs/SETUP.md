@@ -45,8 +45,7 @@ cd ece-portal
 
 ```bash
 cp .env.docker.example .env.docker
-# Edit .env.docker — set SECRET_KEY, MYSQL_* passwords, BOOTSTRAP_ADMIN_PASSWORD,
-# PORTAL_FRONTEND_URL, CORS_ORIGINS
+# Edit .env.docker — see “Variables you must change” below
 ```
 
 Generate a strong secret:
@@ -62,6 +61,40 @@ openssl rand -hex 32
 Copy department CSV/Excel into `data/assets/` (see [DATA_ASSETS.md](DATA_ASSETS.md)).
 These files are **not** in Git.
 
+#### Variables you must change in `.env.docker`
+
+| Variable | Action |
+|----------|--------|
+| `MYSQL_ROOT_PASSWORD` | Replace placeholder with a strong password |
+| `MYSQL_PASSWORD` | Replace placeholder (portal DB user) |
+| `SECRET_KEY` | Paste output of `openssl rand -hex 32` |
+| `BOOTSTRAP_ADMIN_EMAIL` | Default `admin@ece.iiitd.ac.in` (change if desired) |
+| `BOOTSTRAP_ADMIN_PASSWORD` | Default `ChangeMeOnFirstLogin!` — change after first login |
+| `PORTAL_FRONTEND_URL` | Public URL users open (e.g. `http://SERVER_IP:8080` or HTTPS domain) |
+| `CORS_ORIGINS` | Same origin(s) as the frontend URL (comma-separated if multiple) |
+| `SERP_API_KEYS` | Comma-separated SerpAPI keys for Google Scholar scraping (see below) |
+| `SCRAPER_BACKEND` | Keep `serpapi` for Docker |
+
+Optional but recommended for production: enable SMTP (`SMTP_ENABLED=true` + credentials) for password-reset and reminder emails.
+
+#### How to get SerpAPI keys
+
+1. Register at [https://serpapi.com/](https://serpapi.com/) (free tier: **250 searches/month**, resets monthly).
+2. Copy the API key from the dashboard.
+3. Create **3–4 free accounts/keys** if you scrape often — the portal rotates keys when one hits quota.
+4. Set in `.env.docker`:
+
+```env
+SCRAPER_BACKEND=serpapi
+# Preferred — rotation across multiple keys:
+SERP_API_KEYS=your_key_1,your_key_2,your_key_3
+# Leave SERP_API_KEY empty when using SERP_API_KEYS.
+SERP_API_KEY=
+```
+
+If `SERP_API_KEYS` is empty, the app falls back to a single `SERP_API_KEY`.  
+Full reference: [CONFIGURATION.md](CONFIGURATION.md#serpapi-keys).
+
 ### A3. Start the portal (app compose)
 
 ```bash
@@ -72,8 +105,14 @@ docker compose --env-file .env.docker up -d --build
 
 Open `http://localhost:8080` (or `PORTAL_HTTP_PORT` / the server hostname).
 
-Default admin comes from `BOOTSTRAP_ADMIN_EMAIL` / `BOOTSTRAP_ADMIN_PASSWORD`.
-**Change the password immediately after first login.**
+Default bootstrap admin (first API start only, if no admin exists yet):
+
+```env
+BOOTSTRAP_ADMIN_EMAIL=admin@ece.iiitd.ac.in
+BOOTSTRAP_ADMIN_PASSWORD=ChangeMeOnFirstLogin!
+```
+
+**Change the password immediately after first login.** Use the eye icon on the login form to show/hide the password while typing.
 
 ### A4. Ollama (separate compose) — required for full handoff
 
@@ -166,9 +205,18 @@ See [BACKUP_RESTORE.md](BACKUP_RESTORE.md). Quick start:
 cd ops/backup
 cp bac.env.example bac.env
 cp db.env.example db.env
-# Set RESTIC_PASSWORD and MYSQL_PASSWORD (match .env.docker)
-# Set BACKUP_TARGET_PATH to a durable host path
+```
 
+**Edit these two files (not `.env.docker`):**
+
+| File | Variables to set |
+|------|------------------|
+| `bac.env` | `RESTIC_PASSWORD` (long random — store offline), `BACKUP_TARGET_PATH` (durable disk/NAS), optionally `BACKUP_START_TIME` / `BACKUP_INTERVAL_DAYS` |
+| `db.env` | `MYSQL_PASSWORD` and `MYSQL_ROOT_PASSWORD` — **must match** the same values in `.env.docker` |
+
+Then:
+
+```bash
 docker compose -f docker-compose.backup.yml --env-file bac.env up -d --build
 ```
 

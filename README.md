@@ -51,7 +51,14 @@ alembic upgrade head
 python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8001
 ```
 
-Bootstrap admin: `BOOTSTRAP_ADMIN_EMAIL` / `BOOTSTRAP_ADMIN_PASSWORD` in `.env`.
+Bootstrap admin (created on first API start if no admin exists):
+
+```env
+BOOTSTRAP_ADMIN_EMAIL=admin@ece.iiitd.ac.in
+BOOTSTRAP_ADMIN_PASSWORD=ChangeMeOnFirstLogin!
+```
+
+Log in with those values, then **change the password immediately**. The eye icon on the password field toggles visibility. If login fails, the admin may already exist with a different password (bootstrap only runs once) — reset with `backend/scripts/reset_admin_password.py` or set `BOOTSTRAP_ADMIN_PASSWORD` and re-run that script.
 
 On startup you should see `Requirement reminder scheduler active` if reminders are enabled (default).
 
@@ -124,6 +131,8 @@ Full reference: [docs/MODULES.md](docs/MODULES.md).
 
 ## Production deployment
 
+Prefer Docker on the institute server. Full walkthrough: [docs/SETUP.md](docs/SETUP.md).
+
 | Method | Guide |
 |--------|--------|
 | **Full setup (start here)** | [docs/SETUP.md](docs/SETUP.md) |
@@ -131,10 +140,40 @@ Full reference: [docs/MODULES.md](docs/MODULES.md).
 | Docker (recommended for institute) | [docs/DOCKER_DEPLOYMENT.md](docs/DOCKER_DEPLOYMENT.md) |
 | Backup / restore (restic) | [docs/BACKUP_RESTORE.md](docs/BACKUP_RESTORE.md) |
 | Security review | [docs/SECURITY.md](docs/SECURITY.md) |
+| Env variable reference | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) |
+
+### Env files you must edit (never commit)
+
+| File | Copy from | What to change |
+|------|-----------|----------------|
+| `.env.docker` (app stack) | `.env.docker.example` | Secrets + URLs + SerpAPI — see below |
+| `ops/backup/bac.env` | `ops/backup/bac.env.example` | `RESTIC_PASSWORD`, `BACKUP_TARGET_PATH`, schedule |
+| `ops/backup/db.env` | `ops/backup/db.env.example` | MySQL passwords — **must match** `.env.docker` |
+
+**`.env.docker` — change these before first production start:**
+
+| Variable | Notes |
+|----------|--------|
+| `MYSQL_ROOT_PASSWORD`, `MYSQL_PASSWORD` | Strong unique passwords |
+| `SECRET_KEY` | `openssl rand -hex 32` |
+| `BOOTSTRAP_ADMIN_EMAIL` / `BOOTSTRAP_ADMIN_PASSWORD` | Defaults: `admin@ece.iiitd.ac.in` / `ChangeMeOnFirstLogin!` |
+| `PORTAL_FRONTEND_URL`, `CORS_ORIGINS` | Real public URL (HTTPS on institute) |
+| `SERP_API_KEYS` | Comma-separated SerpAPI keys for Scholar scraping (preferred). See [docs/CONFIGURATION.md](docs/CONFIGURATION.md#serpapi-keys) |
+| `SCRAPER_BACKEND` | Keep `serpapi` in Docker (no browser for `scholarly`) |
+
+**Backup envs:** set `RESTIC_PASSWORD` in `bac.env` (store offline — loss = unrecoverable backups). In `db.env`, set `MYSQL_PASSWORD` / `MYSQL_ROOT_PASSWORD` to the **same values** as `.env.docker`.
+
+### SerpAPI keys (publications scrape)
+
+1. Create free accounts at [https://serpapi.com/](https://serpapi.com/) (250 searches/month each, monthly reset).
+2. Prefer **3–4 keys** so scraping can rotate when one hits quota.
+3. Put them in **`SERP_API_KEYS`** (comma-separated) in `.env.docker` or `backend/.env`.  
+   Example: `SERP_API_KEYS=key1,key2,key3`  
+   Single-key fallback: `SERP_API_KEY=one_key` (used only if `SERP_API_KEYS` is empty).
 
 ```bash
 # Docker — app stack
-cp .env.docker.example .env.docker   # edit secrets
+cp .env.docker.example .env.docker   # edit secrets (table above)
 docker compose --env-file .env.docker up -d --build
 
 # Docker — optional Ollama stack (shared network + mTLS)
@@ -143,7 +182,7 @@ docker compose -f docker-compose.ollama.yml up -d
 
 # Docker — encrypted backups
 cd ops/backup && cp bac.env.example bac.env && cp db.env.example db.env
-# edit passwords, then:
+# edit bac.env + db.env (table above), then:
 docker compose -f docker-compose.backup.yml --env-file bac.env up -d --build
 ```
 

@@ -63,7 +63,8 @@ Copy `backend/.env.example` → `backend/.env`. **Never commit `.env`.**
 |----------|-------------|
 | `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE` | Database |
 | `SECRET_KEY` | Long random string for JWT |
-| `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ADMIN_PASSWORD` | First admin |
+| `BOOTSTRAP_ADMIN_EMAIL` | First admin email (default `admin@ece.iiitd.ac.in`) |
+| `BOOTSTRAP_ADMIN_PASSWORD` | First admin password (default `ChangeMeOnFirstLogin!`) |
 | `PORTAL_FRONTEND_URL` | Public SPA URL (email links) |
 | `CORS_ORIGINS` | Comma-separated allowed origins |
 
@@ -78,8 +79,9 @@ Copy `backend/.env.example` → `backend/.env`. **Never commit `.env`.**
 
 | Variable | Description |
 |----------|-------------|
-| `SERP_API_KEY` | SerpAPI key |
-| `SCRAPER_BACKEND` | `scholarly` or `serpapi` |
+| **`SERP_API_KEYS`** | **Preferred** — comma-separated SerpAPI keys (rotation). Get keys at [https://serpapi.com/](https://serpapi.com/) (250 free searches/month each). |
+| `SERP_API_KEY` | Single-key fallback if `SERP_API_KEYS` is empty |
+| `SCRAPER_BACKEND` | `scholarly` or `serpapi` (use `serpapi` in Docker) |
 | `ENABLE_SCHEDULER` | `true` for **monthly** publication gap-fill only |
 
 ### Requirement auto-reminders

@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
+import PasswordField from "../components/PasswordField";
 import {
   activateUser,
   createUser,
@@ -134,14 +135,14 @@ export default function AdminUsersPage() {
           onChange={(e) => setForm({ ...form, full_name: e.target.value })}
           className="w-full border rounded-lg px-3 py-2 text-sm"
         />
-        <input
-          type="password"
+        <PasswordField
           required
           minLength={8}
           placeholder="Portal password (min 8 chars)"
           value={form.password}
           onChange={(e) => setForm({ ...form, password: e.target.value })}
-          className="w-full border rounded-lg px-3 py-2 text-sm"
+          className="text-sm"
+          autoComplete="new-password"
         />
         <select
           value={form.role === "admin" ? "admin" : "faculty"}

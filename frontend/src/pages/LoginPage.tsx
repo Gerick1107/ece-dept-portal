@@ -1,5 +1,6 @@
 import { FormEvent, useRef, useState } from "react";
 import { Navigate } from "react-router-dom";
+import PasswordField from "../components/PasswordField";
 import { useAuth } from "../modules/auth/AuthContext";
 import { forgotPassword } from "../services/api";
 
@@ -87,16 +88,13 @@ export default function LoginPage() {
             className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none"
           />
         </label>
-        <label className="block text-sm font-medium text-slate-700">
-          Password
-          <input
-            type="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none"
-          />
-        </label>
+        <PasswordField
+          label="Password"
+          required
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          autoComplete="current-password"
+        />
         <button
           type="submit"
           disabled={submitting}
