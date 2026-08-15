@@ -1,6 +1,22 @@
 # Data assets (`data/assets/`)
 
-**This folder is not in Git.** It holds departmental CSV/Excel files and `Links.txt` used at runtime. Copy or restore them on each machine from a secure source (SQL dump, shared institute storage, or encrypted transfer between maintainers).
+**This folder is not in Git** (confidential departmental data). A fresh `git clone` will **not** include the Excel/CSV files the portal needs at runtime. You must **manually copy or restore** them onto every machine (laptop, testing server, institute server).
+
+If you see errors like:
+
+> CO-PO mapping file not found at `/data/assets/default_mapping.xlsx`
+
+that is **expected** until `data/assets/` is populated. The app cannot invent department mapping / faculty CSVs from Git.
+
+## How to obtain the files
+
+| Source | When |
+|--------|------|
+| Secure copy from a maintainer’s machine (`scp -r data/assets …`) | First setup on a new server |
+| Restore from restic / institute backup | After a crash or new host |
+| Shared institute storage / encrypted bundle | Ongoing handoff |
+
+See also [SERVER_SETUP.md](SERVER_SETUP.md) (manual copy checklist) and [BACKUP_RESTORE.md](BACKUP_RESTORE.md).
 
 ## Required layout
 
@@ -8,7 +24,7 @@ Place these files in `data/assets/` (create the folder if missing):
 
 | File | Used by |
 |------|---------|
-| `default_mapping.xlsx`, `indirect.xlsx` | CO-PO generator |
+| `default_mapping.xlsx`, `indirect.xlsx` | CO-PO generator (missing → red banner on CO-PO page) |
 | `faculty_master.csv` | Publications |
 | `Links.txt` | Faculty affiliations |
 | `faculty_awards.csv` | Awards |
@@ -35,6 +51,6 @@ Admin UI edits for contributions and allocations **write back** to the CSVs in t
 
 **Local dev:** Copy from your team’s canonical bundle or restore from MySQL after import (DB is source of truth once synced; CSVs are re-exported on some operations).
 
-**Docker:** Mount the host folder into the container (see [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md)). Use a **writable** mount if admins edit data through the portal.
+**Docker:** The compose file mounts `./data/assets` → `/data/assets` on the backend. Populate the **host** folder before (or right after) `docker compose up`. Use a **writable** mount if admins edit data through the portal.
 
 **Backups:** Include `data/assets/` in server backups alongside MySQL dumps.

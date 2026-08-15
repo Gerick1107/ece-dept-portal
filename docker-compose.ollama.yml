@@ -9,17 +9,21 @@ name: ece-ollama
 #      (Windows PowerShell:    .\scripts\generate_mtls_certs.ps1)
 #   2. Ensure portal-shared network exists (main compose creates it), or:
 #        docker network create portal-shared
-#   3. Start Ollama:
-#        docker compose -f docker-compose.ollama.yml up -d
-#   4. Pull a model:
-#        docker compose -f docker-compose.ollama.yml exec ollama ollama pull llama3.2:3b
-#   5. Point the portal backend at the mTLS proxy (in .env.docker):
+#   3. Start Ollama (auto-pulls LOCAL_LLM_MODEL from .env.docker):
+#        docker compose -f docker-compose.ollama.yml --env-file .env.docker up -d
+#   4. Point the portal backend at the mTLS proxy (in .env.docker):
 #        LOCAL_LLM_BASE_URL=https://ollama-proxy:8443/v1
 #        LOCAL_LLM_MTLS_ENABLED=true
 #        LOCAL_LLM_MTLS_CA_FILE=/certs/mtls/ca.crt
 #        LOCAL_LLM_MTLS_CERT_FILE=/certs/mtls/client.crt
 #        LOCAL_LLM_MTLS_KEY_FILE=/certs/mtls/client.key
-#   6. Restart portal: docker compose --env-file .env.docker up -d
+#        LOCAL_LLM_MODEL=llama3.2:3b   # any tag you want; ollama-pull downloads it
+#   5. Restart portal: docker compose --env-file .env.docker up -d
+#
+# Remote Ollama (different machine): skip this compose file. Set in .env.docker:
+#   LOCAL_LLM_BASE_URL=http://OTHER_HOST:11434/v1
+#   LOCAL_LLM_MTLS_ENABLED=false
+#   LOCAL_LLM_MODEL=<model already pulled on that host>
 #
 # Plain HTTP (no mTLS) for lab testing only — set LOCAL_LLM_BASE_URL=http://ollama:11434/v1
 # and LOCAL_LLM_MTLS_ENABLED=false. Prefer mTLS on institute servers.
@@ -44,6 +48,24 @@ services:
     # Requires: nvidia-container-toolkit + Docker configured with runtime "nvidia".
     # If this still fails, use host Ollama instead (see docs/SETUP.md).
     runtime: nvidia
+
+  # One-shot: wait for ollama, then pull LOCAL_LLM_MODEL (from --env-file .env.docker).
+  # Re-run safely on every `up` — ollama pull is a no-op if the model is already present.
+  ollama-pull:
+    image: ollama/ollama:0.9.6
+    container_name: ece-portal-ollama-pull
+    depends_on:
+      - ollama
+    volumes:
+      - ./ops/ollama/pull-model.sh:/pull-model.sh:ro
+    entrypoint: ["/bin/sh", "/pull-model.sh"]
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_MODEL: ${LOCAL_LLM_MODEL:-llama3.2:3b}
+      LOCAL_LLM_MODEL: ${LOCAL_LLM_MODEL:-llama3.2:3b}
+    networks:
+      - portal-shared
+    restart: "no"
 
   ollama-proxy:
     image: nginx:1.27-alpine

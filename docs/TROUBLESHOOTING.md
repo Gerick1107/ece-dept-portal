@@ -17,6 +17,21 @@ The UI sanitizes large/HTML 500 bodies in `frontend/src/services/api.ts`. Check 
 - Deleted papers are skipped if their `source_hash` is in `blocked_publications` (expected).
 - Links containing `repository.iiitd.edu.in` are rejected by design.
 
+## CO-PO: mapping file not found
+
+`data/assets/` is **gitignored**. Copy `default_mapping.xlsx` (and other assets) onto the server — see [DATA_ASSETS.md](DATA_ASSETS.md). The red banner is expected on a bare clone.
+
+## LLM: model not pulled / offline
+
+Warnings name whatever is in `LOCAL_LLM_MODEL` (not a hard-coded model). With the compose Ollama stack:
+
+```bash
+docker compose -f docker-compose.ollama.yml --env-file .env.docker up -d
+docker compose -f docker-compose.ollama.yml --env-file .env.docker logs ollama-pull
+```
+
+First pull can take several minutes. For a remote Ollama host, set `LOCAL_LLM_BASE_URL` / `LOCAL_LLM_MODEL` in `.env.docker` — see [CONFIGURATION.md](CONFIGURATION.md#local-llm-ollama).
+
 ## Faculty cannot edit/delete publications
 
 - Their `users.faculty_id` must point at the correct `faculty.id` row (migration 034 / Admin Users linking).

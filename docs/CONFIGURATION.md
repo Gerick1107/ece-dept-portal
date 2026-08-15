@@ -78,13 +78,33 @@ Do **not** put SerpAPI keys in `ops/backup/bac.env` or `ops/backup/db.env`.
 
 | Variable | Purpose |
 |----------|---------|
-| `LOCAL_LLM_BASE_URL` | Default `http://localhost:11434/v1` (host) or `https://ollama-proxy:8443/v1` (compose mTLS) |
-| `LOCAL_LLM_MODEL` | Default `llama3.2:3b` |
-| `LOCAL_LLM_WARMUP_ON_STARTUP` | Prefetch model weights |
-| `LOCAL_LLM_MTLS_ENABLED` | Use client certs when talking to `ollama-proxy` |
+| `LOCAL_LLM_BASE_URL` | OpenAI-compatible base URL ending in `/v1`. Compose mTLS: `https://ollama-proxy:8443/v1`. Host Ollama: `http://host.docker.internal:11434/v1`. **Remote server:** `http://OTHER_HOST:11434/v1` (or that host’s HTTPS proxy URL). |
+| `LOCAL_LLM_MODEL` | Model tag Ollama must have pulled (default `llama3.2:3b`). UI warnings name **this** value — change it here to use a stronger model. |
+| `LOCAL_LLM_WARMUP_ON_STARTUP` | Prefetch model weights on backend start |
+| `LOCAL_LLM_MTLS_ENABLED` | `true` when talking to `ollama-proxy`; `false` for plain HTTP (host or remote) |
 | `LOCAL_LLM_MTLS_CA_FILE` | CA that signed the proxy cert (default `/certs/mtls/ca.crt`) |
 | `LOCAL_LLM_MTLS_CERT_FILE` | Backend client certificate |
 | `LOCAL_LLM_MTLS_KEY_FILE` | Backend client private key |
+
+### Which model name appears in warnings?
+
+The portal does **not** hard-code a display model. Availability checks and error text use `LOCAL_LLM_MODEL` from `.env.docker` / `backend/.env`. If you see `llama3.2:3b` or `llama3:latest`, that string is whatever is set in that env file on that server.
+
+### Remote Ollama (another machine)
+
+Skip `docker-compose.ollama.yml` on the portal host. On the Ollama machine, install/run Ollama and pull your model. In the portal `.env.docker`:
+
+```env
+LOCAL_LLM_BASE_URL=http://192.168.x.y:11434/v1
+LOCAL_LLM_MTLS_ENABLED=false
+LOCAL_LLM_MODEL=llama3.2:3b
+```
+
+Use the real host/IP (or DNS) and ensure the portal backend container can reach that port (firewall / routing). If the remote side terminates TLS + client certs, point `LOCAL_LLM_BASE_URL` at that proxy and set the `LOCAL_LLM_MTLS_*` paths accordingly.
+
+### Compose Ollama auto-pull
+
+`docker compose -f docker-compose.ollama.yml --env-file .env.docker up -d` starts `ollama-pull`, which downloads `LOCAL_LLM_MODEL` automatically (no manual `ollama pull` required). First pull can take several minutes.
 
 ## Security hardening
 

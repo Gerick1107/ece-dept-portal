@@ -113,7 +113,12 @@ Details: [BACKUP_RESTORE.md](BACKUP_RESTORE.md).
 ### Ollama modes
 
 1. **Host Ollama** (testing): `LOCAL_LLM_BASE_URL=http://host.docker.internal:11434/v1`, `LOCAL_LLM_MTLS_ENABLED=false`
-2. **Compose Ollama + mTLS** (institute): generate certs, start `docker-compose.ollama.yml`, set `LOCAL_LLM_BASE_URL=https://ollama-proxy:8443/v1` and `LOCAL_LLM_MTLS_ENABLED=true`
+2. **Compose Ollama + mTLS** (institute): generate certs, then:
+   ```bash
+   docker compose -f docker-compose.ollama.yml --env-file .env.docker up -d
+   ```
+   The `ollama-pull` service downloads `LOCAL_LLM_MODEL` automatically. Set `LOCAL_LLM_BASE_URL=https://ollama-proxy:8443/v1` and `LOCAL_LLM_MTLS_ENABLED=true`.
+3. **Remote Ollama** (another server): skip the ollama compose file. Set `LOCAL_LLM_BASE_URL=http://OTHER_HOST:11434/v1`, `LOCAL_LLM_MTLS_ENABLED=false`, and `LOCAL_LLM_MODEL` to a model already pulled on that host. Details: [CONFIGURATION.md](CONFIGURATION.md#local-llm-ollama).
 
 ## Environment variables (backend / `.env.docker`)
 

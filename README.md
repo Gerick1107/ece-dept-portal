@@ -98,10 +98,12 @@ Config: `LOCAL_LLM_MODEL` (default `llama3.2:3b`),
 
 ```bash
 ./scripts/generate_mtls_certs.sh   # or .\scripts\generate_mtls_certs.ps1
-docker compose -f docker-compose.ollama.yml up -d
-docker compose -f docker-compose.ollama.yml exec ollama ollama pull llama3.2:3b
+# Pass .env.docker so ollama-pull downloads LOCAL_LLM_MODEL automatically
+docker compose -f docker-compose.ollama.yml --env-file .env.docker up -d
 # Then set LOCAL_LLM_BASE_URL=https://ollama-proxy:8443/v1 and LOCAL_LLM_MTLS_ENABLED=true
 ```
+
+**Remote Ollama:** set `LOCAL_LLM_BASE_URL` to that host’s `/v1` URL in `.env.docker` (see [docs/CONFIGURATION.md](docs/CONFIGURATION.md#local-llm-ollama)).
 
 See [docs/SETUP.md](docs/SETUP.md) for the full dual-compose + mTLS flow.
 

@@ -59,7 +59,7 @@ openssl rand -hex 32
 ```
 
 Copy department CSV/Excel into `data/assets/` (see [DATA_ASSETS.md](DATA_ASSETS.md)).
-These files are **not** in Git.
+These files are **not** in Git — a clone alone will show CO-PO “mapping file not found” until you copy them.
 
 #### Variables you must change in `.env.docker`
 
@@ -125,16 +125,17 @@ certificate). Use this on the testing server and the institute server.
 ./scripts/generate_mtls_certs.sh          # Linux / macOS / Git Bash
 # .\scripts\generate_mtls_certs.ps1       # Windows PowerShell
 
-# 2) Start LLM stack
-docker compose -f docker-compose.ollama.yml up -d
+# 2) Start LLM stack (ollama-pull downloads LOCAL_LLM_MODEL from .env.docker)
+docker compose -f docker-compose.ollama.yml --env-file .env.docker up -d
 
-# 3) Pull model inside the container (~2 GB; first time only)
-docker compose -f docker-compose.ollama.yml exec ollama ollama pull llama3.2:3b
+# 3) Optional — watch the one-shot pull finish (first time can take several minutes):
+docker compose -f docker-compose.ollama.yml --env-file .env.docker logs -f ollama-pull
 
 # 4) Edit .env.docker (see “Exact .env.docker edits” below), then:
 docker compose --env-file .env.docker up -d --build
 ```
 
+Set `LOCAL_LLM_MODEL` in `.env.docker` to whatever model you want (e.g. `llama3.2:3b`, `llama3.1:8b`). The UI warning names that same value. Manual `ollama pull` is no longer required when using this compose file.
 Verify:
 
 ```bash
@@ -193,10 +194,9 @@ git pull
 # Edit .env.docker as above
 
 docker compose --env-file .env.docker up -d --build
-docker compose -f docker-compose.ollama.yml up -d
-docker compose -f docker-compose.ollama.yml exec ollama ollama pull llama3.2:3b
+docker compose -f docker-compose.ollama.yml --env-file .env.docker up -d
+# Model pull is automatic via ollama-pull (uses LOCAL_LLM_MODEL)
 ```
-
 ### A5. Encrypted backups (restic)
 
 See [BACKUP_RESTORE.md](BACKUP_RESTORE.md). Quick start:
