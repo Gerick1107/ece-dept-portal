@@ -157,11 +157,15 @@ Prefer Docker on the institute server. Full walkthrough: [docs/SETUP.md](docs/SE
 | Variable | Notes |
 |----------|--------|
 | `MYSQL_ROOT_PASSWORD`, `MYSQL_PASSWORD` | Strong unique passwords |
-| `SECRET_KEY` | `openssl rand -hex 32` |
+| `SECRET_KEY` | Paste `openssl rand -hex 32` on **one single line** (`KEY=value`). Do **not** wrap/split the hex across lines — editors often soft-wrap 64-char keys; that breaks Compose parsing. |
 | `BOOTSTRAP_ADMIN_EMAIL` / `BOOTSTRAP_ADMIN_PASSWORD` | Defaults: `admin@ece.iiitd.ac.in` / `ChangeMeOnFirstLogin!` |
 | `PORTAL_FRONTEND_URL`, `CORS_ORIGINS` | Real public URL (HTTPS on institute) |
 | `SERP_API_KEYS` | Comma-separated SerpAPI keys for Scholar scraping (preferred). See [docs/CONFIGURATION.md](docs/CONFIGURATION.md#serpapi-keys) |
 | `SCRAPER_BACKEND` | Keep `serpapi` in Docker (no browser for `scholarly`) |
+| `LOCAL_LLM_MODEL` | Model tag for Ollama (e.g. `llama3.2:3b`). UI warnings use this value. |
+| `LOCAL_LLM_BASE_URL` / `LOCAL_LLM_MTLS_*` | See LLM options below |
+
+**Always pass `--env-file .env.docker`** on app/Ollama compose commands (`up`, `logs`, `exec`, `down`). Without it, Compose reports `SECRET_KEY` / `BOOTSTRAP_ADMIN_PASSWORD` as missing even if the file is correct.
 
 **Backup envs:** set `RESTIC_PASSWORD` in `bac.env` (store offline — loss = unrecoverable backups). In `db.env`, set `MYSQL_PASSWORD` / `MYSQL_ROOT_PASSWORD` to the **same values** as `.env.docker`.
 
@@ -173,20 +177,87 @@ Prefer Docker on the institute server. Full walkthrough: [docs/SETUP.md](docs/SE
    Example: `SERP_API_KEYS=key1,key2,key3`  
    Single-key fallback: `SERP_API_KEY=one_key` (used only if `SERP_API_KEYS` is empty).
 
+### LLM options (pick one)
+
+**A — Ollama on the same server (compose):**
+
+```bash
+./scripts/generate_mtls_certs.sh
+docker compose -f docker-compose.ollama.yml --env-file .env.docker up -d
+# In .env.docker:
+# LOCAL_LLM_BASE_URL=https://ollama-proxy:8443/v1
+# LOCAL_LLM_MTLS_ENABLED=true
+# LOCAL_LLM_MODEL=llama3.2:3b   # or whatever you want; ollama-pull downloads it
+```
+
+**B — Ollama on another server (no ollama compose on the portal host):**
+
+```env
+# in .env.docker — point at the remote Ollama OpenAI-compatible /v1 endpoint
+LOCAL_LLM_BASE_URL=http://OTHER_HOST:11434/v1
+LOCAL_LLM_MTLS_ENABLED=false
+LOCAL_LLM_MODEL=qwen2.5:14b
+```
+
+Then only start the app stack (`docker compose --env-file .env.docker up -d --build`). Pull the model on the **remote** Ollama host (`ollama pull …`). Portal backend must be able to reach `OTHER_HOST:11434`.
+
+### MySQL dump (recommended for institute handoff)
+
+A fresh stack only creates the bootstrap admin — it does **not** load faculty/publications data. For a full dataset, import a dump after MySQL is healthy:
+
+```bash
+# create on a machine that already has data
+docker compose --env-file .env.docker exec -T mysql \
+  mysqldump -u portal_user -p"$MYSQL_PASSWORD" ece_dept_portal > dump.sql
+
+# on the new server (portal stack up, mysql healthy)
+docker compose --env-file .env.docker exec -T mysql \
+  mysql -u portal_user -p"$MYSQL_PASSWORD" ece_dept_portal < dump.sql
+docker compose --env-file .env.docker exec backend alembic upgrade head
+```
+
+Full walkthrough: [docs/SERVER_SETUP.md](docs/SERVER_SETUP.md) §3c / Part 4.
+
 ```bash
 # Docker — app stack
-cp .env.docker.example .env.docker   # edit secrets (table above)
+cp .env.docker.example .env.docker   # edit secrets (table above) — SECRET_KEY on ONE line
 docker compose --env-file .env.docker up -d --build
 
-# Docker — optional Ollama stack (shared network + mTLS)
+# Docker — optional Ollama stack (same server; skip if using remote LLM option B above)
 ./scripts/generate_mtls_certs.sh
-docker compose -f docker-compose.ollama.yml up -d
+docker compose -f docker-compose.ollama.yml --env-file .env.docker up -d
 
 # Docker — encrypted backups
 cd ops/backup && cp bac.env.example bac.env && cp db.env.example db.env
 # edit bac.env + db.env (table above), then:
 docker compose -f docker-compose.backup.yml --env-file bac.env up -d --build
 ```
+
+### Docker up / down cheat sheet
+
+**Always** pass the env file. Bare `docker compose logs` / `up` / `down` will look like secrets are missing.
+
+```bash
+# --- UP (from repo root) ---
+docker network create portal-shared    # once, if missing
+./scripts/generate_mtls_certs.sh       # once, if using compose Ollama
+
+docker compose --env-file .env.docker up -d --build
+docker compose -f docker-compose.ollama.yml --env-file .env.docker up -d
+cd ops/backup && docker compose -f docker-compose.backup.yml --env-file bac.env up -d --build
+
+# --- DOWN ---
+docker compose --env-file .env.docker down
+docker compose -f docker-compose.ollama.yml --env-file .env.docker down
+cd ops/backup && docker compose -f docker-compose.backup.yml --env-file bac.env down
+
+# --- LOGS / STATUS (examples) ---
+docker compose --env-file .env.docker logs -f
+docker compose --env-file .env.docker logs mysql
+docker compose -f docker-compose.ollama.yml --env-file .env.docker logs -f ollama-pull
+```
+
+Full detail: [docs/SETUP.md](docs/SETUP.md) §A6.
 
 ## Documentation
 

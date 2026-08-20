@@ -72,7 +72,7 @@ Copy from `.env.docker.example`. **Never commit** the filled file.
 |----------|-----------|--------|
 | `MYSQL_ROOT_PASSWORD` | Yes | Strong password for MySQL root |
 | `MYSQL_PASSWORD` | Yes | Strong password for `portal_user` |
-| `SECRET_KEY` | Yes | `openssl rand -hex 32` |
+| `SECRET_KEY` | Yes | `openssl rand -hex 32` — **must be one line** in `.env.docker` (no soft wrap) |
 | `BOOTSTRAP_ADMIN_EMAIL` | Yes | Default `admin@ece.iiitd.ac.in` |
 | `BOOTSTRAP_ADMIN_PASSWORD` | Yes | Default `ChangeMeOnFirstLogin!` |
 | `PORTAL_FRONTEND_URL` | Yes | Public URL of the portal |
@@ -81,7 +81,10 @@ Copy from `.env.docker.example`. **Never commit** the filled file.
 | `SERP_API_KEY` | Fallback only | Used only if `SERP_API_KEYS` is empty |
 | `SCRAPER_BACKEND` | Docker | Keep `serpapi` |
 | `SMTP_*` | Recommended | Enable for password reset / reminders |
+| `LOCAL_LLM_MODEL` | LLM | Model tag; compose `ollama-pull` and UI warnings use this |
+| `LOCAL_LLM_BASE_URL` | LLM | Same-server proxy, host Ollama, or remote `http://OTHER_HOST:11434/v1` |
 
+Always use `docker compose --env-file .env.docker …` (including `logs` / `exec` / `down`). Omitting `--env-file` makes Compose report required vars as missing.
 ### Backup env files (`ops/backup/`)
 
 These are **separate** from `.env.docker`:
@@ -151,19 +154,44 @@ Before IT security review / institute handoff:
 
 ## Useful commands
 
+> **Always** include `--env-file .env.docker` for the app and Ollama stacks  
+> (`up`, `down`, `logs`, `ps`, `exec`). Without it, Compose reports  
+> `SECRET_KEY` / `BOOTSTRAP_ADMIN_PASSWORD` as missing even when `.env.docker` is correct.
+
+### First start / bring everything up
+
 ```bash
-# View logs
-docker compose --env-file .env.docker logs -f backend
+docker network create portal-shared    # only if missing
+./scripts/generate_mtls_certs.sh       # first time; skip if remote LLM
 
-# Rebuild after code updates
 docker compose --env-file .env.docker up -d --build
+docker compose -f docker-compose.ollama.yml --env-file .env.docker up -d
+cd ops/backup && docker compose -f docker-compose.backup.yml --env-file bac.env up -d --build
+```
 
-# Stop
+### Bring everything down
+
+```bash
 docker compose --env-file .env.docker down
+docker compose -f docker-compose.ollama.yml --env-file .env.docker down
+cd ops/backup && docker compose -f docker-compose.backup.yml --env-file bac.env down
+```
+
+### Day-to-day
+
+```bash
+docker compose --env-file .env.docker ps
+docker compose --env-file .env.docker logs -f
+docker compose --env-file .env.docker logs -f backend
+docker compose --env-file .env.docker logs mysql
+docker compose --env-file .env.docker up -d --build    # after code updates
+docker compose --env-file .env.docker exec backend alembic upgrade head
 
 # Stop and remove DB volume (destructive)
 docker compose --env-file .env.docker down -v
 ```
+
+Full cheat sheet: [SETUP.md](SETUP.md) §A6.
 
 ## Optional: MySQL only in Docker
 

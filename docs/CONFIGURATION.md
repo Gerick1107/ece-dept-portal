@@ -8,7 +8,7 @@ Primary env file: `backend/.env` (see `backend/.env.example` if present). Docker
 |----------|---------|
 | `APP_ENV` | `development` / `production` |
 | `DEBUG` | Must be false in production |
-| `SECRET_KEY` | JWT signing secret (required strong value in production) |
+| `SECRET_KEY` | JWT signing secret (required strong value in production). **One line** in the env file. |
 | `API_V1_PREFIX` | Default `/api/v1` |
 | `CORS_ORIGINS` | Comma-separated browser origins |
 

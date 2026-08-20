@@ -5,6 +5,19 @@
 - Check MySQL is reachable with `MYSQL_*` from `.env`.
 - Run `alembic upgrade head` — missing tables/columns often look like random 500s.
 - In production, weak `SECRET_KEY` or `DEBUG=true` can abort startup intentionally.
+- **Always** pass `--env-file .env.docker` (e.g. `docker compose --env-file .env.docker logs -f`). Without it, Compose errors with `SECRET_KEY` / `BOOTSTRAP_ADMIN_PASSWORD` missing even when the file is fine. See the up/down cheat sheet in [SETUP.md](SETUP.md) §A6.
+- Keep `SECRET_KEY=…` on **one line** in `.env.docker`. Soft-wrapped hex (second line of digits) truncates the key.
+
+## MySQL container unhealthy / “dependency failed to start”
+
+Backend will not start until MySQL is healthy — so **bootstrap admin is not created** either. Inspect MySQL:
+
+```bash
+docker compose --env-file .env.docker ps
+docker compose --env-file .env.docker logs mysql
+```
+
+Common causes: bad/mismatched `MYSQL_*` passwords, port conflict on `3307`, disk/memory pressure, or a half-initialized volume after a failed first start (`down -v` only if you accept wiping DB data).
 
 ## Frontend shows "Something went wrong. Please try again."
 

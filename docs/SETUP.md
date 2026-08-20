@@ -67,13 +67,19 @@ These files are **not** in Git — a clone alone will show CO-PO “mapping file
 |----------|--------|
 | `MYSQL_ROOT_PASSWORD` | Replace placeholder with a strong password |
 | `MYSQL_PASSWORD` | Replace placeholder (portal DB user) |
-| `SECRET_KEY` | Paste output of `openssl rand -hex 32` |
+| `SECRET_KEY` | Paste output of `openssl rand -hex 32` on **one single line**. Do not let the editor wrap it onto a second line. |
 | `BOOTSTRAP_ADMIN_EMAIL` | Default `admin@ece.iiitd.ac.in` (change if desired) |
 | `BOOTSTRAP_ADMIN_PASSWORD` | Default `ChangeMeOnFirstLogin!` — change after first login |
 | `PORTAL_FRONTEND_URL` | Public URL users open (e.g. `http://SERVER_IP:8080` or HTTPS domain) |
 | `CORS_ORIGINS` | Same origin(s) as the frontend URL (comma-separated if multiple) |
 | `SERP_API_KEYS` | Comma-separated SerpAPI keys for Google Scholar scraping (see below) |
 | `SCRAPER_BACKEND` | Keep `serpapi` for Docker |
+| `LOCAL_LLM_MODEL` | Ollama model tag (warnings / auto-pull use this) |
+| `LOCAL_LLM_BASE_URL` | Same-server mTLS proxy, host Ollama, or **remote** Ollama URL (see A4 / remote LLM below) |
+
+**Formatting rules for `.env.docker`:** every variable is `NAME=value` on one line. No spaces around `=`. Never split a long value (especially `SECRET_KEY`) across lines.
+
+**Every compose command needs the env file**, e.g. `docker compose --env-file .env.docker logs -f` — not bare `docker compose logs -f`.
 
 Optional but recommended for production: enable SMTP (`SMTP_ENABLED=true` + credentials) for password-reset and reminder emails.
 
@@ -114,6 +120,20 @@ BOOTSTRAP_ADMIN_PASSWORD=ChangeMeOnFirstLogin!
 
 **Change the password immediately after first login.** Use the eye icon on the login form to show/hide the password while typing.
 
+Bootstrap runs only when the **backend** container starts successfully (after MySQL is healthy). If MySQL stays unhealthy, no admin row is created — fix MySQL first, then `up` again (or import a SQL dump that already contains users).
+
+### A3b. Import a MySQL dump (full dataset)
+
+Fresh installs only get schema + bootstrap admin. For institute handoff with real data, copy a `dump.sql` and import after MySQL is up:
+
+```bash
+docker compose --env-file .env.docker exec -T mysql \
+  mysql -u portal_user -p"$MYSQL_PASSWORD" ece_dept_portal < dump.sql
+docker compose --env-file .env.docker exec backend alembic upgrade head
+```
+
+Create/export dumps: [SERVER_SETUP.md](SERVER_SETUP.md) §3c. Encrypted restore path: [BACKUP_RESTORE.md](BACKUP_RESTORE.md).
+
 ### A4. Ollama (separate compose) — required for full handoff
 
 Ollama runs in `docker-compose.ollama.yml`, not in the main app compose.
@@ -135,13 +155,30 @@ docker compose -f docker-compose.ollama.yml --env-file .env.docker logs -f ollam
 docker compose --env-file .env.docker up -d --build
 ```
 
-Set `LOCAL_LLM_MODEL` in `.env.docker` to whatever model you want (e.g. `llama3.2:3b`, `llama3.1:8b`). The UI warning names that same value. Manual `ollama pull` is no longer required when using this compose file.
+Set `LOCAL_LLM_MODEL` in `.env.docker` to whatever model you want (e.g. `llama3.2:3b`, `llama3.1:8b`, `qwen2.5:14b`). The UI warning names that same value. Manual `ollama pull` is no longer required when using this compose file.
+
+### A4c. Host Ollama on another server (skip local ollama compose)
+
+Do **not** run `docker-compose.ollama.yml` on the portal host. On the LLM machine, install/run Ollama and pull your model. In the portal `.env.docker`:
+
+```env
+LOCAL_LLM_BASE_URL=http://OTHER_HOST:11434/v1
+LOCAL_LLM_MTLS_ENABLED=false
+LOCAL_LLM_MODEL=qwen2.5:14b
+```
+
+Replace `OTHER_HOST` with the LLM server’s IP/DNS. Ensure the portal backend can reach that port (firewall). Then start only the app stack:
+
+```bash
+docker compose --env-file .env.docker up -d --build
+```
+
 Verify:
 
 ```bash
 docker compose --env-file .env.docker exec backend python -c \
   "from app.llm.services.local_service import local_available; print(local_available())"
-# Expect: (True, 'Ready (model: llama3.2:3b, ...)')
+# Expect: (True, 'Ready (model: …)')
 ```
 
 ### A4b. What “TLS” means (browser HTTPS vs mTLS)
@@ -223,15 +260,70 @@ docker compose -f docker-compose.backup.yml --env-file bac.env up -d --build
 First start runs an **immediate** backup, then daily runs **automatically**.
 Admin only acts again for restore after a crash.
 
-### A6. Useful Docker commands
+### A6. Docker command cheat sheet (always use env files)
+
+> **Rule:** never run bare `docker compose …` for the app or Ollama stacks.  
+> Always pass `--env-file .env.docker` (or `bac.env` for backups).  
+> Omitting it causes false errors like `SECRET_KEY is missing` / `BOOTSTRAP_ADMIN_PASSWORD is missing`.
+
+#### First start — bring everything up
+
+From the **repo root**. Prerequisites: `.env.docker` edited (`SECRET_KEY` on one line), `data/assets/` copied, and for backups `ops/backup/bac.env` + `db.env` filled.
+
+```bash
+# Shared network (only if it does not already exist)
+docker network create portal-shared
+
+# mTLS certs for compose Ollama (first time only; skip if using remote LLM)
+./scripts/generate_mtls_certs.sh          # Linux / macOS / Git Bash
+# .\scripts\generate_mtls_certs.ps1       # Windows
+
+# 1) App stack (MySQL + backend + frontend) — --build on first start / after code changes
+docker compose --env-file .env.docker up -d --build
+
+# 2) Ollama stack (same server only — skip if LOCAL_LLM points at another host)
+docker compose -f docker-compose.ollama.yml --env-file .env.docker up -d
+# Optional: watch model pull (Ctrl+C exits logs only; containers keep running)
+docker compose -f docker-compose.ollama.yml --env-file .env.docker logs -f ollama-pull
+
+# 3) Encrypted backups (optional)
+cd ops/backup
+docker compose -f docker-compose.backup.yml --env-file bac.env up -d --build
+cd ../..
+```
+
+Later restarts (no rebuild): drop `--build` from the `up` commands.
+
+#### Bring everything down
+
+```bash
+# from repo root
+docker compose --env-file .env.docker down
+
+docker compose -f docker-compose.ollama.yml --env-file .env.docker down
+
+cd ops/backup
+docker compose -f docker-compose.backup.yml --env-file bac.env down
+cd ../..
+```
+
+MySQL data is kept. Wipe the DB volume only if you intend to (destructive):
+
+```bash
+docker compose --env-file .env.docker down -v
+```
+
+#### Day-to-day (always with `--env-file`)
 
 ```bash
 docker compose --env-file .env.docker ps
+docker compose --env-file .env.docker logs -f
 docker compose --env-file .env.docker logs -f backend
+docker compose --env-file .env.docker logs mysql
 docker compose --env-file .env.docker exec backend alembic upgrade head
-docker compose --env-file .env.docker down
-docker compose -f docker-compose.ollama.yml ps
-docker compose -f docker-compose.ollama.yml logs -f ollama
+
+docker compose -f docker-compose.ollama.yml --env-file .env.docker ps
+docker compose -f docker-compose.ollama.yml --env-file .env.docker logs -f ollama
 ```
 
 ---
